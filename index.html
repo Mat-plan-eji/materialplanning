@@ -623,25 +623,45 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <span id="fb-dot" class="dot off"></span>
       </div>
       <div style="padding:16px">
+        <div id="fb-status-msg" style="margin-bottom:12px;font-size:12px;color:var(--muted)">Belum dikonfigurasi</div>
+
         <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.7">
-          Data tersimpan online di Firebase — otomatis sync ke semua laptop.<br>
-          <strong style="color:var(--text)">Setup sekali, gratis selamanya</strong> (free tier cukup untuk tim kecil).<br>
-          <a onclick="window.open('https://console.firebase.google.com','_blank')" style="color:var(--accent);cursor:pointer">→ Buat project di Firebase Console</a>
+          Masukkan config Firebase di bawah → klik Simpan → copy snippet yang muncul → paste ke file HTML kamu (ganti baris FIREBASE_CONFIG) → push ke GitHub.<br>
+          <strong style="color:var(--text)">Setelah itu semua laptop langsung konek otomatis tanpa setting apapun.</strong><br>
+          <a onclick="window.open('https://console.firebase.google.com','_blank')" style="color:var(--accent);cursor:pointer">→ Buka Firebase Console</a>
           &nbsp;·&nbsp;
           <a onclick="showFirebaseGuide()" style="color:var(--teal);cursor:pointer">Panduan lengkap</a>
         </div>
+
         <div class="fg"><label>API Key</label><input id="fb-apikey" placeholder="AIzaSy..." style="width:100%"></div>
-        <div class="fg"><label>Project ID</label><input id="fb-projectid" placeholder="my-project-12345" style="width:100%"></div>
-        <div class="fg"><label>App ID</label><input id="fb-appid" placeholder="1:123456:web:abc..." style="width:100%"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-amber" onclick="saveFirebaseConfig();initFirebase()">💾 Simpan &amp; Hubungkan</button>
+        <div class="fg"><label>Project ID</label><input id="fb-projectid" placeholder="material-planner-xxxxx" style="width:100%"></div>
+        <div class="fg"><label>App ID</label><input id="fb-appid" placeholder="1:123456789:web:abc..." style="width:100%"></div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-amber" onclick="saveFirebaseConfig()">💾 Simpan & Hubungkan</button>
           <button class="btn btn-sm" onclick="testFirebase()">Test Koneksi</button>
           <button class="btn btn-sm btn-red" onclick="clearFirebaseConfig()">Hapus Config</button>
         </div>
-        <div id="fb-status-msg" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
-        <div style="margin-top:10px;padding:10px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;color:var(--muted)">
-          <strong style="color:var(--text)">Data yang disync ke cloud:</strong> Schedule pengiriman, PO overrides, Projection comments, Stock history, Projection history, Supplier list, Settings URL Sheets.<br>
-          <strong style="color:var(--amber)">Data yang tetap di lokal:</strong> MRP, Matcom, Master Data, Real Name (ditarik ulang dari Sheets).
+
+        <!-- Snippet untuk di-embed ke HTML -->
+        <div id="fb-snippet-wrap" style="display:none">
+          <div style="background:var(--green-bg);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:12px;margin-bottom:8px">
+            <div style="font-size:11.5px;font-weight:600;color:var(--green);margin-bottom:8px">
+              ✓ Langkah terakhir — embed ke GitHub agar laptop lain otomatis konek:
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
+              1. Buka file HTML di GitHub → cari baris <code style="background:var(--bg4);padding:1px 4px;border-radius:3px">var FIREBASE_CONFIG = {</code><br>
+              2. Ganti 3 baris di dalamnya dengan snippet di bawah ini:<br>
+              3. Commit & push → selesai, tidak perlu setting di laptop manapun
+            </div>
+            <textarea id="fb-embed-snippet" readonly onclick="this.select()" style="width:100%;height:70px;background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:11px;color:var(--teal);resize:none"></textarea>
+            <button class="btn btn-sm btn-green" style="margin-top:6px;width:100%" onclick="var t=document.getElementById('fb-embed-snippet');t.select();document.execCommand('copy');toast('Snippet di-copy ✓','ok')">📋 Copy Snippet</button>
+          </div>
+        </div>
+
+        <div style="margin-top:8px;padding:10px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;color:var(--muted)">
+          <strong style="color:var(--text)">Tersimpan di cloud:</strong> Schedule, PO overrides, Comments, History, URL Sheets, Settings.<br>
+          <strong style="color:var(--amber)">Tidak di cloud:</strong> MRP, Master Data, Matcom, Real Name — ditarik ulang otomatis dari Sheets.
         </div>
       </div>
     </div>
@@ -805,33 +825,79 @@ function clearFirebaseConfig() {
   toast('Firebase config dihapus','ok');
 }
 
-function initFirebase() {
-  var apiKey    = window.localStorage.getItem('fb_apikey');
-  var projectId = window.localStorage.getItem('fb_projectid');
-  var appId     = window.localStorage.getItem('fb_appid');
-  if(!apiKey || !projectId || !appId){ return; }
+// ═══════════════════════════════════════════════════════════════════════════════
+// ☁️  FIREBASE CLOUD SYNC
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚠️  ISI CONFIG INI SEKALI → PUSH KE GITHUB → SEMUA LAPTOP OTOMATIS KONEK
+// Ambil nilai dari Firebase Console → Project Settings → Your apps → Config
+var FIREBASE_CONFIG = {
+  apiKey:    window.localStorage.getItem('fb_apikey')    || '',
+  projectId: window.localStorage.getItem('fb_projectid') || '',
+  appId:     window.localStorage.getItem('fb_appid')     || ''
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
+var _db = null;
+var _fbReady = false;
+var _fbDocId = 'shared';
+
+var CLOUD_KEYS = [
+  'schedule','po_overrides','proj_comments','stock_history','proj_history',
+  'suppliers','proj_hidden_cols','proj_snapshots',
+  'sheet_url_master','sheet_url_mrp','sheet_url_matcom','sheet_url_realname',
+  'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
+  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
+];
+
+function saveFirebaseConfig() {
+  var apiKey    = (document.getElementById('fb-apikey')||{}).value.trim();
+  var projectId = (document.getElementById('fb-projectid')||{}).value.trim();
+  var appId     = (document.getElementById('fb-appid')||{}).value.trim();
+  if(!apiKey || !projectId || !appId){ toast('Isi semua field Firebase','err'); return; }
+  window.localStorage.setItem('fb_apikey', apiKey);
+  window.localStorage.setItem('fb_projectid', projectId);
+  window.localStorage.setItem('fb_appid', appId);
+  FIREBASE_CONFIG.apiKey    = apiKey;
+  FIREBASE_CONFIG.projectId = projectId;
+  FIREBASE_CONFIG.appId     = appId;
+
+  // Generate snippet untuk di-paste ke HTML agar laptop lain tidak perlu setting
+  var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
+  var box = document.getElementById('fb-embed-snippet');
+  if(box) { box.value = snippet; box.parentElement.style.display='block'; }
+
+  toast('Config disimpan ✓ — lihat snippet di bawah untuk embed ke HTML','ok');
+  initFirebase();
+}
+
+function clearFirebaseConfig() {
+  if(!confirm('Hapus config Firebase?')) return;
+  ['fb_apikey','fb_projectid','fb_appid'].forEach(function(k){ window.localStorage.removeItem(k); });
+  FIREBASE_CONFIG.apiKey = FIREBASE_CONFIG.projectId = FIREBASE_CONFIG.appId = '';
+  _db = null; _fbReady = false;
+  var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot off';
+  var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='Config dihapus.';
+  toast('Firebase config dihapus','ok');
+}
+
+function initFirebase() {
+  var cfg = FIREBASE_CONFIG;
+  if(!cfg.apiKey || !cfg.projectId || !cfg.appId) return;
   try {
-    // Initialize or reuse existing app
     var app;
-    try { app = firebase.app(); } catch(e) { app = null; }
-    if(!app || app.options.projectId !== projectId) {
-      firebase.initializeApp({
-        apiKey: apiKey,
-        projectId: projectId,
-        appId: appId
-      });
+    try { app = firebase.app(); } catch(e){ app = null; }
+    if(!app || app.options.projectId !== cfg.projectId) {
+      firebase.initializeApp({ apiKey: cfg.apiKey, projectId: cfg.projectId, appId: cfg.appId });
     }
     _db = firebase.firestore();
     _fbReady = true;
     var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot';
-    var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='☁ Firebase siap';
-    toast('Firebase terhubung ✓','ok');
+    var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='☁ Firebase aktif';
   } catch(e) {
     _fbReady = false;
     var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot off';
     var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='Error: '+e.message;
-    toast('Firebase error: '+e.message,'err');
+    console.warn('Firebase init error:', e.message);
   }
 }
 
@@ -840,30 +906,22 @@ function testFirebase() {
   var msg = document.getElementById('fb-status-msg');
   if(msg) msg.textContent = 'Testing...';
   _db.collection('planner').doc(_fbDocId).get().then(function(doc){
-    if(msg) msg.textContent = '✓ Koneksi OK — ' + (doc.exists ? 'data ditemukan' : 'belum ada data') + ' (' + new Date().toLocaleTimeString('id-ID') + ')';
+    if(msg) msg.textContent = '✓ OK — '+(doc.exists?'data ditemukan':'belum ada data')+' ('+new Date().toLocaleTimeString('id-ID')+')';
     toast('Firebase OK ✓','ok');
-  }).catch(function(e){
-    if(msg) msg.textContent = 'Error: '+e.message;
-    toast('Test gagal: '+e.message,'err');
-  });
+  }).catch(function(e){ if(msg) msg.textContent='Error: '+e.message; toast('Test gagal: '+e.message,'err'); });
 }
 
 function showFirebaseGuide() { document.getElementById('modal-fb-guide').classList.add('open'); }
 
-// Throttled cloud save — batches writes
-var _cloudSaveTimer = null;
-var _cloudDirty = {};
-
+// Throttled cloud save
+var _cloudSaveTimer = null, _cloudDirty = {};
 function cloudSave(key, value) {
   if(!_fbReady || !_db) return;
   _cloudDirty[key] = value;
   clearTimeout(_cloudSaveTimer);
   _cloudSaveTimer = setTimeout(function(){
-    var patch = {};
-    Object.keys(_cloudDirty).forEach(function(k){ patch[k] = _cloudDirty[k]; });
-    _cloudDirty = {};
-    _db.collection('planner').doc(_fbDocId).set(patch, {merge: true})
-      .catch(function(e){ console.warn('Cloud save failed:', e.message); });
+    var patch = {}; Object.keys(_cloudDirty).forEach(function(k){ patch[k]=_cloudDirty[k]; }); _cloudDirty={};
+    _db.collection('planner').doc(_fbDocId).set(patch,{merge:true}).catch(function(e){ console.warn('Cloud save failed:',e.message); });
   }, 1200);
 }
 
@@ -871,60 +929,79 @@ function cloudLoad(callback) {
   if(!_fbReady || !_db){ callback({}); return; }
   _db.collection('planner').doc(_fbDocId).get()
     .then(function(doc){ callback(doc.exists ? doc.data() : {}); })
-    .catch(function(e){ console.warn('Cloud load failed:', e.message); callback({}); });
+    .catch(function(e){ console.warn('Cloud load failed:',e.message); callback({}); });
 }
 
-// Override localStorage.setItem to also sync to cloud for CLOUD_KEYS
+// localStorage shim — writes to real localStorage + cloud for CLOUD_KEYS
 var _origLS = window.localStorage;
-var localStorage = (function(){
-  var _mem = {};
-  // Pre-populate from real localStorage
-  for(var i=0;i<_origLS.length;i++){
-    var k=_origLS.key(i); if(k) _mem[k]=_origLS.getItem(k);
-  }
-  return {
-    getItem: function(k){ return _mem.hasOwnProperty(k) ? _mem[k] : null; },
-    setItem: function(k,v){
-      _mem[k] = v;
-      _origLS.setItem(k, v); // always write to real localStorage too
-      if(CLOUD_KEYS.indexOf(k) >= 0) cloudSave(k, v);
-    },
-    removeItem: function(k){
-      delete _mem[k];
-      _origLS.removeItem(k);
-    },
-    key: function(i){ return Object.keys(_mem)[i]||null; },
-    get length(){ return Object.keys(_mem).length; }
-  };
-})();
+var _lsMem = {};
+for(var _i=0; _i<_origLS.length; _i++){ var _k=_origLS.key(_i); if(_k) _lsMem[_k]=_origLS.getItem(_k); }
+var localStorage = {
+  getItem:    function(k){ return _lsMem.hasOwnProperty(k) ? _lsMem[k] : null; },
+  setItem:    function(k,v){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} if(CLOUD_KEYS.indexOf(k)>=0) cloudSave(k,v); },
+  removeItem: function(k){ delete _lsMem[k]; try{_origLS.removeItem(k);}catch(e){}},
+  key:        function(i){ return Object.keys(_lsMem)[i]||null; },
+  get length(){ return Object.keys(_lsMem).length; }
+};
 
-// Load from cloud then init app
+// ── BOOT SEQUENCE ─────────────────────────────────────────────────────────────
 function appStart() {
   initFirebase();
-  if(_fbReady && _db) {
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:var(--font)';
-    overlay.innerHTML = '<div style="font-size:24px">☁️</div><div style="font-size:14px;font-weight:600;color:var(--text)">Material Planner</div><div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px"><div class="spin"></div>Mengambil data dari cloud...</div>';
-    document.body.appendChild(overlay);
-    cloudLoad(function(cloudData){
-      // Merge cloud data into localStorage memory (cloud wins)
-      Object.keys(cloudData).forEach(function(k){
-        if(cloudData[k] !== null && cloudData[k] !== undefined){
-          localStorage._mem ? (localStorage._mem[k] = cloudData[k]) : void 0;
-          // Direct write since our shim wraps setItem
-          var val = cloudData[k];
-          // Bypass cloudSave to avoid re-uploading what we just downloaded
-          if(typeof localStorage.getItem === 'function'){
-            // write to _mem directly via the inner structure
-            localStorage.setItem(k, val);
-          }
-        }
-      });
-      if(document.body.contains(overlay)) document.body.removeChild(overlay);
-      _appInit();
+
+  // Show splash while loading cloud data
+  var overlay = document.createElement('div');
+  overlay.id = 'boot-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:var(--font)';
+  overlay.innerHTML =
+    '<div style="font-size:32px">📦</div>'+
+    '<div style="font-size:15px;font-weight:600;color:var(--text)">Material Planner</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px">'+
+      '<div class="spin"></div><span id="boot-msg">'+((_fbReady)?'Mengambil data dari cloud...':'Memuat data lokal...')+'</span>'+
+    '</div>'+
+    '<div style="width:220px;height:3px;background:var(--border);border-radius:99px;overflow:hidden">'+
+      '<div id="boot-bar" style="height:100%;background:var(--accent);border-radius:99px;width:10%;transition:width .4s"></div>'+
+    '</div>';
+  document.body.appendChild(overlay);
+
+  function setProgress(pct, msg) {
+    var b = document.getElementById('boot-bar'); if(b) b.style.width = pct+'%';
+    var m = document.getElementById('boot-msg'); if(m) m.textContent = msg;
+  }
+
+  function removeSplash() {
+    var o = document.getElementById('boot-overlay');
+    if(o){ o.style.opacity='0'; o.style.transition='opacity .3s'; setTimeout(function(){ if(document.body.contains(o)) document.body.removeChild(o); },300); }
+  }
+
+  function afterCloudLoad(cloudData) {
+    setProgress(60, 'Memuat state aplikasi...');
+    // Cloud wins over local for CLOUD_KEYS
+    Object.keys(cloudData||{}).forEach(function(k){
+      var v = cloudData[k];
+      if(v !== null && v !== undefined){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
     });
-  } else {
+    setProgress(80, 'Menyiapkan tampilan...');
     _appInit();
+    setProgress(100, 'Siap!');
+    setTimeout(removeSplash, 400);
+
+    // Auto-load sheets if master/mrp not in local cache but URLs are in cloud
+    setTimeout(function(){
+      var needsSheets = !STATE.masterData || !STATE.mrpData;
+      var hasUrls = localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp');
+      if(needsSheets && hasUrls){
+        toast('Memuat data dari Google Sheets...','inf');
+        loadAllSheets();
+      }
+    }, 800);
+  }
+
+  if(_fbReady) {
+    setProgress(30, 'Mengambil data dari cloud...');
+    cloudLoad(afterCloudLoad);
+  } else {
+    setProgress(50, 'Firebase tidak aktif — pakai data lokal...');
+    setTimeout(function(){ afterCloudLoad({}); }, 200);
   }
 }
 
@@ -3034,24 +3111,32 @@ function saveSup() {
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function loadSettingsForm() {
-  document.getElementById('cfg-url').value   = CFG.url;
-  document.getElementById('cfg-user').value  = CFG.user;
-  document.getElementById('cfg-pass').value  = CFG.pass;
-  document.getElementById('cfg-fonnte').value= CFG.fonnte;
-  document.getElementById('cfg-wn').value    = CFG.wn;
+  document.getElementById('cfg-url').value    = CFG.url;
+  document.getElementById('cfg-user').value   = CFG.user;
+  document.getElementById('cfg-pass').value   = CFG.pass;
+  document.getElementById('cfg-fonnte').value = CFG.fonnte;
+  document.getElementById('cfg-wn').value     = CFG.wn;
   document.getElementById('cfg-workdays').value = CFG.workdays;
-  // Firebase fields
-  var apiKey = window.localStorage.getItem('fb_apikey')||'';
-  var projId = window.localStorage.getItem('fb_projectid')||'';
-  var appId  = window.localStorage.getItem('fb_appid')||'';
+
+  var apiKey    = window.localStorage.getItem('fb_apikey')||'';
+  var projectId = window.localStorage.getItem('fb_projectid')||'';
+  var appId     = window.localStorage.getItem('fb_appid')||'';
   if(document.getElementById('fb-apikey'))    document.getElementById('fb-apikey').value    = apiKey;
-  if(document.getElementById('fb-projectid')) document.getElementById('fb-projectid').value = projId;
+  if(document.getElementById('fb-projectid')) document.getElementById('fb-projectid').value = projectId;
   if(document.getElementById('fb-appid'))     document.getElementById('fb-appid').value     = appId;
-  // Update Firebase dot status
-  var dot = document.getElementById('fb-dot');
-  if(dot) dot.className = _fbReady ? 'dot' : 'dot off';
+
+  var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
-  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif' : (apiKey ? 'Klik "Simpan & Hubungkan" untuk mengaktifkan' : 'Belum dikonfigurasi — cloud sync nonaktif');
+  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif — data tersync ke cloud' : (apiKey ? 'Config ada di browser ini — simpan snippet ke HTML agar laptop lain konek otomatis' : 'Belum dikonfigurasi');
+
+  // Show snippet if config already exists
+  if(apiKey && projectId && appId) {
+    var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
+    var box = document.getElementById('fb-embed-snippet');
+    var wrap = document.getElementById('fb-snippet-wrap');
+    if(box) box.value = snippet;
+    if(wrap) wrap.style.display = 'block';
+  }
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
