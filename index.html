@@ -1942,6 +1942,16 @@ function parseIDNum(v) {
   return parseFloat(s) || 0;
 }
 
+// ── Normalize SAP item code ────────────────────────────────────────────────────
+// Kode SAP adalah angka murni (misal 3000010001). Google Sheets Indonesia
+// bisa export integer sebagai "3.000.010.001" (titik = ribuan) → hapus titiknya.
+function cleanSAPCode(v) {
+  var s = String(v == null ? '' : v).trim();
+  // Kalau semua karakter adalah digit atau titik, dan tidak ada koma → hapus titik
+  if(s && /^[\d.]+$/.test(s)) s = s.replace(/\./g, '');
+  return s;
+}
+
 function processMRP(rows, headers) {
   var result = {};
   var now = new Date();
@@ -1968,7 +1978,7 @@ function processMRP(rows, headers) {
   }
 
   rows.forEach(function(row) {
-    var code = String(row['Item'] || row['Item Code'] || row['ItemCode'] || row['ITEM'] || '').trim();
+    var code = cleanSAPCode(row['Item'] || row['Item Code'] || row['ItemCode'] || row['ITEM'] || '');
     if(!code || !code.match(/^\d/)) return;
 
     var actualMRP = 0, max3MRP = 0;
@@ -2043,7 +2053,7 @@ function processMatcom(rows, headers, customAvgCol) {
   }
 
   rows.forEach(function(row) {
-    var code = String(row['Code']||row['SAP Code']||row['Item Code']||row['ItemCode']||row['Item No.']||row['Item No']||'').trim();
+    var code = cleanSAPCode(row['Code']||row['SAP Code']||row['Item Code']||row['ItemCode']||row['Item No.']||row['Item No']||'');
     if(!code || !code.match(/^\d/)) return;
     var avgUsg = 0;
 
@@ -2079,7 +2089,7 @@ function processMatcom(rows, headers, customAvgCol) {
 function processRealName(rows) {
   var result = {};
   rows.forEach(function(row) {
-    var code = String(row['Item No.'] || row['Item No'] || row['Item Code'] || row['ItemCode'] || row['SAP Code'] || row['Code'] || '').trim();
+    var code = cleanSAPCode(row['Item No.'] || row['Item No'] || row['Item Code'] || row['ItemCode'] || row['SAP Code'] || row['Code'] || '');
     var name = String(row['Real Name'] || row['RealName'] || row['Item Description'] || row['Description'] || row['Name'] || '').trim();
     if(code && name) result[code] = name;
   });
@@ -2089,7 +2099,7 @@ function processRealName(rows) {
 function processMasterData(rows) {
   var result = {};
   rows.forEach(function(row) {
-    var code = String(row['Item No.'] || row['Item No'] || row['Item Code'] || row['ItemCode'] || '').trim();
+    var code = cleanSAPCode(row['Item No.'] || row['Item No'] || row['Item Code'] || row['ItemCode'] || '');
     if(!code || !code.match(/^\d/)) return;
     var desc = String(row['Item Description'] || row['Description'] || '').trim();
     var moq = parseIDNum(row['Minimum Order Qty'] || row['MOQ'] || '0');
