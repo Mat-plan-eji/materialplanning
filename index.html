@@ -2684,68 +2684,79 @@ function getWorkdays(from, n) {
 }
 
 function generateSchedule() {
-  var cutoffInput = document.getElementById('urgent-cutoff') && document.getElementById('urgent-cutoff').value;
-  var cutoff = cutoffInput ? new Date(cutoffInput) : getCutoff();
+  // ── 1. Delivery week = minggu depan (Mon-Fri) ───────────────────────────────
+  var today = new Date(); today.setHours(0,0,0,0);
+  var dow = today.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  var daysToNextMon = (dow === 0) ? 1 : (8 - dow);
+  var delivMon = new Date(today); delivMon.setDate(today.getDate() + daysToNextMon);
+
+  // Build delivery workdays Mon-Fri
+  var delivWeek = [];
+  for(var di = 0; di < 5; di++) {
+    var wd = new Date(delivMon); wd.setDate(delivMon.getDate() + di);
+    if(wd.getDay() !== 0 && wd.getDay() !== 6) delivWeek.push(wd);
+  }
+  var delivFri = delivWeek[delivWeek.length - 1];
+
+  // ── 2. Coverage cutoff = hari terakhir delivery week + W+N ──────────────────
+  var coverageCutoff = new Date(delivFri);
+  coverageCutoff.setDate(delivFri.getDate() + CFG.wn);
+
+  // ── 3. Filter item urgent ────────────────────────────────────────────────────
   var urgentItems = STATE.projectionData.filter(function(p){
-    // Only items with actual MRP demand in current month
-    if(!p.actualMRP || p.actualMRP <= 0) return false;
-    return p.coverageDate <= cutoff;
+    if(p.actualMRP <= 0 && p.max3MRP <= 0) return false;
+    return p.coverageDate <= coverageCutoff;
   });
 
-  if(!urgentItems.length) { toast('Tidak ada item urgent untuk dijadwalkan', 'inf'); return; }
+  if(!urgentItems.length) { toast('Tidak ada item untuk dijadwalkan', 'inf'); return; }
 
-  // Group by supplier — pick earliest coverage date per supplier
+  // ── 4. Per item: delivery date = coverage - W+N, clamp ke delivery week ──────
+  var delivMonISO = delivWeek[0].toISOString().split('T')[0];
+  var delivFriISO = delivFri.toISOString().split('T')[0];
+
+  urgentItems.forEach(function(item){
+    var raw = new Date(item.coverageDate);
+    raw.setDate(raw.getDate() - CFG.wn);
+    var rawISO = raw.toISOString().split('T')[0];
+    // Clamp ke delivery week
+    if(rawISO <= delivMonISO) {
+      item._delivISO = delivMonISO;
+    } else if(rawISO >= delivFriISO) {
+      item._delivISO = delivFriISO;
+    } else {
+      // Cari hari kerja di delivery week yang >= rawISO
+      var matched = delivWeek.find(function(d){ return d.toISOString().split('T')[0] >= rawISO; });
+      item._delivISO = (matched || delivFri).toISOString().split('T')[0];
+    }
+  });
+
+  // ── 5. Group by supplier: pakai delivery date TERCEPAT ──────────────────────
   var bySupplier = {};
   urgentItems.forEach(function(item){
     var matchedPOs = STATE.poData.filter(function(p){ return p.itemCode === item.productCode && p.openQty > 0; });
     var supName = item.supplier || (matchedPOs.length ? matchedPOs[0].supplierName : 'Unknown');
-    if(!bySupplier[supName]) bySupplier[supName] = { supName: supName, entries: [], earliestCoverage: item.coverageDate, totalQty: 0 };
+    if(!bySupplier[supName]) {
+      bySupplier[supName] = {
+        supName: supName, entries: [],
+        delivISO: item._delivISO,
+        earliestCoverage: item.coverageDate,
+        totalQty: 0
+      };
+    } else {
+      // Ambil tanggal pengiriman TERCEPAT (item paling urgent)
+      if(item._delivISO < bySupplier[supName].delivISO)
+        bySupplier[supName].delivISO = item._delivISO;
+      if(item.coverageDate < bySupplier[supName].earliestCoverage)
+        bySupplier[supName].earliestCoverage = item.coverageDate;
+    }
     bySupplier[supName].entries.push({ item: item, pos: matchedPOs });
-    // Track earliest coverage date for this supplier
-    if(item.coverageDate < bySupplier[supName].earliestCoverage) bySupplier[supName].earliestCoverage = item.coverageDate;
-    // Sum open qty for load balancing
     matchedPOs.forEach(function(po){ bySupplier[supName].totalQty += (po.openQty || 0); });
   });
 
   var suppliers = Object.values(bySupplier);
 
-  // Calculate ideal request date per supplier: earliest coverage - 14 days
+  // ── 6. Cek manual override ───────────────────────────────────────────────────
   suppliers.forEach(function(sup){
-    var idealDate = new Date(sup.earliestCoverage);
-    idealDate.setDate(idealDate.getDate() - 14);
-    // Must not be in the past
-    var today = new Date(); today.setHours(0,0,0,0);
-    if(idealDate < today) idealDate = new Date(today);
-    sup.idealDate = idealDate;
-    sup.idealDateISO = idealDate.toISOString().split('T')[0];
-  });
-
-  // Get workdays for next 2 weeks (10 working days)
-  var workdays = getWorkdays(new Date(), 10);
-  var workdayISOs = workdays.map(function(d){ return d.toISOString().split('T')[0]; });
-
-  // Balance: for each supplier, find the nearest workday >= idealDate
-  // Then balance load across the 5 workdays of the target week
-  // by minimizing max(supplier count per day) and max(qty per day)
-  
-  // Group workdays by week
-  var weekDays = workdays.slice(0, CFG.workdays); // first week = 5 days
-  var week2Days = workdays.slice(CFG.workdays, CFG.workdays * 2);
-
-  // Assign suppliers to workdays
-  var dayLoad = {}; // dayISO -> {count, qty}
-  workdays.forEach(function(d){ var iso = d.toISOString().split('T')[0]; dayLoad[iso] = {count:0, qty:0}; });
-
-  // Sort suppliers by idealDate (earliest first) then by totalQty (largest first for better balancing)
-  suppliers.sort(function(a,b){
-    if(a.idealDateISO !== b.idealDateISO) return a.idealDateISO.localeCompare(b.idealDateISO);
-    return b.totalQty - a.totalQty;
-  });
-
-  var newSchedule = [];
-
-  suppliers.forEach(function(sup){
-    // Check if any PO already has manual override date
     var manualDate = null;
     sup.entries.forEach(function(e){
       e.pos.forEach(function(po){
@@ -2755,45 +2766,70 @@ function generateSchedule() {
         }
       });
     });
+    if(manualDate) { sup.delivISO = manualDate; sup._isManual = true; }
+  });
 
-    var assignedDateISO;
-    if(manualDate) {
-      assignedDateISO = manualDate;
-    } else {
-      // Find best workday: >= idealDate, minimize load (count then qty)
-      var eligible = workdays.filter(function(d){ return d.toISOString().split('T')[0] >= sup.idealDateISO; });
-      if(!eligible.length) eligible = workdays; // fallback: use any available workday
-      
-      // Pick the workday with fewest suppliers, then fewest qty
-      eligible.sort(function(a,b){
-        var ai = a.toISOString().split('T')[0], bi = b.toISOString().split('T')[0];
-        var la = dayLoad[ai] || {count:0,qty:0};
-        var lb = dayLoad[bi] || {count:0,qty:0};
-        if(la.count !== lb.count) return la.count - lb.count;
-        return la.qty - lb.qty;
-      });
-      assignedDateISO = eligible[0].toISOString().split('T')[0];
+  // ── 7. Inisialisasi day buckets ───────────────────────────────────────────────
+  var dayBuckets = {}; // ISO → [supplier, ...]
+  delivWeek.forEach(function(d){ dayBuckets[d.toISOString().split('T')[0]] = []; });
+  // Untuk tanggal manual yang mungkin di luar delivery week
+  suppliers.forEach(function(sup){
+    if(!dayBuckets[sup.delivISO]) dayBuckets[sup.delivISO] = [];
+  });
+
+  // Sort: delivISO dulu (earliest first), lalu earliestCoverage (most urgent first)
+  suppliers.sort(function(a,b){
+    if(a.delivISO !== b.delivISO) return a.delivISO.localeCompare(b.delivISO);
+    return a.earliestCoverage - b.earliestCoverage;
+  });
+
+  // Assign ke bucket awal
+  suppliers.forEach(function(sup){
+    dayBuckets[sup.delivISO].push(sup);
+    sup.assignedISO = sup.delivISO;
+  });
+
+  // ── 8. Load balancing: kalau satu hari terlalu banyak → mundurkan yg least urgent ──
+  var maxPerDay = Math.max(3, Math.ceil(suppliers.length / delivWeek.length));
+  // Iterasi beberapa kali sampai stabil
+  for(var iter = 0; iter < 20; iter++) {
+    var moved = false;
+    for(var wi = 0; wi < delivWeek.length - 1; wi++) {
+      var iso   = delivWeek[wi].toISOString().split('T')[0];
+      var next  = delivWeek[wi+1].toISOString().split('T')[0];
+      var list  = dayBuckets[iso];
+      if(list && list.length > maxPerDay) {
+        // Sort: most urgent (earliest coverage) stays → least urgent (latest coverage) moves
+        list.sort(function(a,b){ return a.earliestCoverage - b.earliestCoverage; });
+        var toMove = list.pop(); // least urgent = last item
+        toMove.assignedISO = next;
+        if(!dayBuckets[next]) dayBuckets[next] = [];
+        dayBuckets[next].push(toMove);
+        moved = true;
+      }
     }
+    if(!moved) break;
+  }
 
-    // Update load tracker
-    if(dayLoad[assignedDateISO]) {
-      dayLoad[assignedDateISO].count++;
-      dayLoad[assignedDateISO].qty += sup.totalQty;
-    }
+  // ── 9. Generate schedule entries (FIFO PO selection) ─────────────────────────
+  var newSchedule = [];
+  var dayLoad = {};
 
-    // Convert ISO to DD/MM/YYYY
-    var delivDate = assignedDateISO.split('-').reverse().join('/');
+  suppliers.forEach(function(sup){
+    var assignedISO = sup.assignedISO;
+    if(!dayLoad[assignedISO]) dayLoad[assignedISO] = { count: 0, qty: 0 };
+    dayLoad[assignedISO].count++;
+    dayLoad[assignedISO].qty += sup.totalQty;
 
-    // FIFO PO selection: sort by docNum (oldest first), pick enough to cover shortfall
-    var itemSummaryParts = [];
-    var selectedPOs = [];
-    var selectedEntries = []; // entries with only selected POs
+    var delivDate = assignedISO.split('-').reverse().join('/');
+
+    // FIFO PO selection
+    var itemSummaryParts = [], selectedPOs = [], selectedEntries = [];
     sup.entries.forEach(function(e){
       var item = e.item;
       var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return String(a.docNum).localeCompare(String(b.docNum)); });
       var needed = Math.max(0, (item.max3MRP || item.avgUsg || 0) - (item.stockBTG||0) - (item.stockSNG||0));
-      var accumulated = 0;
-      var pickedPOs = [];
+      var accumulated = 0, pickedPOs = [];
       for(var pi = 0; pi < sortedPOs.length; pi++) {
         pickedPOs.push(sortedPOs[pi]);
         accumulated += (sortedPOs[pi].openQty || 0);
@@ -2805,32 +2841,30 @@ function generateSchedule() {
       var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
       itemSummaryParts.push((item.description||'') + (qtySum ? ' · ' + qtySum.toLocaleString('id-ID') + ' ' + uom : ''));
-      // Store entry with ONLY picked POs — this is what modal & WA will use
       selectedEntries.push({ item: item, pos: pickedPOs });
     });
-    var itemSummary = itemSummaryParts.join(', ');
-    var poNums = selectedPOs.map(function(p){ return p.docNum; }).filter(Boolean);
 
+    var poNums = selectedPOs.map(function(p){ return p.docNum; }).filter(Boolean);
     var exists = STATE.scheduleData.find(function(s){ return s.supName === sup.supName && s.status !== 'confirmed'; });
     if(!exists) {
       newSchedule.push({
         supName: sup.supName, date: delivDate,
-        items: itemSummary, pos: poNums.join(', '),
-        entries: selectedEntries,   // ← FIFO-selected only, not sup.entries
-        status: manualDate ? 'approved' : 'pending',
-        feedback: '', isManual: !!manualDate,
-        idealDate: sup.idealDateISO
+        items: itemSummaryParts.join(', '), pos: poNums.join(', '),
+        entries: selectedEntries,
+        status: sup._isManual ? 'approved' : 'pending',
+        feedback: '', isManual: !!sup._isManual,
+        coverageDate: sup.earliestCoverage ? fmtDateID(sup.earliestCoverage) : ''
       });
     }
 
-    // Update PO override dates — only selected POs
+    // Update PO override dates
     selectedPOs.forEach(function(po){
       var key = po.docNum + '_' + po.itemCode;
       if(!STATE.poOverrides[key] || !STATE.poOverrides[key].isManual) {
         if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
-        STATE.poOverrides[key].date = assignedDateISO;
+        STATE.poOverrides[key].date    = assignedISO;
         STATE.poOverrides[key].isManual = false;
-        STATE.poOverrides[key].isAuto = true;
+        STATE.poOverrides[key].isAuto   = true;
       }
     });
   });
@@ -2838,11 +2872,17 @@ function generateSchedule() {
   STATE.scheduleData = STATE.scheduleData.concat(newSchedule);
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
-  document.getElementById('s-unconfirmed').textContent = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'}).length;
+  document.getElementById('s-unconfirmed').textContent =
+    STATE.scheduleData.filter(function(s){ return s.status !== 'confirmed'; }).length;
 
-  // Show distribution summary
-  var distSummary = Object.keys(dayLoad).filter(function(k){ return dayLoad[k].count > 0; }).map(function(k){ return k.split('-').reverse().join('/') + ': ' + dayLoad[k].count + ' supplier'; }).join(' | ');
-  toast('Jadwal: ' + newSchedule.length + ' supplier | ' + distSummary, 'ok');
+  // Summary toast
+  var distSummary = Object.keys(dayLoad)
+    .filter(function(k){ return dayLoad[k].count > 0; })
+    .sort()
+    .map(function(k){ return k.split('-').reverse().join('/') + ': ' + dayLoad[k].count + ' sup'; })
+    .join(' | ');
+  var coverageCutoffStr = coverageCutoff.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+  toast('Jadwal ' + newSchedule.length + ' supplier (coverage s/d ' + coverageCutoffStr + ') | ' + distSummary, 'ok');
   showPage('schedule', document.querySelectorAll('.ni')[5]);
 }
 
@@ -2900,7 +2940,7 @@ function renderSchedule() {
           '<div class="sinfo-name">' + e.supName + ' ' + sb + typeTags + (e.isManual?'<span class="badge b-amber" style="margin-left:5px">Manual</span>':'') + '</div>' +
           '<div class="sinfo-items">' + (e.items||'') + '</div>' +
           (e.feedback ? '<div class="sinfo-fb">✓ ' + e.feedback + '</div>' : '') +
-          (e.idealDate ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">Ideal: ' + e.idealDate.split('-').reverse().join('/') + '</div>' : '') +
+          (e.coverageDate ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">Coverage tercepat: ' + e.coverageDate + '</div>' : '') +
         '</div>' +
         '<div class="sacts">' +
           '<button class="btn btn-sm" onclick="openFbModal(' + idx + ')">📝</button>' +
