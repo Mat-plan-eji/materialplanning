@@ -527,14 +527,9 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="card">
       <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom wajib: <span style="font-family:var(--mono);color:var(--teal)">Code | [kolom avg usage]</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Code (col C) | Average 3 months (col L)</span> — header baris 3</div>
         <div class="fg"><label>URL Google Sheets</label><input id="matcom-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
         <div class="fg"><label>Nama Tab</label><input id="matcom-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <div class="fg">
-          <label>Nama Kolom Avg Usage <span style="color:var(--hint)">(kosong = auto-detect)</span></label>
-          <input id="matcom-avg-col" type="text" placeholder="contoh: Average x Max  atau  Max  atau  Usg/day" style="width:100%;font-size:11.5px">
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">Tulis nama kolom persis seperti di header sheet (case-insensitive)</div>
-        </div>
         <button class="btn btn-sm" style="width:100%;border-color:rgba(16,185,129,.3);color:var(--green)" onclick="loadSheetData('matcom')">↓ Muat Matcom</button>
         <div id="matcom-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
         <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
@@ -1002,7 +997,7 @@ function _sheetsCSVUrl(url, sheetName) {
   return base;
 }
 
-function _parseCSV(text) {
+function _parseCSV(text, headerRowHint) {
   // RFC 4180 CSV parser
   var allRows = []; var row = []; var cell = ''; var inQ = false;
   for(var i=0;i<text.length;i++){
@@ -1012,30 +1007,41 @@ function _parseCSV(text) {
     else if(c===','){ row.push(cell); cell=''; }
     else if(c==='\n'||c==='\r'){
       row.push(cell); cell='';
-      if(row.some(function(x){return x!=='';})) allRows.push(row);
+      // Keep ALL rows including empty ones for row-number-based hint
+      allRows.push(row);
       row=[];
       if(c==='\r'&&text[i+1]==='\n') i++;
     } else { cell+=c; }
   }
-  if(cell||row.length){ row.push(cell); if(row.some(function(x){return x!=='';})) allRows.push(row); }
+  if(cell||row.length){ row.push(cell); allRows.push(row); }
   if(allRows.length<2) return {headers:[],rows:[],headerRowIdx:0};
 
-  // Auto-detect header row: cari baris yang mengandung kata kunci kolom data
-  // Hindari baris judul seperti "Raw Material & Packaging Consumption"
-  var HEADER_KEYWORDS = ['code','item','category','nama','name','description','uom','satuan','no'];
   var headerRowIdx = 0;
-  for(var ri=0; ri<Math.min(allRows.length-1, 5); ri++){
-    var rowLower = allRows[ri].map(function(c){ return String(c).toLowerCase().trim(); });
-    var matches = rowLower.filter(function(h){ return HEADER_KEYWORDS.some(function(k){ return h.includes(k); }); }).length;
-    if(matches >= 2){ headerRowIdx = ri; break; }
+
+  if(headerRowHint && headerRowHint > 0) {
+    // User specified exact row number (1-indexed) → use directly
+    headerRowIdx = Math.min(headerRowHint - 1, allRows.length - 2);
+  } else {
+    // Auto-detect: cari baris yang paling banyak mengandung kata kunci header
+    var HEADER_KEYWORDS = ['code','item','category','nama','name','description','uom','satuan','no','kode'];
+    var bestIdx = 0, bestScore = 0;
+    for(var ri = 0; ri < Math.min(allRows.length - 1, 8); ri++) {
+      var rowLower = allRows[ri].map(function(c){ return String(c).toLowerCase().trim(); });
+      var score = rowLower.filter(function(h){ return h && HEADER_KEYWORDS.some(function(k){ return h === k || h.includes(k); }); }).length;
+      if(score > bestScore) { bestScore = score; bestIdx = ri; }
+    }
+    headerRowIdx = bestIdx;
   }
 
   var headers = allRows[headerRowIdx].map(function(h){ return String(h).trim(); });
-  var data = allRows.slice(headerRowIdx+1).map(function(r){
-    var obj={};
-    headers.forEach(function(h,i){ obj[h]=(r[i]!==undefined?r[i]:''); });
-    return obj;
-  });
+  // Filter data rows: skip empty rows after header
+  var data = allRows.slice(headerRowIdx+1)
+    .filter(function(r){ return r.some(function(x){ return x !== ''; }); })
+    .map(function(r){
+      var obj={};
+      headers.forEach(function(h,i){ obj[h]=(r[i]!==undefined?r[i]:''); });
+      return obj;
+    });
   return {headers:headers, rows:data, headerRowIdx:headerRowIdx};
 }
 
@@ -1064,7 +1070,9 @@ function loadSheetData(type) {
     if(!r.ok) throw new Error('HTTP '+r.status+' — pastikan sheet sudah di-share "Anyone with link"');
     return r.text();
   }).then(function(text){
-    var parsed = _parseCSV(text);
+    // Matcom: header selalu baris 3, kolom avg = "Average 3 months"
+    var headerRowHint = (type === 'matcom') ? 3 : 0;
+    var parsed = _parseCSV(text, headerRowHint);
     var rows = parsed.rows; var headers = parsed.headers;
     var ts = new Date().toLocaleString('id-ID');
 
@@ -1087,26 +1095,15 @@ function loadSheetData(type) {
       toast('MRP: '+cnt+' item ✓','ok');
 
     } else if(type==='matcom'){
-      // Ambil nama kolom avg dari input user (kalau ada)
-      var customAvgCol = (document.getElementById('matcom-avg-col')||{value:''}).value.trim();
-      if(customAvgCol) localStorage.setItem('matcom_avg_col', customAvgCol);
-      else customAvgCol = localStorage.getItem('matcom_avg_col')||'';
-
-      STATE.matcomData = processMatcom(rows, headers, customAvgCol);
+      // Hardcoded: header baris 3, kolom avg = "Average 3 months", kode = kolom C ("Code")
+      STATE.matcomData = processMatcom(rows, headers, 'Average 3 months');
       localStorage.setItem('matcom_data', JSON.stringify(STATE.matcomData));
       localStorage.setItem('matcom_upload_ts', ts);
       var cnt = Object.keys(STATE.matcomData).length;
-      var avgFound = STATE.matcomData && cnt > 0
-        ? (function(){ var sample=Object.values(STATE.matcomData).find(function(x){return x.avgUsg>0;}); return sample?'avgUsg OK':'avgUsg = 0 semua'; })()
-        : 'kosong';
-      if(infoEl) infoEl.innerHTML = cnt+' item dimuat ✓ &nbsp;<span style="color:var(--muted);font-size:10.5px">| header row '+(parsed.headerRowIdx+1)+' | '+avgFound+'</span>';
-      // Tampilkan kolom yang tersedia untuk debug
-      if(infoEl && cnt > 0) {
-        var colList = headers.slice(0, 20).filter(function(h){ return h; }).join(', ');
-        infoEl.innerHTML += '<br><span style="font-size:10px;color:var(--hint)">Kolom: '+colList+'</span>';
-      }
-      if(dotEl) dotEl.className = cnt>0 ? 'dot' : 'dot warn';
-      toast('Matcom: '+cnt+' item ('+avgFound+')','ok');
+      var nonZero = Object.values(STATE.matcomData).filter(function(x){ return x.avgUsg > 0; }).length;
+      if(infoEl) infoEl.textContent = cnt + ' item dimuat ✓ (' + nonZero + ' ada avgUsg)';
+      if(dotEl) dotEl.className = cnt > 0 ? 'dot' : 'dot warn';
+      toast('Matcom: ' + cnt + ' item' + (nonZero > 0 ? ' ✓' : ' ⚠ avgUsg 0'), nonZero > 0 ? 'ok' : 'err');
 
     } else if(type==='realname'){
       STATE.realNameData = processRealName(rows);
@@ -1140,10 +1137,6 @@ function _restoreSheetUrls() {
     var ts=localStorage.getItem(t+'_upload_ts'), te=document.getElementById(t+'-ts');
     if(ts&&te) te.textContent='Dimuat: '+ts;
   });
-  // Restore matcom avg col
-  var ac = localStorage.getItem('matcom_avg_col');
-  var ace = document.getElementById('matcom-avg-col');
-  if(ac && ace) ace.value = ac;
 }
 // ─── PERF UTILS ──────────────────────────────────────────────────────────────
 function debounce(fn, ms) {
@@ -1919,6 +1912,36 @@ function processFile(file, type) {
   reader.readAsArrayBuffer(file);
 }
 
+// ── Parser angka format Indonesia ──────────────────────────────────────────────
+// Handles: "8.817" (titik=ribuan), "8,817" (koma=desimal), "8.817,50", "8817"
+function parseIDNum(v) {
+  var s = String(v == null ? '' : v).trim().replace(/\s/g,'');
+  if(!s || s === '-') return 0;
+  // Ada titik DAN koma → titik=ribuan, koma=desimal: "8.817,50" → 8817.50
+  if(s.includes('.') && s.includes(',')) {
+    s = s.replace(/\./g,'').replace(',','.');
+  }
+  // Hanya koma → koma=desimal: "8,5" → 8.5
+  else if(s.includes(',') && !s.includes('.')) {
+    s = s.replace(',','.');
+  }
+  // Hanya titik → cek apakah ribuan atau desimal
+  else if(s.includes('.') && !s.includes(',')) {
+    var parts = s.split('.');
+    // "8.817" → bagian setelah titik = 3 digit → ribuan separator
+    // "8.5" atau "293.9" → bagian setelah titik ≠ 3 digit → desimal
+    if(parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1) {
+      s = s.replace(/\./g,''); // hapus titik ribuan
+    }
+    // Multiple titik → semua titik = ribuan: "1.234.567" → 1234567
+    else if(parts.length > 2) {
+      s = s.replace(/\./g,'');
+    }
+    // Else: biarkan apa adanya (titik = desimal)
+  }
+  return parseFloat(s) || 0;
+}
+
 function processMRP(rows, headers) {
   var result = {};
   var now = new Date();
@@ -1952,16 +1975,16 @@ function processMRP(rows, headers) {
 
     Object.keys(row).forEach(function(k) {
       var kl = String(k).toLowerCase();
-      var val = parseFloat(String(row[k]).replace(',','.')) || 0;
+      var val = parseIDNum(row[k]);
       if(kl.includes(curMonthName.toLowerCase()) && (kl.includes(curYear2) || kl.includes(String(now.getFullYear())))) {
         if(val > actualMRP) actualMRP = val;
       }
     });
 
-    if(max3Key && row[max3Key] !== undefined) max3MRP = parseFloat(String(row[max3Key]).replace(',','.')) || 0;
+    if(max3Key && row[max3Key] !== undefined) max3MRP = parseIDNum(row[max3Key]);
     if(!max3MRP) {
       ['Maximal','Max 3 Bulan MRP','Max avg 2 bulan + MRP'].forEach(function(c) {
-        if(!max3MRP && row[c] !== undefined) max3MRP = parseFloat(String(row[c]).replace(',','.')) || 0;
+        if(!max3MRP && row[c] !== undefined) max3MRP = parseIDNum(row[c]);
       });
     }
 
@@ -1969,7 +1992,7 @@ function processMRP(rows, headers) {
     monthNamesID.forEach(function(m) {
       Object.keys(row).forEach(function(k) {
         if(!months[m] && String(k).toLowerCase().includes(m.toLowerCase())) {
-          var v = parseFloat(String(row[k]).replace(',','.')) || 0;
+          var v = parseIDNum(row[k]);
           if(v) months[m] = v;
         }
       });
@@ -1988,8 +2011,17 @@ function processMatcom(rows, headers, customAvgCol) {
   var result = {};
   var avgKey = null;
   // Prioritas: kolom yang ditentukan user → exact match → partial match
-  var avgCandidates = ['average x max','avg x max','max','average 3','usg/day','usg per day',
-                       'average','avg usg','avg usage','average usage','pemakaian rata','rata-rata'];
+  // 'x' = kolom "Average x Max" yang terpecah di beberapa sheet
+  var avgCandidates = [
+    'average 3 months',   // ← prioritas utama sesuai format sheet
+    'average x max','avg x max',
+    'x','max',
+    'average 3','avg 3 months',
+    'usg/day','avg daily use','usg per day',
+    'avg usg','avg usage','average usage',
+    'avg 2 bulan','pemakaian rata','rata-rata',
+    'average'
+  ];
 
   if(customAvgCol && customAvgCol.trim()) {
     avgKey = customAvgCol.trim(); // User-specified, langsung pakai
@@ -2015,7 +2047,7 @@ function processMatcom(rows, headers, customAvgCol) {
     if(!code || !code.match(/^\d/)) return;
     var avgUsg = 0;
 
-    function parseNum(v) { return parseFloat(String(v).replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0; }
+    function parseNum(v) { return parseIDNum(v); }
 
     if(avgKey && row[avgKey] !== undefined && row[avgKey] !== '') avgUsg = parseNum(row[avgKey]);
 
@@ -2060,7 +2092,7 @@ function processMasterData(rows) {
     var code = String(row['Item No.'] || row['Item No'] || row['Item Code'] || row['ItemCode'] || '').trim();
     if(!code || !code.match(/^\d/)) return;
     var desc = String(row['Item Description'] || row['Description'] || '').trim();
-    var moq = parseFloat(String(row['Minimum Order Qty'] || row['MOQ'] || '0').replace(',','.')) || 0;
+    var moq = parseIDNum(row['Minimum Order Qty'] || row['MOQ'] || '0');
     var uom = String(row['Inventory Uom'] || row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim();
     var supplier = String(row['Supplier'] || row['Supplier Name'] || row['Vendor'] || '').trim();
     result[code] = { desc: desc, moq: moq, uom: uom, supplier: supplier };
