@@ -245,7 +245,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="logo-mark">
       <div class="logo-icon">RM</div>
       <h1>Material Planner</h1>
-      <span id="sync-status-dot" title="Status cloud sync" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;margin-left:2px"></span>
     </div>
     <p>Raw Material Dashboard</p>
   </div>
@@ -263,7 +262,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ni" onclick="showPage('ospo',this)"><span class="ni-ico">◉</span>OSPO</div>
   <div class="ni" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
   <div class="ni" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
-  <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets)</div>
+  <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Upload Data</div>
   <div class="nav-divider"></div>
   <div style="padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:10.5px;color:var(--muted)" id="theme-label">🌙 Dark</span>
@@ -283,16 +282,19 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph">
     <div class="ph-l"><h2>Material Planner Dashboard</h2><p id="dash-sub">Sync data untuk memulai</p></div>
     <div class="ph-r">
-      <button class="btn btn-sm" onclick="_backgroundRefreshSAP()" title="Refresh data SAP yang expired saja">↺ Refresh Expired</button>
-      <button class="btn btn-amber btn-sm" onclick="syncAll(true)" title="Paksa ambil ulang SEMUA data dari SAP sekarang">⚡ Force Refresh SAP</button>
+      <button class="btn" onclick="syncAll()">↺ Sync Semua</button>
       <button class="btn btn-primary" onclick="buildProjection();showPage('projection',document.querySelectorAll('.ni')[1])">⚡ Build Projection</button>
     </div>
   </div>
-  <!-- Cache status bar -->
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:7px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span style="font-size:10.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Data SAP terakhir:</span>
-    <div id="dash-cache-status" style="flex:1;min-width:0;font-size:11px"></div>
-    <button class="btn btn-xs" onclick="updateCacheStatus()" style="flex-shrink:0">↺</button>
+  <!-- Sync progress indicator -->
+  <div id="sync-progress-bar" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 16px;margin-bottom:12px;align-items:center;gap:16px;flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:500;color:var(--muted)">Sync SAP:</span>
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-stock">⏳</span> Stock</span>
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-po">⏳</span> PO</span>
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-grpo">⏳</span> GRPO</span>
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospo">⏳</span> OSPO</span>
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospr">⏳</span> OSPR</span>
+    <span style="font-size:10.5px;color:var(--muted);margin-left:auto">Semua berjalan paralel</span>
   </div>
   <div class="stats" id="dash-stats">
     <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub">coverage ≤ W+2</div></div>
@@ -439,13 +441,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <div class="page" id="pg-grpo">
 <div class="page-inner">
   <div class="ph">
-    <div class="ph-l"><h2>GRPO</h2><p>Goods Receipt PO bulan berjalan — otomatis tarik bulan ini</p></div>
-    <div class="ph-r" style="gap:6px">
-      <span style="font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px">
-        History:
-        <input type="month" id="grpo-month" style="width:130px" onchange="loadGRPOMonth()" title="Lihat GRPO bulan lain">
-      </span>
-      <button class="btn btn-primary" onclick="loadGRPO(true)">↺ Refresh Bulan Ini</button>
+    <div class="ph-l"><h2>GRPO</h2><p>Goods Receipt PO bulan berjalan dari SAP</p></div>
+    <div class="ph-r">
+      <input type="month" id="grpo-month" style="width:140px">
+      <button class="btn btn-primary" onclick="loadGRPO()">↺ Load GRPO</button>
     </div>
   </div>
   <div class="fbar">
@@ -470,30 +469,23 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 </div>
 </div>
 
-<!-- DATA SOURCE / SHEETS -->
+<!-- UPLOAD -->
 <div class="page" id="pg-upload">
 <div class="page-inner">
-  <div class="ph">
-    <div class="ph-l"><h2>Data Source — Google Sheets</h2><p>Tarik data dari Google Sheet yang sudah dipublish. URL tersimpan online, tidak perlu input ulang di laptop lain.</p></div>
-    <div class="ph-r">
-      <button class="btn btn-primary" onclick="loadAllSheets()">↓ Muat Semua</button>
-    </div>
-  </div>
-
-  <div class="alert alert-info" style="margin-bottom:16px">
-    💡 <strong>Cara share Google Sheet:</strong> Buka sheet → klik <strong>Share</strong> → ubah ke <em>"Anyone with the link — Viewer"</em> → copy URL → paste di bawah.
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px">
+  <div class="ph"><div class="ph-l"><h2>Upload Data</h2><p>Upload Master Data, MRP, Material Consumption, dan Real Name</p></div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px">
 
     <div class="card" style="border-color:rgba(59,127,255,.4)">
       <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">⭐ Master Data Item</span><span id="master-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Minimum Order Qty | Inventory Uom | Supplier</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="master-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab <span style="color:var(--hint)">(kosong = tab pertama)</span></label><input id="master-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadSheetData('master')">↓ Muat Master Data</button>
-        <div id="master-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Minimum Order Qty | Inventory Uom | Supplier</span></div>
+        <div class="upload-zone" id="master-zone" onclick="document.getElementById('master-file').click()" ondragover="dragOver(event,'master-zone')" ondragleave="dragLeave('master-zone')" ondrop="dropFile(event,'master')">
+          <div class="upload-ico">📋</div>
+          <div class="upload-title" id="master-fname">Klik atau drag file Master Data</div>
+          <div class="upload-sub">Projection Stock akan menggunakan item dari file ini</div>
+        </div>
+        <input type="file" id="master-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'master')">
+        <div id="master-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
         <div id="master-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
@@ -501,11 +493,14 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="card">
       <div class="card-hdr"><span class="card-title">🏷️ Real Name Item</span><span id="realname-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Real Name</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="realname-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="realname-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-sm" style="width:100%;border-color:rgba(6,182,212,.3);color:var(--teal)" onclick="loadSheetData('realname')">↓ Muat Real Name</button>
-        <div id="realname-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Real Name</span></div>
+        <div class="upload-zone" id="realname-zone" onclick="document.getElementById('realname-file').click()" ondragover="dragOver(event,'realname-zone')" ondragleave="dragLeave('realname-zone')" ondrop="dropFile(event,'realname')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="realname-fname">Klik atau drag file Real Name</div>
+          <div class="upload-sub">Kolom: Item No. + Real Name</div>
+        </div>
+        <input type="file" id="realname-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'realname')">
+        <div id="realname-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
         <div id="realname-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
@@ -513,11 +508,13 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="card">
       <div class="card-hdr"><span class="card-title">📊 MRP</span><span id="mrp-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item | Bulan… | Maximal</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="mrp-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="mrp-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadSheetData('mrp')">↓ Muat MRP</button>
-        <div id="mrp-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
+        <div class="upload-zone" id="mrp-zone" onclick="document.getElementById('mrp-file').click()" ondragover="dragOver(event,'mrp-zone')" ondragleave="dragLeave('mrp-zone')" ondrop="dropFile(event,'mrp')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="mrp-fname">Klik atau drag file MRP</div>
+          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
+        </div>
+        <input type="file" id="mrp-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'mrp')">
+        <div id="mrp-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
         <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
@@ -525,22 +522,19 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="card">
       <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom wajib: <span style="font-family:var(--mono);color:var(--teal)">Code | [kolom avg usage]</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="matcom-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="matcom-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <div class="fg">
-          <label>Nama Kolom Avg Usage <span style="color:var(--hint)">(kosong = auto-detect)</span></label>
-          <input id="matcom-avg-col" type="text" placeholder="contoh: Average x Max  atau  Max  atau  Usg/day" style="width:100%;font-size:11.5px">
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">Tulis nama kolom persis seperti di header sheet (case-insensitive)</div>
+        <div class="upload-zone" id="matcom-zone" onclick="document.getElementById('matcom-file').click()" ondragover="dragOver(event,'matcom-zone')" ondragleave="dragLeave('matcom-zone')" ondrop="dropFile(event,'matcom')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="matcom-fname">Klik atau drag file Matcom</div>
+          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
         </div>
-        <button class="btn btn-sm" style="width:100%;border-color:rgba(16,185,129,.3);color:var(--green)" onclick="loadSheetData('matcom')">↓ Muat Matcom</button>
-        <div id="matcom-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
+        <input type="file" id="matcom-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'matcom')">
+        <div id="matcom-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
         <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
 
   </div>
-  <div style="margin-top:8px;max-width:1000px" id="upload-preview"></div>
+  <div style="margin-top:16px;max-width:900px" id="upload-preview"></div>
 </div>
 </div>
 
@@ -629,59 +623,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <!-- SETTINGS -->
 <div class="page" id="pg-settings">
 <div class="page-inner">
-  <div class="ph"><div class="ph-l"><h2>Settings</h2><p>Konfigurasi koneksi SAP, WA, dan Firebase (cloud sync)</p></div></div>
-  <div style="max-width:560px;display:flex;flex-direction:column;gap:14px">
-
-    <!-- FIREBASE CLOUD SYNC -->
-    <div class="card" style="border-color:rgba(245,158,11,.35)">
-      <div class="card-hdr" style="background:var(--amber-bg)">
-        <span class="card-title">☁️ Firebase — Cloud Sync</span>
-        <span id="fb-dot" class="dot off"></span>
-      </div>
-      <div style="padding:16px">
-        <div id="fb-status-msg" style="margin-bottom:12px;font-size:12px;color:var(--muted)">Belum dikonfigurasi</div>
-
-        <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.7">
-          Masukkan config Firebase di bawah → klik Simpan → copy snippet yang muncul → paste ke file HTML kamu (ganti baris FIREBASE_CONFIG) → push ke GitHub.<br>
-          <strong style="color:var(--text)">Setelah itu semua laptop langsung konek otomatis tanpa setting apapun.</strong><br>
-          <a onclick="window.open('https://console.firebase.google.com','_blank')" style="color:var(--accent);cursor:pointer">→ Buka Firebase Console</a>
-          &nbsp;·&nbsp;
-          <a onclick="showFirebaseGuide()" style="color:var(--teal);cursor:pointer">Panduan lengkap</a>
-        </div>
-
-        <div class="fg"><label>API Key</label><input id="fb-apikey" placeholder="AIzaSy..." style="width:100%"></div>
-        <div class="fg"><label>Project ID</label><input id="fb-projectid" placeholder="material-planner-xxxxx" style="width:100%"></div>
-        <div class="fg"><label>App ID</label><input id="fb-appid" placeholder="1:123456789:web:abc..." style="width:100%"></div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="btn btn-amber" onclick="saveFirebaseConfig()">💾 Simpan & Hubungkan</button>
-          <button class="btn btn-sm" onclick="testFirebase()">Test Koneksi</button>
-          <button class="btn btn-sm btn-red" onclick="clearFirebaseConfig()">Hapus Config</button>
-        </div>
-
-        <!-- Snippet untuk di-embed ke HTML -->
-        <div id="fb-snippet-wrap" style="display:none">
-          <div style="background:var(--green-bg);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:12px;margin-bottom:8px">
-            <div style="font-size:11.5px;font-weight:600;color:var(--green);margin-bottom:8px">
-              ✓ Langkah terakhir — embed ke GitHub agar laptop lain otomatis konek:
-            </div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
-              1. Buka file HTML di GitHub → cari baris <code style="background:var(--bg4);padding:1px 4px;border-radius:3px">var FIREBASE_CONFIG = {</code><br>
-              2. Ganti 3 baris di dalamnya dengan snippet di bawah ini:<br>
-              3. Commit & push → selesai, tidak perlu setting di laptop manapun
-            </div>
-            <textarea id="fb-embed-snippet" readonly onclick="this.select()" style="width:100%;height:70px;background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:11px;color:var(--teal);resize:none"></textarea>
-            <button class="btn btn-sm btn-green" style="margin-top:6px;width:100%" onclick="var t=document.getElementById('fb-embed-snippet');t.select();document.execCommand('copy');toast('Snippet di-copy ✓','ok')">📋 Copy Snippet</button>
-          </div>
-        </div>
-
-        <div style="margin-top:8px;padding:10px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;color:var(--muted)">
-          <strong style="color:var(--text)">Tersimpan di cloud:</strong> Schedule, PO overrides, Comments, History, URL Sheets, Settings.<br>
-          <strong style="color:var(--amber)">Tidak di cloud:</strong> MRP, Master Data, Matcom, Real Name — ditarik ulang otomatis dari Sheets.
-        </div>
-      </div>
-    </div>
-
+  <div class="ph"><div class="ph-l"><h2>Settings</h2><p>Konfigurasi koneksi API</p></div></div>
+  <div style="max-width:520px;display:flex;flex-direction:column;gap:14px">
     <div class="card">
       <div class="card-hdr"><span class="card-title">SAP API</span><span id="sap-dot" class="dot off"></span></div>
       <div style="padding:16px">
@@ -718,28 +661,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
   </div>
 </div>
-</div>
-
-<!-- Modal Firebase Guide -->
-<div class="modal-bg" id="modal-fb-guide">
-  <div class="modal" style="width:600px;max-width:96vw">
-    <h3>🔥 Panduan Setup Firebase</h3>
-    <div style="font-size:12.5px;line-height:1.9;color:var(--text)">
-      <div style="background:var(--bg3);border-radius:var(--r);padding:14px;margin-bottom:12px">
-        <strong style="color:var(--accent)">1.</strong> Buka <a onclick="window.open('https://console.firebase.google.com','_blank')" style="color:var(--accent);cursor:pointer">console.firebase.google.com</a> → <strong>Add project</strong> → beri nama (contoh: <em>material-planner</em>) → lanjutkan.<br><br>
-        <strong style="color:var(--accent)">2.</strong> Di sidebar kiri → <strong>Build → Firestore Database</strong> → <strong>Create database</strong> → pilih mode <strong>Production</strong> → pilih region terdekat (asia-southeast2 = Jakarta).<br><br>
-        <strong style="color:var(--accent)">3.</strong> Di Firestore → tab <strong>Rules</strong> → ganti isinya dengan:<br>
-        <div style="background:var(--bg4);font-family:var(--mono);font-size:11px;padding:10px;border-radius:4px;margin:6px 0;color:var(--green)">rules_version = '2';<br>service cloud.firestore {'{'}  <br>&nbsp;&nbsp;match /databases/{database}/documents {'{'}<br>&nbsp;&nbsp;&nbsp;&nbsp;match /{document=**} {'{'}<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br>&nbsp;&nbsp;&nbsp;&nbsp;{'}'}<br>&nbsp;&nbsp;{'}'}<br>{'}'}</div>
-        <strong style="color:var(--accent)">4.</strong> Kembali ke Project Overview → klik ikon <strong>&lt;/&gt; Web</strong> → beri nama app → klik <strong>Register App</strong>.<br><br>
-        <strong style="color:var(--accent)">5.</strong> Copy nilai <strong>apiKey</strong>, <strong>projectId</strong>, dan <strong>appId</strong> dari config yang muncul → paste ke Settings di atas.<br><br>
-        <strong style="color:var(--accent)">6.</strong> Klik <strong>Simpan & Hubungkan</strong> → tunggu status jadi hijau ✓
-      </div>
-      <div style="font-size:11px;color:var(--muted)">Free tier Firebase: 1 GB storage, 50.000 reads/hari, 20.000 writes/hari — lebih dari cukup untuk tim kecil.</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-primary" onclick="closeModal('modal-fb-guide')">Tutup</button>
-    </div>
-  </div>
 </div>
 
 </div><!-- /main -->
@@ -801,424 +722,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Firebase SDK v9 compat -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
-// ═══════════════════════════════════════════════════════════════════════════════
-// ☁️  FIREBASE CLOUD SYNC
-// ═══════════════════════════════════════════════════════════════════════════════
-// ☁️  FIREBASE CLOUD SYNC — per-key Firestore documents (no 1MB limit issue)
-// ═══════════════════════════════════════════════════════════════════════════════
-// ⚠️  GANTI 3 BARIS INI DENGAN CONFIG FIREBASE KAMU → PUSH KE GITHUB
-var FIREBASE_CONFIG = {
-  apiKey:    window.localStorage.getItem('fb_apikey')    || '',
-  projectId: window.localStorage.getItem('fb_projectid') || '',
-  appId:     window.localStorage.getItem('fb_appid')     || ''
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
-var _db = null;
-var _fbReady = false;
-
-// Helper bulan berjalan untuk cache key GRPO
-function _curMonthKey(){ var n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
-
-// Status sync indicator di header
-function _setSyncStatus(s){
-  var el=document.getElementById('sync-status-dot');
-  if(!el) return;
-  if(s==='saving')      { el.style.background='var(--amber)'; el.title='Menyimpan ke cloud...'; }
-  else if(s==='saved')  { el.style.background='var(--green)'; el.title='Tersimpan di cloud ✓'; }
-  else if(s==='error')  { el.style.background='var(--red)';   el.title='Gagal simpan ke cloud'; }
-}
-
-// Keys yang disync ke cloud — tiap key = 1 dokumen di Firestore koleksi 'kv'
-// Ini menghindari batas 1MB per dokumen Firestore
-var CLOUD_KEYS = [
-  // State aplikasi
-  'schedule','po_overrides','proj_comments','stock_history','proj_history',
-  'suppliers','proj_hidden_cols','proj_snapshots',
-  // URL Google Sheets
-  'sheet_url_master','sheet_url_mrp','sheet_url_matcom','sheet_url_realname',
-  'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
-  'matcom_avg_col',
-  // Settings
-  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync',
-  // SAP Cache — disync ke Firebase agar laptop lain tidak fetch ulang
-  'cache_data_stock','cache_ts_stock',
-  'cache_data_po',   'cache_ts_po',
-  'cache_data_ospo', 'cache_ts_ospo',
-  'cache_data_ospr', 'cache_ts_ospr',
-  'cache_data_grpo_'+_curMonthKey(), 'cache_ts_grpo_'+_curMonthKey()
-];
-
-// ── Sync indicator di header ──────────────────────────────────────────────────
-var _syncEl = null;
-function _setSyncStatus(status) {
-  // status: 'saving' | 'saved' | 'error' | 'off'
-  if(!_syncEl) {
-    _syncEl = document.createElement('div');
-    _syncEl.id = 'cloud-sync-indicator';
-    _syncEl.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:99px;padding:4px 12px;font-size:11px;font-family:var(--font);display:flex;align-items:center;gap:6px;z-index:500;opacity:0;transition:opacity .3s;pointer-events:none';
-    document.body.appendChild(_syncEl);
-  }
-  var icons = {saving:'⏳',saved:'☁ Tersimpan',error:'⚠ Gagal sync',off:''};
-  var colors = {saving:'var(--muted)',saved:'var(--green)',error:'var(--red)',off:''};
-  _syncEl.style.color = colors[status]||'var(--muted)';
-  _syncEl.textContent = icons[status]||'';
-  _syncEl.style.opacity = (status==='off') ? '0' : '1';
-  if(status==='saved'){ clearTimeout(_syncEl._t); _syncEl._t=setTimeout(function(){ _syncEl.style.opacity='0'; },2500); }
-}
-
-function saveFirebaseConfig() {
-  var apiKey    = (document.getElementById('fb-apikey')||{}).value.trim();
-  var projectId = (document.getElementById('fb-projectid')||{}).value.trim();
-  var appId     = (document.getElementById('fb-appid')||{}).value.trim();
-  if(!apiKey || !projectId || !appId){ toast('Isi semua field Firebase','err'); return; }
-  window.localStorage.setItem('fb_apikey', apiKey);
-  window.localStorage.setItem('fb_projectid', projectId);
-  window.localStorage.setItem('fb_appid', appId);
-  FIREBASE_CONFIG.apiKey = apiKey; FIREBASE_CONFIG.projectId = projectId; FIREBASE_CONFIG.appId = appId;
-  var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
-  var box = document.getElementById('fb-embed-snippet'); var wrap = document.getElementById('fb-snippet-wrap');
-  if(box) box.value = snippet; if(wrap) wrap.style.display='block';
-  toast('Config disimpan ✓','ok');
-  initFirebase();
-}
-
-function clearFirebaseConfig() {
-  if(!confirm('Hapus config Firebase?')) return;
-  ['fb_apikey','fb_projectid','fb_appid'].forEach(function(k){ window.localStorage.removeItem(k); });
-  FIREBASE_CONFIG.apiKey=FIREBASE_CONFIG.projectId=FIREBASE_CONFIG.appId='';
-  _db=null; _fbReady=false;
-  var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot off';
-  var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Config dihapus.';
-  toast('Firebase config dihapus','ok');
-}
-
-function initFirebase() {
-  var cfg = FIREBASE_CONFIG;
-  if(!cfg.apiKey || !cfg.projectId || !cfg.appId) return;
-  try {
-    var app; try{ app=firebase.app(); }catch(e){ app=null; }
-    if(!app || app.options.projectId !== cfg.projectId)
-      firebase.initializeApp({apiKey:cfg.apiKey, projectId:cfg.projectId, appId:cfg.appId});
-    _db = firebase.firestore();
-    _fbReady = true;
-    var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot';
-    var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='☁ Firebase aktif';
-  } catch(e) {
-    _fbReady=false;
-    var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot off';
-    var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Error: '+e.message;
-    console.warn('Firebase init error:',e.message);
-  }
-}
-
-function testFirebase() {
-  if(!_fbReady||!_db){ toast('Firebase belum terhubung','err'); return; }
-  var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Testing...';
-  _db.collection('kv').doc('sheet_url_master').get()
-    .then(function(doc){
-      if(msg) msg.textContent='✓ OK ('+new Date().toLocaleTimeString('id-ID')+')';
-      toast('Firebase OK ✓','ok');
-    }).catch(function(e){ if(msg) msg.textContent='Error: '+e.message; toast('Test gagal: '+e.message,'err'); });
-}
-
-function showFirebaseGuide(){ document.getElementById('modal-fb-guide').classList.add('open'); }
-
-// ── Cloud save: tiap key = 1 dokumen di koleksi 'kv' ─────────────────────────
-var _saveTimers = {};
-function cloudSave(key, value) {
-  if(!_fbReady || !_db) return;
-  _setSyncStatus('saving');
-  clearTimeout(_saveTimers[key]);
-  _saveTimers[key] = setTimeout(function(){
-    _db.collection('kv').doc(key).set({v: value})
-      .then(function(){ _setSyncStatus('saved'); })
-      .catch(function(e){ _setSyncStatus('error'); console.warn('Save failed',key,e.message); });
-  }, 400); // 400ms — cepat
-}
-
-// ── Cloud load: baca semua dokumen di koleksi 'kv' ───────────────────────────
-function cloudLoad(callback) {
-  if(!_fbReady || !_db){ callback({}); return; }
-  _db.collection('kv').get()
-    .then(function(snapshot){
-      var data = {};
-      snapshot.forEach(function(doc){ data[doc.id] = doc.data().v; });
-      callback(data);
-    })
-    .catch(function(e){ console.warn('Cloud load failed:',e.message); callback({}); });
-}
-
-// ── localStorage shim ─────────────────────────────────────────────────────────
-var _origLS = window.localStorage;
-var _lsMem = {};
-for(var _i=0; _i<_origLS.length; _i++){ var _lk=_origLS.key(_i); if(_lk) _lsMem[_lk]=_origLS.getItem(_lk); }
-var localStorage = {
-  getItem:    function(k){ return _lsMem.hasOwnProperty(k) ? _lsMem[k] : null; },
-  setItem:    function(k,v){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} if(CLOUD_KEYS.indexOf(k)>=0) cloudSave(k,v); },
-  removeItem: function(k){ delete _lsMem[k]; try{_origLS.removeItem(k);}catch(e){}},
-  key:        function(i){ return Object.keys(_lsMem)[i]||null; },
-  get length(){ return Object.keys(_lsMem).length; }
-};
-
-// ── Boot sequence — CEPAT: tampil dari cache dulu, SAP di background ──────────
-function appStart() {
-  initFirebase();
-
-  // Splash screen ringan
-  var overlay = document.createElement('div');
-  overlay.id = 'boot-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:var(--font)';
-  overlay.innerHTML =
-    '<div style="font-size:28px">📦</div>'+
-    '<div style="font-size:15px;font-weight:600;color:var(--text)">Material Planner</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px">'+
-      '<div class="spin"></div>'+
-      '<span id="boot-msg">'+(_fbReady ? 'Mengambil dari cloud...' : 'Memuat...')+'</span>'+
-    '</div>';
-  document.body.appendChild(overlay);
-
-  function setMsg(m){ var el=document.getElementById('boot-msg'); if(el) el.textContent=m; }
-  function removeSplash(){
-    var o=document.getElementById('boot-overlay');
-    if(o){ o.style.opacity='0'; o.style.transition='opacity .25s'; setTimeout(function(){ if(document.body.contains(o)) document.body.removeChild(o); }, 250); }
-  }
-
-  function afterLoad(cloudData) {
-    // Tulis cloud data ke memori lokal (cloud wins)
-    Object.keys(cloudData||{}).forEach(function(k){
-      var v=cloudData[k]; if(v!=null){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
-    });
-
-    setMsg('Menyiapkan tampilan...');
-    _appInit();       // render app dari cache — TIDAK ada SAP call di sini
-    removeSplash();   // hapus splash segera
-
-    // Background: auto-load Sheets jika data belum ada
-    setTimeout(function(){
-      if((!STATE.masterData || !STATE.mrpData) &&
-         (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))){
-        toast('Memuat data Sheets di background...','inf');
-        loadAllSheets();
-      }
-    }, 500);
-
-    // Background: refresh SAP data yang expired — TIDAK blocking tampilan
-    setTimeout(function(){ _backgroundRefreshSAP(); }, 1000);
-  }
-
-  if(_fbReady){ setMsg('Mengambil dari cloud...'); cloudLoad(afterLoad); }
-  else { setTimeout(function(){ afterLoad({}); }, 50); }
-}
-
-// Refresh SAP data di background — hanya yang expired, tidak blocking UI
-function _backgroundRefreshSAP() {
-  var tasks = [];
-
-  var sc = cacheGet('stock');
-  var pc = cacheGet('po');
-  var oc = cacheGet('ospo');
-  var or2 = cacheGet('ospr');
-  var monthKey = _curMonthKey();
-  var gc = cacheGet('grpo_' + monthKey);
-
-  // Kumpulkan yang expired atau belum ada
-  if(!sc || sc.expired) tasks.push({name:'Stock', fn: function(){ return loadStock(true); }});
-  if(!pc || pc.expired) tasks.push({name:'PO',    fn: function(){ return loadPO(true); }});
-  if(!oc || oc.expired) tasks.push({name:'OSPO',  fn: function(){ return loadOSPO(true); }});
-  if(!or2|| or2.expired)tasks.push({name:'OSPR',  fn: function(){ return loadOSPR(true); }});
-  if(!gc || gc.expired) tasks.push({name:'GRPO',  fn: function(){
-    document.getElementById('grpo-month').value = monthKey;
-    return loadGRPO(true);
-  }});
-
-  if(!tasks.length) { updateCacheStatus(); return; }
-
-  // Update status bar
-  var subEl = document.getElementById('dash-sub');
-  var origText = subEl ? subEl.textContent : '';
-  if(subEl) subEl.textContent = '⟳ Refresh SAP di background (' + tasks.length + ' data)...';
-
-  // Jalankan satu per satu agar tidak spam SAP
-  var idx = 0;
-  function runNext() {
-    if(idx >= tasks.length) {
-      if(subEl) subEl.textContent = origText;
-      // Rebuild projection dengan data baru
-      if(STATE.mrpData && STATE.masterData) buildProjection();
-      updateDashStats();
-      updateCacheStatus();
-      toast('Background refresh selesai ✓', 'ok');
-      return;
-    }
-    var task = tasks[idx++];
-    Promise.resolve(task.fn()).then(runNext).catch(function(e){
-      console.warn('Background refresh gagal:', task.name, e);
-      runNext(); // lanjut meski satu gagal
-    });
-  }
-  runNext();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 📊 GOOGLE SHEETS LOADER (via public CSV export — no API key needed)
-// ═══════════════════════════════════════════════════════════════════════════════
-function _sheetsCSVUrl(url, sheetName) {
-  var m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if(!m) return null;
-  var id = m[1];
-  var base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
-  if(sheetName) base += '&sheet=' + encodeURIComponent(sheetName);
-  return base;
-}
-
-function _parseCSV(text) {
-  // RFC 4180 CSV parser
-  var allRows = []; var row = []; var cell = ''; var inQ = false;
-  for(var i=0;i<text.length;i++){
-    var c=text[i];
-    if(inQ){ if(c==='"'&&text[i+1]==='"'){ cell+='"'; i++; } else if(c==='"'){ inQ=false; } else { cell+=c; } }
-    else if(c==='"'){ inQ=true; }
-    else if(c===','){ row.push(cell); cell=''; }
-    else if(c==='\n'||c==='\r'){
-      row.push(cell); cell='';
-      if(row.some(function(x){return x!=='';})) allRows.push(row);
-      row=[];
-      if(c==='\r'&&text[i+1]==='\n') i++;
-    } else { cell+=c; }
-  }
-  if(cell||row.length){ row.push(cell); if(row.some(function(x){return x!=='';})) allRows.push(row); }
-  if(allRows.length<2) return {headers:[],rows:[],headerRowIdx:0};
-
-  // Auto-detect header row: cari baris yang mengandung kata kunci kolom data
-  // Hindari baris judul seperti "Raw Material & Packaging Consumption"
-  var HEADER_KEYWORDS = ['code','item','category','nama','name','description','uom','satuan','no'];
-  var headerRowIdx = 0;
-  for(var ri=0; ri<Math.min(allRows.length-1, 5); ri++){
-    var rowLower = allRows[ri].map(function(c){ return String(c).toLowerCase().trim(); });
-    var matches = rowLower.filter(function(h){ return HEADER_KEYWORDS.some(function(k){ return h.includes(k); }); }).length;
-    if(matches >= 2){ headerRowIdx = ri; break; }
-  }
-
-  var headers = allRows[headerRowIdx].map(function(h){ return String(h).trim(); });
-  var data = allRows.slice(headerRowIdx+1).map(function(r){
-    var obj={};
-    headers.forEach(function(h,i){ obj[h]=(r[i]!==undefined?r[i]:''); });
-    return obj;
-  });
-  return {headers:headers, rows:data, headerRowIdx:headerRowIdx};
-}
-
-function saveSheetUrl(type) {
-  var url   = (document.getElementById(type+'-url')||{}).value||'';
-  var sheet = (document.getElementById(type+'-sheet')||{}).value||'';
-  localStorage.setItem('sheet_url_'+type, url.trim());
-  localStorage.setItem('sheet_tab_'+type, sheet.trim());
-}
-
-function loadSheetData(type) {
-  saveSheetUrl(type);
-  var url   = localStorage.getItem('sheet_url_'+type)||'';
-  var sheet = localStorage.getItem('sheet_tab_'+type)||'';
-  if(!url){ toast('Masukkan URL Google Sheets untuk '+type,'err'); return; }
-
-  var csvUrl = _sheetsCSVUrl(url, sheet);
-  if(!csvUrl){ toast('URL tidak valid untuk '+type,'err'); return; }
-
-  var infoEl = document.getElementById(type+'-info');
-  var tsEl   = document.getElementById(type+'-ts');
-  var dotEl  = document.getElementById(type+'-status');
-  if(infoEl) infoEl.textContent='⏳ Memuat dari Google Sheets...';
-
-  fetch(csvUrl).then(function(r){
-    if(!r.ok) throw new Error('HTTP '+r.status+' — pastikan sheet sudah di-share "Anyone with link"');
-    return r.text();
-  }).then(function(text){
-    var parsed = _parseCSV(text);
-    var rows = parsed.rows; var headers = parsed.headers;
-    var ts = new Date().toLocaleString('id-ID');
-
-    if(type==='master'){
-      STATE.masterData = processMasterData(rows);
-      localStorage.setItem('master_data', JSON.stringify(STATE.masterData));
-      localStorage.setItem('master_upload_ts', ts);
-      var cnt = Object.keys(STATE.masterData).length;
-      if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
-      if(dotEl) dotEl.className='dot';
-      toast('Master Data: '+cnt+' item ✓','ok');
-
-    } else if(type==='mrp'){
-      STATE.mrpData = processMRP(rows, headers);
-      localStorage.setItem('mrp_data', JSON.stringify(STATE.mrpData));
-      localStorage.setItem('mrp_upload_ts', ts);
-      var cnt = Object.keys(STATE.mrpData).length;
-      if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
-      if(dotEl) dotEl.className='dot';
-      toast('MRP: '+cnt+' item ✓','ok');
-
-    } else if(type==='matcom'){
-      // Ambil nama kolom avg dari input user (kalau ada)
-      var customAvgCol = (document.getElementById('matcom-avg-col')||{value:''}).value.trim();
-      if(customAvgCol) localStorage.setItem('matcom_avg_col', customAvgCol);
-      else customAvgCol = localStorage.getItem('matcom_avg_col')||'';
-
-      STATE.matcomData = processMatcom(rows, headers, customAvgCol);
-      localStorage.setItem('matcom_data', JSON.stringify(STATE.matcomData));
-      localStorage.setItem('matcom_upload_ts', ts);
-      var cnt = Object.keys(STATE.matcomData).length;
-      var avgFound = STATE.matcomData && cnt > 0
-        ? (function(){ var sample=Object.values(STATE.matcomData).find(function(x){return x.avgUsg>0;}); return sample?'avgUsg OK':'avgUsg = 0 semua'; })()
-        : 'kosong';
-      if(infoEl) infoEl.innerHTML = cnt+' item dimuat ✓ &nbsp;<span style="color:var(--muted);font-size:10.5px">| header row '+(parsed.headerRowIdx+1)+' | '+avgFound+'</span>';
-      // Tampilkan kolom yang tersedia untuk debug
-      if(infoEl && cnt > 0) {
-        var colList = headers.slice(0, 20).filter(function(h){ return h; }).join(', ');
-        infoEl.innerHTML += '<br><span style="font-size:10px;color:var(--hint)">Kolom: '+colList+'</span>';
-      }
-      if(dotEl) dotEl.className = cnt>0 ? 'dot' : 'dot warn';
-      toast('Matcom: '+cnt+' item ('+avgFound+')','ok');
-
-    } else if(type==='realname'){
-      STATE.realNameData = processRealName(rows);
-      localStorage.setItem('realname_data', JSON.stringify(STATE.realNameData));
-      localStorage.setItem('realname_upload_ts', ts);
-      var cnt = Object.keys(STATE.realNameData).length;
-      if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
-      if(dotEl) dotEl.className='dot';
-      toast('Real Name: '+cnt+' item ✓','ok');
-    }
-    if(tsEl) tsEl.textContent='Dimuat: '+ts+(sheet?' (tab: '+sheet+')':'');
-  }).catch(function(e){
-    if(infoEl) infoEl.textContent='❌ '+e.message;
-    toast('Gagal muat '+type+': '+e.message,'err');
-  });
-}
-
-function loadAllSheets() {
-  var loaded=0;
-  ['master','mrp','matcom','realname'].forEach(function(t){
-    if(localStorage.getItem('sheet_url_'+t)){ loaded++; loadSheetData(t); }
-  });
-  if(!loaded) toast('Belum ada URL Sheets. Buka menu Data Source terlebih dahulu.','err');
-}
-
-function _restoreSheetUrls() {
-  ['master','mrp','matcom','realname'].forEach(function(t){
-    var u=localStorage.getItem('sheet_url_'+t), s=localStorage.getItem('sheet_tab_'+t);
-    var ue=document.getElementById(t+'-url'), se=document.getElementById(t+'-sheet');
-    if(ue&&u) ue.value=u; if(se&&s) se.value=s;
-    var ts=localStorage.getItem(t+'_upload_ts'), te=document.getElementById(t+'-ts');
-    if(ts&&te) te.textContent='Dimuat: '+ts;
-  });
-  // Restore matcom avg col
-  var ac = localStorage.getItem('matcom_avg_col');
-  var ace = document.getElementById('matcom-avg-col');
-  if(ac && ace) ace.value = ac;
-}
 // ─── PERF UTILS ──────────────────────────────────────────────────────────────
 function debounce(fn, ms) {
   var t; return function(){ clearTimeout(t); t = setTimeout(fn, ms||120); };
@@ -1293,7 +797,7 @@ function showPage(name, el) {
     ospr: function(){if(!STATE.osprData.length)loadOSPR().then(renderOSPR);else renderOSPR()},
     'stock-daily': function(){initStockDaily()},
     settings: loadSettingsForm,
-    upload: function(){ _restoreSheetUrls(); }
+    upload: function(){}
   };
   if(handlers[name]) handlers[name]();
 }
@@ -1336,133 +840,87 @@ async function testSAP() {
 var BTG_WHS = ['GBEX','GBFP','GBHB','GBHK','GBJD','GBNS','GKIB','GSBC','GTIM','PFFG'];
 var SNG_WHS = ['SBFP','SBHB','SBHK','SFFG','SKIB','SSBC'];
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ⚡ SMART CACHE SYSTEM — pakai data cache, refresh di background
-// ═══════════════════════════════════════════════════════════════════════════════
-var CACHE_TTL = {
-  stock:  30 * 60 * 1000,   // 30 menit
-  po:     60 * 60 * 1000,   // 1 jam
-  grpo:   4  * 60 * 60 * 1000, // 4 jam
-  ospo:   6  * 60 * 60 * 1000, // 6 jam
-  ospr:   6  * 60 * 60 * 1000  // 6 jam
-};
-
-function cacheKey(type)  { return 'cache_data_' + type; }
-function cacheTs(type)   { return 'cache_ts_' + type; }
-
-function cacheGet(type) {
-  var ts  = parseInt(localStorage.getItem(cacheTs(type)) || '0');
-  var ttl = CACHE_TTL[type] || 3600000;
-  var age = Date.now() - ts;
-  var raw = localStorage.getItem(cacheKey(type));
-  if(!raw) return null;
-  try { return { data: JSON.parse(raw), age: age, expired: age > ttl, ts: ts }; } catch(e) { return null; }
-}
-
-function cacheSet(type, data) {
-  var ts = Date.now();
+// ─── SAP FETCH WITH TIMEOUT ───────────────────────────────────────────────────
+async function sapFetchTimeout(reportId, params, timeoutMs) {
+  timeoutMs = timeoutMs || 30000;
+  var ctrl = new AbortController();
+  var timer = setTimeout(function(){ ctrl.abort(); }, timeoutMs);
   try {
-    localStorage.setItem(cacheKey(type), JSON.stringify(data));
-    localStorage.setItem(cacheTs(type), String(ts));
-  } catch(e) { console.warn('Cache write failed:', e.message); }
-  return ts;
-}
-
-function fmtCacheAge(ts) {
-  if(!ts) return 'belum pernah';
-  var d = new Date(ts);
-  return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) + ' ' +
-         d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-}
-
-function fmtAge(ms) {
-  if(ms < 60000)  return Math.round(ms/1000) + ' detik lalu';
-  if(ms < 3600000) return Math.round(ms/60000) + ' menit lalu';
-  return Math.round(ms/3600000) + ' jam lalu';
-}
-
-// Tampilkan info cache di dashboard
-function updateCacheStatus() {
-  var el = document.getElementById('dash-cache-status');
-  if(!el) return;
-  var types = ['stock','po','grpo','ospo','ospr'];
-  var labels = {stock:'Stock', po:'PO', grpo:'GRPO', ospo:'OSPO', ospr:'OSPR'};
-  el.innerHTML = types.map(function(t){
-    var c = cacheGet(t);
-    var color = !c ? 'var(--muted)' : (c.expired ? 'var(--amber)' : 'var(--green)');
-    var txt   = !c ? 'belum ada' : (fmtCacheAge(c.ts) + ' (' + fmtAge(c.age) + ')');
-    return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px">' +
-           '<span style="width:6px;height:6px;border-radius:50%;background:'+color+';flex-shrink:0"></span>' +
-           '<span style="color:var(--text);font-weight:500">' + labels[t] + '</span>' +
-           '<span style="color:var(--muted)">' + txt + '</span>' +
-           '</span>';
-  }).join('');
-}
-
-// ── SMART LOAD WRAPPERS ───────────────────────────────────────────────────────
-async function _fetchStock() {
-  var whsParam = JSON.stringify(BTG_WHS.concat(SNG_WHS));
-  var itemGroupParam = JSON.stringify([101,102,103,104]);
-  var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/90?' +
-    encodeURIComponent('[%0]') + '=' + encodeURIComponent(whsParam) + '&' +
-    encodeURIComponent('[%1]') + '=' + encodeURIComponent(itemGroupParam);
-  var res = await fetch(url, { headers: { Authorization: sapAuth() } });
-  if(!res.ok) throw new Error('Stock API error: ' + res.status);
-  return res.json();
-}
-
-async function loadStock(forceRefresh) {
-  var cached = cacheGet('stock');
-  if(cached && !cached.expired && !forceRefresh) {
-    _applyStockData(cached.data);
-    toast('Stock dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    // Refresh di background kalau sudah > 15 menit
-    if(cached.age > 15*60*1000) setTimeout(function(){ loadStock(true); }, 100);
-    return;
-  }
-  try {
-    var raw = await _fetchStock();
-    var processed = _processStockRaw(raw);
-    cacheSet('stock', processed);
-    _applyStockData(processed);
-    toast(Object.keys(STATE.stockData).length + ' item stock dimuat ✓', 'ok');
-    updateCacheStatus();
+    var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/' + reportId + '?';
+    var ps = Object.entries(params).map(function(kv){
+      return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]);
+    }).join('&');
+    var res = await fetch(url + ps, {
+      headers: { Authorization: sapAuth() },
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if(!res.ok) throw new Error('SAP ' + reportId + ' error: ' + res.status);
+    return res.json();
   } catch(e) {
-    if(cached) { _applyStockData(cached.data); toast('Stock: pakai cache (API error: ' + e.message + ')', 'err'); }
-    else { toast('Gagal load stock: ' + e.message, 'err'); STATE.stockData = {}; }
+    clearTimeout(timer);
+    if(e.name === 'AbortError') throw new Error('Timeout — SAP tidak merespons dalam ' + (timeoutMs/1000) + 's');
+    throw e;
   }
 }
 
-function _processStockRaw(raw) {
-  var stockData = {};
-  (raw || []).forEach(function(r) {
-    var ic = r.ItemCode, whs = r.WhsCode;
-    var onHand = parseFloat(r.OnHand) || 0;
-    var uom = (r.UOM || '').toUpperCase();
-    if(uom === 'GR') onHand = onHand / 1000;
-    if(whs === 'GBJD' && ic && !/^11|^12/.test(String(ic))) return;
-    if(onHand <= 0) return;
-    if(!stockData[ic]) stockData[ic] = { btg: 0, sng: 0 };
-    if(BTG_WHS.indexOf(whs) >= 0) stockData[ic].btg += onHand;
-    if(SNG_WHS.indexOf(whs) >= 0) stockData[ic].sng += onHand;
-  });
-  return stockData;
+// ─── PROGRESS SYNC UI ─────────────────────────────────────────────────────────
+var _syncProgress = {};
+function _setSyncItem(key, state) {
+  // state: 'loading' | 'ok' | 'err'
+  _syncProgress[key] = state;
+  var el = document.getElementById('sync-item-' + key);
+  if(!el) return;
+  var icons = { loading: '<div class="spin" style="width:10px;height:10px;border-width:1.5px"></div>', ok: '✓', err: '✗' };
+  var colors = { loading: 'var(--muted)', ok: 'var(--green)', err: 'var(--red)' };
+  el.innerHTML = '<span style="color:' + colors[state] + '">' + icons[state] + '</span>';
 }
-function _applyStockData(data) { STATE.stockData = data || {}; }
 
-async function loadOSPR(forceRefresh) {
-  var cached = cacheGet('ospr');
-  if(cached && !cached.expired && !forceRefresh) {
-    STATE.osprData = cached.data.list || [];
-    STATE.osprByItem = cached.data.byItem || {};
-    toast('OSPR dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    return;
-  }
+function _showSyncBar(show) {
+  var el = document.getElementById('sync-progress-bar');
+  if(el) el.style.display = show ? 'flex' : 'none';
+}
+
+// ─── LOAD FUNCTIONS — OPTIMIZED ───────────────────────────────────────────────
+async function loadStock() {
+  _setSyncItem('stock', 'loading');
   try {
-    var raw = await sapFetch(34, { '[%0]': '2025-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
+    var whsParam = JSON.stringify(BTG_WHS.concat(SNG_WHS));
+    var itemGroupParam = JSON.stringify([101,102,103,104]);
+    var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/90?' +
+      encodeURIComponent('[%0]') + '=' + encodeURIComponent(whsParam) + '&' +
+      encodeURIComponent('[%1]') + '=' + encodeURIComponent(itemGroupParam);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, 30000);
+    var res = await fetch(url, { headers: { Authorization: sapAuth() }, signal: ctrl.signal });
+    clearTimeout(timer);
+    if(!res.ok) throw new Error('Stock API ' + res.status);
+    var raw = await res.json();
+    STATE.stockData = {};
+    (raw || []).forEach(function(r) {
+      var ic = r.ItemCode, whs = r.WhsCode;
+      var onHand = parseFloat(r.OnHand) || 0;
+      if((r.UOM||'').toUpperCase() === 'GR') onHand /= 1000;
+      if(whs === 'GBJD' && ic && !/^11|^12/.test(String(ic))) return;
+      if(onHand <= 0) return;
+      if(!STATE.stockData[ic]) STATE.stockData[ic] = { btg: 0, sng: 0 };
+      if(BTG_WHS.indexOf(whs) >= 0) STATE.stockData[ic].btg += onHand;
+      if(SNG_WHS.indexOf(whs) >= 0) STATE.stockData[ic].sng += onHand;
+    });
+    _setSyncItem('stock', 'ok');
+  } catch(e) {
+    _setSyncItem('stock', 'err');
+    toast('Stock gagal: ' + e.message, 'err');
+    STATE.stockData = {};
+  }
+}
+
+async function loadOSPR() {
+  _setSyncItem('ospr', 'loading');
+  try {
+    var raw = await sapFetchTimeout(34, { '[%0]': '2025-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
     STATE.osprData = (raw || []).filter(function(r) {
-      var s = (r.DocStatus||'').toLowerCase();
-      if(!s.includes('open')) return false;
+      if(!((r.DocStatus||'').toLowerCase().includes('open'))) return false;
       if((r.OpenQty||0) <= 0) return false;
       var ic = (r.ItemCode||'').toString();
       if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
@@ -1477,28 +935,20 @@ async function loadOSPR(forceRefresh) {
       if(!STATE.osprByItem[r.itemCode]) STATE.osprByItem[r.itemCode] = 0;
       STATE.osprByItem[r.itemCode] += (r.openQty || 0);
     });
-    cacheSet('ospr', { list: STATE.osprData, byItem: STATE.osprByItem });
-    toast(STATE.osprData.length + ' OSPR dimuat ✓', 'ok');
-    updateCacheStatus();
+    _setSyncItem('ospr', 'ok');
   } catch(e) {
-    if(cached) { STATE.osprData = cached.data.list||[]; STATE.osprByItem = cached.data.byItem||{}; toast('OSPR: pakai cache', 'inf'); }
-    else { toast('Gagal load OSPR: ' + e.message, 'err'); STATE.osprData = []; STATE.osprByItem = {}; }
+    _setSyncItem('ospr', 'err');
+    toast('OSPR gagal: ' + e.message, 'err');
+    STATE.osprData = []; STATE.osprByItem = {};
   }
 }
 
-async function loadPO(forceRefresh) {
-  document.getElementById('po-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat PO...</div>';
-  var cached = cacheGet('po');
-  if(cached && !cached.expired && !forceRefresh) {
-    STATE.poData = cached.data;
-    document.getElementById('s-po').textContent = STATE.poData.length;
-    renderPO();
-    toast('PO dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    if(cached.age > 30*60*1000) setTimeout(function(){ loadPO(true); }, 200);
-    return;
-  }
+async function loadPO() {
+  _setSyncItem('po', 'loading');
+  var poEl = document.getElementById('po-table');
+  if(poEl) poEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat PO dari SAP...</div>';
   try {
-    var raw = await sapFetch(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
+    var raw = await sapFetchTimeout(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
     STATE.poData = (raw || []).filter(function(r){
       var s = (r.DocStatus||'').toLowerCase();
       if(s === 'cancelled' || s === 'cancellation') return false;
@@ -1513,51 +963,30 @@ async function loadPO(forceRefresh) {
         itemName: r.Dscription, openQty: r.OpenQty, uom: r.unitMsr,
         status: r.DocStatus, lineStatus: r.PO_LineStatus };
     });
-    cacheSet('po', STATE.poData);
-    document.getElementById('s-po').textContent = STATE.poData.length;
+    var spo = document.getElementById('s-po'); if(spo) spo.textContent = STATE.poData.length;
     renderPO();
-    toast(STATE.poData.length + ' PO aktif dimuat ✓', 'ok');
-    updateCacheStatus();
+    _setSyncItem('po', 'ok');
   } catch(e) {
-    if(cached) {
-      STATE.poData = cached.data;
-      document.getElementById('s-po').textContent = STATE.poData.length;
-      renderPO();
-      toast('PO: pakai cache (API error)', 'err');
-    } else {
-      document.getElementById('po-table').innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
-      toast('Gagal load PO: ' + e.message, 'err');
-    }
+    _setSyncItem('po', 'err');
+    if(poEl) poEl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
+    toast('PO gagal: ' + e.message, 'err');
   }
 }
 
-async function loadGRPO(forceRefresh) {
-  // Selalu pakai bulan berjalan — tidak perlu pilih manual
+async function loadGRPO() {
+  // Selalu tarik bulan berjalan saja
+  _setSyncItem('grpo', 'loading');
   var now = new Date();
-  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  var monthEl = document.getElementById('grpo-month');
-  if(monthEl) monthEl.value = curMonth;
-  var monthVal = curMonth;
-
-  var cacheKeyMonth = 'grpo_' + monthVal;
-  var cached = cacheGet(cacheKeyMonth);
-  var grpoTTL = CACHE_TTL.grpo;
-  if(cached && (Date.now() - cached.ts) < grpoTTL && !forceRefresh) {
-    STATE.grpoData = cached.data;
-    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
-    renderGRPO();
-    toast('GRPO dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    return;
-  }
-  var parts = monthVal.split('-');
-  var y = parts[0], m = parts[1];
-  var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
-  var startDate = y+'-'+m+'-01T00:00:00.000Z';
-  var endDate   = y+'-'+m+'-'+lastDay+'T00:00:00.000Z';
-  var grpoEl = document.getElementById('grpo-table');
-  if(grpoEl) grpoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO ' + m + '/' + y + ' dari SAP...</div>';
+  var y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+  var monthVal = y + '-' + m;
+  var grpoEl = document.getElementById('grpo-month'); if(grpoEl) grpoEl.value = monthVal;
+  var lastDay = new Date(y, now.getMonth()+1, 0).getDate();
+  var startDate = y + '-' + m + '-01T00:00:00.000Z';
+  var endDate   = y + '-' + m + '-' + lastDay + 'T00:00:00.000Z';
+  var tbl = document.getElementById('grpo-table');
+  if(tbl) tbl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO ' + m + '/' + y + '...</div>';
   try {
-    var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
+    var raw = await sapFetchTimeout(27, { '[%0]': startDate, '[%1]': endDate });
     STATE.grpoData = (raw || []).filter(function(r){
       var s = (r.DocStatus||'').toLowerCase();
       if(s === 'cancelled' || s === 'cancellation') return false;
@@ -1568,73 +997,76 @@ async function loadGRPO(forceRefresh) {
       return { grpoDate: fmtSAPDate(r.GRPO_Date), itemCode: r.ItemCode,
         itemName: r.Dscription, supplierName: r.CardName, qty: r.Quantity, uom: r.unitMsr };
     });
-    cacheSet(cacheKeyMonth, STATE.grpoData);
-    var sgrpo2 = document.getElementById('s-grpo'); if(sgrpo2) sgrpo2.textContent = STATE.grpoData.length;
+    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
     renderGRPO();
-    toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' dimuat ✓', 'ok');
-    updateCacheStatus();
+    _setSyncItem('grpo', 'ok');
   } catch(e) {
-    if(cached) { STATE.grpoData = cached.data; renderGRPO(); toast('GRPO: pakai cache', 'inf'); }
-    else { if(grpoEl) grpoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load GRPO: '+e.message,'err'); }
+    _setSyncItem('grpo', 'err');
+    if(tbl) tbl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
+    toast('GRPO gagal: ' + e.message, 'err');
   }
 }
 
-async function loadOSPO(forceRefresh) {
-  document.getElementById('ospo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat OSPO...</div>';
-  var cached = cacheGet('ospo');
-  if(cached && !cached.expired && !forceRefresh) {
-    STATE.ospoData = cached.data;
-    populateOSPOMonths(); renderOSPO();
-    toast('OSPO dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    if(cached.age > 2*60*60*1000) setTimeout(function(){ loadOSPO(true); }, 300);
-    return;
-  }
+function initGRPO() {
+  var now = new Date();
+  document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  if(!STATE.grpoData.length) loadGRPO(); else renderGRPO();
+}
+
+async function loadOSPO() {
+  _setSyncItem('ospo', 'loading');
+  var ospoEl = document.getElementById('ospo-table');
+  if(ospoEl) ospoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat OSPO dari SAP...</div>';
   try {
-    var raw = await sapFetch(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
+    var raw = await sapFetchTimeout(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
     STATE.ospoData = (raw || []).filter(function(r){
-      var s=(r.DocStatus||'').toLowerCase();
-      if(s==='cancelled'||s==='cancellation') return false;
-      if((r.OpenQty||0)<=0) return false;
-      var ic=(r.ItemCode||'').toString();
-      if(/^6/.test(ic)&&r.CardName!=='Berkat Asia Kemasindo, PT') return false;
+      var s = (r.DocStatus||'').toLowerCase();
+      if(s === 'cancelled' || s === 'cancellation') return false;
+      if((r.OpenQty||0) <= 0) return false;
+      var ic = (r.ItemCode||'').toString();
+      if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
       return true;
     }).map(function(r){
-      return { docNum:r.DocNum, itemCode:r.ItemCode, itemName:r.Dscription,
-        supplierName:r.CardName, openQty:r.OpenQty, uom:r.unitMsr,
-        poReqDate:fmtSAPDate(r.PO_Req_Date), site:r.U_ReqSite||'' };
+      return { docNum: r.DocNum, itemCode: r.ItemCode, itemName: r.Dscription,
+        supplierName: r.CardName, openQty: r.OpenQty, uom: r.unitMsr,
+        poReqDate: fmtSAPDate(r.PO_Req_Date), site: r.U_ReqSite||'' };
     });
-    cacheSet('ospo', STATE.ospoData);
     populateOSPOMonths(); renderOSPO();
-    toast(STATE.ospoData.length + ' OSPO dimuat ✓', 'ok');
-    updateCacheStatus();
+    _setSyncItem('ospo', 'ok');
   } catch(e) {
-    if(cached) { STATE.ospoData=cached.data; populateOSPOMonths(); renderOSPO(); toast('OSPO: pakai cache','inf'); }
-    else { document.getElementById('ospo-table').innerHTML='<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load OSPO: '+e.message,'err'); }
+    _setSyncItem('ospo', 'err');
+    if(ospoEl) ospoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
+    toast('OSPO gagal: ' + e.message, 'err');
   }
 }
 
-async function syncAll(forceRefresh) {
-  toast('Sync data dari SAP...', 'inf');
-  document.getElementById('dash-sub').textContent = 'Menyinkronkan...';
+// ─── SYNC ALL — semua paralel sekaligus ───────────────────────────────────────
+async function syncAll() {
+  _showSyncBar(true);
+  ['stock','po','grpo','ospo','ospr'].forEach(function(k){ _setSyncItem(k,'loading'); });
+  document.getElementById('dash-sub').textContent = 'Menyinkronkan semua data...';
+
   try {
+    // Semua 5 API call berjalan PARALEL — tidak saling tunggu
     await Promise.all([
-      loadPO(forceRefresh),
-      loadOSPO(forceRefresh),
-      loadStock(forceRefresh),
-      loadOSPR(forceRefresh)
+      loadStock(),
+      loadPO(),
+      loadOSPO(),
+      loadOSPR(),
+      loadGRPO()
     ]);
-    await loadGRPO(forceRefresh);
+
     if(STATE.mrpData) buildProjection();
-    var ts = now.toLocaleString('id-ID');
+    var ts = new Date().toLocaleString('id-ID');
     document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ts;
     localStorage.setItem('last_sync', ts);
     updateDashStats();
-    updateCacheStatus();
-    toast('Sync berhasil ✓', 'ok');
+    toast('Sync selesai ✓', 'ok');
   } catch(e) {
-    document.getElementById('dash-sub').textContent = 'Sync gagal — cek Settings';
-    toast('Sync gagal: ' + e.message, 'err');
+    document.getElementById('dash-sub').textContent = 'Sebagian sync gagal — lihat indikator';
+    toast('Ada yang gagal: ' + e.message, 'err');
   }
+  setTimeout(function(){ _showSyncBar(false); }, 4000);
 }
 
 function renderPO() {
@@ -1868,85 +1300,25 @@ function resetPOOverrides() {
   toast('Semua tanggal request dan konfirmasi direset ✓', 'ok');
 }
 
-// ─── LOAD GRPO ───────────────────────────────────────────────────────────────
-function initGRPO() {
-  // Set picker ke bulan ini tapi jangan ubah kalau user sudah pilih bulan lain
-  var el = document.getElementById('grpo-month');
-  var now = new Date();
-  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  if(!el.value) el.value = curMonth;
-  if(!STATE.grpoData.length) loadGRPO(); else renderGRPO();
-}
-
-// Load GRPO bulan yang dipilih di history picker (bukan current month)
-async function loadGRPOMonth() {
-  var monthEl = document.getElementById('grpo-month');
-  var monthVal = monthEl ? monthEl.value : '';
-  if(!monthVal) return;
-
-  var now = new Date();
-  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  if(monthVal === curMonth) { loadGRPO(); return; } // bulan ini → pakai loadGRPO biasa
-
-  var cacheKeyMonth = 'grpo_' + monthVal;
-  var cached = cacheGet(cacheKeyMonth);
-  if(cached) {
-    STATE.grpoData = cached.data;
-    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = STATE.grpoData.length;
-    renderGRPO();
-    toast('GRPO ' + monthVal + ' dari cache (' + fmtAge(cached.age) + ')', 'inf');
-    return;
-  }
-  var parts = monthVal.split('-');
-  var y = parts[0], m = parts[1];
-  var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
-  var startDate = y+'-'+m+'-01T00:00:00.000Z';
-  var endDate   = y+'-'+m+'-'+lastDay+'T00:00:00.000Z';
-  var grpoEl = document.getElementById('grpo-table');
-  if(grpoEl) grpoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO ' + m + '/' + y + '...</div>';
-  try {
-    var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
-    STATE.grpoData = (raw || []).filter(function(r){
-      var s=(r.DocStatus||'').toLowerCase();
-      if(s==='cancelled'||s==='cancellation') return false;
-      var ic=(r.ItemCode||'').toString();
-      if(/^6/.test(ic)&&r.CardName!=='Berkat Asia Kemasindo, PT') return false;
-      return true;
-    }).map(function(r){
-      return { grpoDate:fmtSAPDate(r.GRPO_Date), itemCode:r.ItemCode,
-        itemName:r.Dscription, supplierName:r.CardName, qty:r.Quantity, uom:r.unitMsr };
-    });
-    cacheSet(cacheKeyMonth, STATE.grpoData);
-    var sg2 = document.getElementById('s-grpo'); if(sg2) sg2.textContent = STATE.grpoData.length;
-    renderGRPO();
-    toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' dimuat ✓', 'ok');
-  } catch(e) {
-    if(grpoEl) grpoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>';
-    toast('Gagal: '+e.message, 'err');
-  }
-}
-
+// ─── RENDER GRPO ─────────────────────────────────────────────────────────────
 function renderGRPO() {
   var srch = (document.getElementById('srch-grpo')||{value:''}).value.toLowerCase();
   var f = STATE.grpoData.filter(function(r){
     return !srch || (r.itemCode||'').toLowerCase().includes(srch) || (r.itemName||'').toLowerCase().includes(srch) || (r.supplierName||'').toLowerCase().includes(srch);
   }).sort(function(a,b){
-    // Sort by grpoDate descending (DD/MM/YYYY)
     function toISO(s){ if(!s) return ''; var p=s.split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:s; }
     return toISO(b.grpoDate).localeCompare(toISO(a.grpoDate));
   });
-  if(!f.length){document.getElementById('grpo-table').innerHTML='<div class="empty"><div class="empty-ico">📦</div><h3>Tidak ada GRPO</h3></div>';return;}
+  if(!f.length){ document.getElementById('grpo-table').innerHTML='<div class="empty"><div class="empty-ico">📦</div><h3>Tidak ada GRPO</h3></div>'; return; }
   document.getElementById('grpo-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
-    '<thead>' +
-    '<tr><th>GRPO Date</th><th>Item Code</th><th>Item Name</th><th>Supplier</th><th>Qty</th><th>UOM</th></tr>' +
+    '<thead><tr><th>GRPO Date</th><th>Item Code</th><th>Item Name</th><th>Supplier</th><th>Qty</th><th>UOM</th></tr>' +
     '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" id="gf-date" oninput="renderGRPO()" placeholder="filter..."></th>' +
     '<th><input class="th-filter" id="gf-code" oninput="renderGRPO()" placeholder="filter..."></th>' +
     '<th><input class="th-filter" id="gf-name" oninput="renderGRPO()" placeholder="filter..."></th>' +
-    '<th><input class="th-filter" id="gf-sup" oninput="renderGRPO()" placeholder="filter..."></th>' +
-    '<th></th><th></th>' +
-    '</tr></thead>' +
-    '<tbody>' + f.filter(function(r){
+    '<th><input class="th-filter" id="gf-sup"  oninput="renderGRPO()" placeholder="filter..."></th>' +
+    '<th></th><th></th></tr></thead><tbody>' +
+    f.filter(function(r){
       var gd=(document.getElementById('gf-date')||{value:''}).value.toLowerCase();
       var gc=(document.getElementById('gf-code')||{value:''}).value.toLowerCase();
       var gn=(document.getElementById('gf-name')||{value:''}).value.toLowerCase();
@@ -1956,18 +1328,20 @@ function renderGRPO() {
       if(gn && !(r.itemName||'').toLowerCase().includes(gn)) return false;
       if(gs && !(r.supplierName||'').toLowerCase().includes(gs)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+(r.qty||0).toLocaleString('id-ID')+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
-    '</tbody></table></div></div>' +
-    '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' GRPO</div>';
+    }).map(function(r){
+      return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td>' +
+        '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td>' +
+        '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td>' +
+        '<td class="mono td-right">'+(r.qty||0).toLocaleString('id-ID')+'</td><td>'+(r.uom||'')+'</td></tr>';
+    }).join('') +
+    '</tbody></table></div></div><div style="padding:6px 0;font-size:11px;color:var(--muted)">'+f.length+' GRPO bulan ini</div>';
 }
 
+// ─── LOAD OSPO (old duplicate removed) ───────────────────────────────────────
 function populateOSPOMonths() {
   var months = {};
   STATE.ospoData.forEach(function(r){
-    if(r.poReqDate){
-      var parts = r.poReqDate.split('/');
-      if(parts.length === 3) { var k = parts[1]+'/'+parts[2]; months[k] = true; }
-    }
+    if(r.poReqDate){ var parts=r.poReqDate.split('/'); if(parts.length===3){ var k=parts[1]+'/'+parts[2]; months[k]=true; } }
   });
   var sel = document.getElementById('f-ospo-month');
   sel.innerHTML = '<option value="">Semua Bulan</option>' +
@@ -2162,61 +1536,31 @@ function processMRP(rows, headers) {
   return result;
 }
 
-function processMatcom(rows, headers, customAvgCol) {
+function processMatcom(rows, headers) {
   var result = {};
   var avgKey = null;
-  // Prioritas: kolom yang ditentukan user → exact match → partial match
-  var avgCandidates = ['average x max','avg x max','max','average 3','usg/day','usg per day',
-                       'average','avg usg','avg usage','average usage','pemakaian rata','rata-rata'];
-
-  if(customAvgCol && customAvgCol.trim()) {
-    avgKey = customAvgCol.trim(); // User-specified, langsung pakai
-  } else if(headers) {
-    // Pass 1: exact match
-    for(var ci=0; ci<avgCandidates.length; ci++){
-      headers.forEach(function(h){
-        if(!avgKey && String(h).toLowerCase().trim() === avgCandidates[ci]) avgKey = String(h).trim();
-      });
-      if(avgKey) break;
-    }
-    // Pass 2: partial match
-    if(!avgKey){
-      headers.forEach(function(h){
-        var hl = String(h).toLowerCase().trim();
-        if(!avgKey && avgCandidates.some(function(c){ return hl.includes(c); })) avgKey = String(h).trim();
-      });
-    }
+  if(headers) {
+    headers.forEach(function(h) {
+      var hl = String(h).toLowerCase().trim();
+      if(!avgKey && (hl === 'average x max' || hl.includes('average x max'))) avgKey = String(h).trim();
+    });
   }
-
   rows.forEach(function(row) {
-    var code = String(row['Code']||row['SAP Code']||row['Item Code']||row['ItemCode']||row['Item No.']||row['Item No']||'').trim();
+    var code = String(row['Code'] || row['SAP Code'] || row['ItemCode'] || row['Item Code'] || '').trim();
     if(!code || !code.match(/^\d/)) return;
     var avgUsg = 0;
-
-    function parseNum(v) { return parseFloat(String(v).replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0; }
-
-    if(avgKey && row[avgKey] !== undefined && row[avgKey] !== '') avgUsg = parseNum(row[avgKey]);
-
-    // Fallback: scan kolom yang namanya mengandung kata kunci
-    if(!avgUsg){
-      var skipWords = ['code','item','name','category','uom','satuan','no','sap','inventory','ss','cov','min','max ss'];
-      Object.keys(row).forEach(function(k){
-        if(avgUsg) return;
-        var kl = String(k).toLowerCase();
-        if(skipWords.some(function(s){ return kl === s; })) return;
-        if(avgCandidates.some(function(c){ return kl.includes(c); })){
-          var v = parseNum(row[k]);
-          if(v > 0) avgUsg = v;
-        }
+    if(avgKey && row[avgKey] !== undefined) avgUsg = parseFloat(String(row[avgKey]).replace(',','.')) || 0;
+    if(!avgUsg) {
+      Object.keys(row).forEach(function(k) {
+        if(!avgUsg && String(k).toLowerCase().includes('average x max')) avgUsg = parseFloat(String(row[k]).replace(',','.')) || 0;
       });
     }
-
     result[code] = {
-      category:    String(row['Category']||'').trim(),
-      invCategory: String(row['Inventory category']||row['Inventory Category']||'').trim(),
-      sapName:     String(row['SAP Name']||row['Item Name']||row['Name']||'').trim(),
-      uom:         String(row['Inventory UoM']||row['UoM']||row['UOM']||'').trim(),
-      avgUsg:      avgUsg
+      category: String(row['Category'] || '').trim(),
+      invCategory: String(row['Inventory category'] || row['Inventory Category'] || '').trim(),
+      sapName: String(row['SAP Name'] || '').trim(),
+      uom: String(row['Inventory UoM'] || row['UoM'] || '').trim(),
+      avgUsg: avgUsg
     };
   });
   return result;
@@ -3393,32 +2737,12 @@ function saveSup() {
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function loadSettingsForm() {
-  document.getElementById('cfg-url').value    = CFG.url;
-  document.getElementById('cfg-user').value   = CFG.user;
-  document.getElementById('cfg-pass').value   = CFG.pass;
+  document.getElementById('cfg-url').value = CFG.url;
+  document.getElementById('cfg-user').value = CFG.user;
+  document.getElementById('cfg-pass').value = CFG.pass;
   document.getElementById('cfg-fonnte').value = CFG.fonnte;
-  document.getElementById('cfg-wn').value     = CFG.wn;
+  document.getElementById('cfg-wn').value = CFG.wn;
   document.getElementById('cfg-workdays').value = CFG.workdays;
-
-  var apiKey    = window.localStorage.getItem('fb_apikey')||'';
-  var projectId = window.localStorage.getItem('fb_projectid')||'';
-  var appId     = window.localStorage.getItem('fb_appid')||'';
-  if(document.getElementById('fb-apikey'))    document.getElementById('fb-apikey').value    = apiKey;
-  if(document.getElementById('fb-projectid')) document.getElementById('fb-projectid').value = projectId;
-  if(document.getElementById('fb-appid'))     document.getElementById('fb-appid').value     = appId;
-
-  var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
-  var msg = document.getElementById('fb-status-msg');
-  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif — data tersync ke cloud' : (apiKey ? 'Config ada di browser ini — simpan snippet ke HTML agar laptop lain konek otomatis' : 'Belum dikonfigurasi');
-
-  // Show snippet if config already exists
-  if(apiKey && projectId && appId) {
-    var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
-    var box = document.getElementById('fb-embed-snippet');
-    var wrap = document.getElementById('fb-snippet-wrap');
-    if(box) box.value = snippet;
-    if(wrap) wrap.style.display = 'block';
-  }
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
@@ -4036,92 +3360,59 @@ function td(content, col, extraStyle) {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
-function _appInit() {
-  // Re-read STATE from (possibly cloud-updated) localStorage
-  STATE.mrpData          = JSON.parse(localStorage.getItem('mrp_data')       || 'null');
-  STATE.matcomData       = JSON.parse(localStorage.getItem('matcom_data')     || 'null');
-  STATE.realNameData     = JSON.parse(localStorage.getItem('realname_data')   || '{}');
-  STATE.masterData       = JSON.parse(localStorage.getItem('master_data')     || 'null');
-  STATE.projectionHistory= JSON.parse(localStorage.getItem('proj_history')    || '{}');
-  STATE.stockHistory     = JSON.parse(localStorage.getItem('stock_history')   || '{}');
-  STATE.scheduleData     = JSON.parse(localStorage.getItem('schedule')        || '[]');
-  STATE.supplierData     = JSON.parse(localStorage.getItem('suppliers')       || '[]');
-  STATE.poOverrides      = JSON.parse(localStorage.getItem('po_overrides')    || '{}');
-  STATE.projectionSnapshots = JSON.parse(localStorage.getItem('proj_snapshots')|| '{}');
-  STATE.projComments     = JSON.parse(localStorage.getItem('proj_comments')   || '{}');
+var ls = localStorage.getItem('last_sync');
+if(ls) document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ls;
 
-  CFG.url      = localStorage.getItem('sap_url')   || CFG.url;
-  CFG.user     = localStorage.getItem('sap_user')  || CFG.user;
-  CFG.pass     = localStorage.getItem('sap_pass')  || CFG.pass;
-  CFG.fonnte   = localStorage.getItem('fonnte')     || CFG.fonnte;
-  CFG.wn       = parseInt(localStorage.getItem('wn')       || CFG.wn);
-  CFG.workds   = parseInt(localStorage.getItem('workdays') || CFG.workdays);
-
-  PROJ_HIDDEN_COLS = JSON.parse(localStorage.getItem('proj_hidden_cols') || '[]');
-
-  var ls = localStorage.getItem('last_sync');
-  if(ls) document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ls;
-
-  if(STATE.masterData) {
-    var mEl = document.getElementById('master-status'); if(mEl) mEl.className='dot';
-    var mInf = document.getElementById('master-info'); if(mInf) mInf.textContent=Object.keys(STATE.masterData).length+' item Master Data';
-  }
-  if(STATE.mrpData) {
-    var el1 = document.getElementById('mrp-status'); if(el1) el1.className='dot';
-    var el2 = document.getElementById('mrp-info'); if(el2) el2.textContent=Object.keys(STATE.mrpData).length+' item MRP';
-  }
-  if(STATE.matcomData) {
-    var el3 = document.getElementById('matcom-status'); if(el3) el3.className='dot';
-    var el4 = document.getElementById('matcom-info'); if(el4) el4.textContent=Object.keys(STATE.matcomData).length+' item Matcom';
-  }
-  if(STATE.realNameData && Object.keys(STATE.realNameData).length) {
-    var rnEl = document.getElementById('realname-status'); if(rnEl) rnEl.className='dot';
-    var rnFn = document.getElementById('realname-info'); if(rnFn) rnFn.textContent=Object.keys(STATE.realNameData).length+' item Real Name';
-  }
-
-  // Apply theme
-  if(localStorage.getItem('theme') === 'light') {
-    document.body.classList.add('light-mode');
-    var lbl = document.getElementById('theme-label'); if(lbl) lbl.textContent='☀️ Light';
-    var knob = document.getElementById('theme-knob'); if(knob) knob.textContent='☀️';
-  }
-
-  // Init dashboard
-  if(!STATE.masterData) {
-    document.getElementById('dash-urgent-table').innerHTML='<div class="empty" style="padding:32px"><div class="empty-ico">📋</div><h3>Muat Master Data terlebih dahulu</h3><p>Buka <strong>Data Source (Sheets)</strong> → masukkan URL → klik Muat</p></div>';
-  } else if(!STATE.mrpData) {
-    document.getElementById('dash-urgent-table').innerHTML='<div class="empty" style="padding:32px"><div class="empty-ico">📂</div><h3>Belum ada data MRP</h3><p>Muat MRP &amp; Matcom dari Sheets lalu klik Build Projection</p></div>';
-  } else {
-    buildProjection();
-  }
-  setUrgentCutoff();
-  renderSchedule();
-  updateDashStats();
-  _restoreSheetUrls();
-
-  document.querySelectorAll('#col-menu input[type=checkbox]').forEach(function(cb){
-    var col = cb.getAttribute('onchange').match(/toggleProjCol\('([^']+)'/);
-    if(col && PROJ_HIDDEN_COLS.indexOf(col[1]) >= 0) cb.checked = false;
-  });
-  ['master','mrp','matcom','realname'].forEach(function(t){
-    var ts=localStorage.getItem(t+'_upload_ts'), el=document.getElementById(t+'-ts');
-    if(ts&&el) el.textContent='Dimuat: '+ts;
-  });
-
-  // Load SAP data from cache into STATE (no API call)
-  var sc = cacheGet('stock'); if(sc) { _applyStockData(sc.data); }
-  var pc = cacheGet('po');    if(pc) { STATE.poData = pc.data; var spo = document.getElementById('s-po'); if(spo) spo.textContent = pc.data.length; }
-  var oc = cacheGet('ospo');  if(oc) { STATE.ospoData = oc.data; }
-  var or = cacheGet('ospr');  if(or) { STATE.osprData = or.data.list||[]; STATE.osprByItem = or.data.byItem||{}; }
-
-  // Show cache timestamps
-  updateCacheStatus();
-
-  scheduleAutoRefresh();
+if(STATE.masterData) {
+  var mEl = document.getElementById('master-status'); if(mEl) mEl.className = 'dot';
+  var mFn = document.getElementById('master-fname'); if(mFn) mFn.textContent = 'Master Data tersimpan (' + Object.keys(STATE.masterData).length + ' item)';
+  var mInf = document.getElementById('master-info'); if(mInf) mInf.textContent = Object.keys(STATE.masterData).length + ' item Master Data';
+}
+if(STATE.mrpData) {
+  var el1 = document.getElementById('mrp-status'); if(el1) el1.className = 'dot';
+  var el2 = document.getElementById('mrp-fname'); if(el2) el2.textContent = 'File MRP tersimpan (' + Object.keys(STATE.mrpData).length + ' item)';
+}
+if(STATE.matcomData) {
+  var el3 = document.getElementById('matcom-status'); if(el3) el3.className = 'dot';
+  var el4 = document.getElementById('matcom-fname'); if(el4) el4.textContent = 'File Matcom tersimpan (' + Object.keys(STATE.matcomData).length + ' item)';
+}
+if(STATE.realNameData && Object.keys(STATE.realNameData).length) {
+  var rnEl = document.getElementById('realname-status'); if(rnEl) rnEl.className = 'dot';
+  var rnFn = document.getElementById('realname-fname'); if(rnFn) rnFn.textContent = 'Real Name tersimpan (' + Object.keys(STATE.realNameData).length + ' item)';
 }
 
-// Kick off — tries Firebase first, falls back to localStorage
-appStart();
+// Apply theme
+if(localStorage.getItem('theme') === 'light') {
+  document.body.classList.add('light-mode');
+  var lbl = document.getElementById('theme-label'); if(lbl) lbl.textContent='☀️ Light';
+  var knob = document.getElementById('theme-knob'); if(knob) knob.textContent='☀️';
+}
+
+// Init dashboard
+if(!STATE.masterData) {
+  document.getElementById('dash-urgent-table').innerHTML = '<div class="empty" style="padding:32px"><div class="empty-ico">📋</div><h3>Upload Master Data terlebih dahulu</h3><p>1. Upload Master Data &nbsp;→&nbsp; 2. Sync Semua &nbsp;→&nbsp; 3. Build Projection</p></div>';
+} else if(!STATE.mrpData) {
+  document.getElementById('dash-urgent-table').innerHTML = '<div class="empty" style="padding:32px"><div class="empty-ico">📂</div><h3>Belum ada data MRP</h3><p>Upload MRP &amp; Matcom lalu klik Build Projection</p></div>';
+} else {
+  buildProjection();
+}
+setUrgentCutoff();
+renderSchedule();
+updateDashStats();
+// Restore hidden column checkboxes
+document.querySelectorAll('#col-menu input[type=checkbox]').forEach(function(cb){
+  var col = cb.getAttribute('onchange').match(/toggleProjCol\('([^']+)'/);
+  if(col && PROJ_HIDDEN_COLS.indexOf(col[1]) >= 0) cb.checked = false;
+});
+// Load upload timestamps
+['master','mrp','matcom','realname'].forEach(function(t){
+  var ts = localStorage.getItem(t + '_upload_ts');
+  var el = document.getElementById(t + '-ts');
+  if(ts && el) el.textContent = 'Diupload: ' + ts;
+});
+
+// Start auto-refresh scheduler
+scheduleAutoRefresh();
 
 </script>
 </body>
