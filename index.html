@@ -282,9 +282,16 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph">
     <div class="ph-l"><h2>Material Planner Dashboard</h2><p id="dash-sub">Sync data untuk memulai</p></div>
     <div class="ph-r">
-      <button class="btn" onclick="syncAll()">↺ Sync Semua</button>
+      <button class="btn" onclick="syncAll(false)" title="Pakai cache jika belum expired">↺ Sync (Cache)</button>
+      <button class="btn btn-amber btn-sm" onclick="syncAll(true)" title="Paksa ambil ulang semua data dari SAP">⚡ Force Refresh</button>
       <button class="btn btn-primary" onclick="buildProjection();showPage('projection',document.querySelectorAll('.ni')[1])">⚡ Build Projection</button>
     </div>
+  </div>
+  <!-- Cache status bar -->
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:10.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Cache SAP:</span>
+    <div id="dash-cache-status" style="flex:1;min-width:0"></div>
+    <button class="btn btn-xs" onclick="updateCacheStatus()" style="flex-shrink:0">↺</button>
   </div>
   <div class="stats" id="dash-stats">
     <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub">coverage ≤ W+2</div></div>
@@ -792,55 +799,21 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 // ═══════════════════════════════════════════════════════════════════════════════
 // ☁️  FIREBASE CLOUD SYNC
 // ═══════════════════════════════════════════════════════════════════════════════
-var _db = null;      // Firestore instance
-var _fbReady = false;
-var _fbDocId = 'shared'; // single shared document — change to user/session if needed
-
-// Keys saved to cloud (all mutable state). Read-only master data stays local.
-var CLOUD_KEYS = [
-  'schedule','po_overrides','proj_comments','stock_history','proj_history',
-  'suppliers','proj_hidden_cols','proj_snapshots',
-  'sheet_url_master','sheet_url_mrp','sheet_url_matcom','sheet_url_realname',
-  'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
-  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
-];
-
-function saveFirebaseConfig() {
-  var apiKey    = document.getElementById('fb-apikey').value.trim();
-  var projectId = document.getElementById('fb-projectid').value.trim();
-  var appId     = document.getElementById('fb-appid').value.trim();
-  if(!apiKey || !projectId || !appId){ toast('Isi semua field Firebase','err'); return; }
-  window.localStorage.setItem('fb_apikey', apiKey);
-  window.localStorage.setItem('fb_projectid', projectId);
-  window.localStorage.setItem('fb_appid', appId);
-  toast('Firebase config disimpan ✓','ok');
-}
-
-function clearFirebaseConfig() {
-  if(!confirm('Hapus config Firebase? App akan kembali ke localStorage browser.')) return;
-  ['fb_apikey','fb_projectid','fb_appid'].forEach(function(k){ window.localStorage.removeItem(k); });
-  _db = null; _fbReady = false;
-  var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot off';
-  var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='Config dihapus — reload halaman untuk efek penuh.';
-  toast('Firebase config dihapus','ok');
-}
-
+// ☁️  FIREBASE CLOUD SYNC — per-key Firestore documents (no 1MB limit issue)
 // ═══════════════════════════════════════════════════════════════════════════════
-// ☁️  FIREBASE CLOUD SYNC
-// ═══════════════════════════════════════════════════════════════════════════════
-// ⚠️  ISI CONFIG INI SEKALI → PUSH KE GITHUB → SEMUA LAPTOP OTOMATIS KONEK
-// Ambil nilai dari Firebase Console → Project Settings → Your apps → Config
+// ⚠️  GANTI 3 BARIS INI DENGAN CONFIG FIREBASE KAMU → PUSH KE GITHUB
 var FIREBASE_CONFIG = {
-  apiKey:    "AIzaSyDfUvdnJC9e-lWN_Mioy-niLs9kZcwNYu8",
-  projectId: "material-planner-eji",
-  appId:     "1:468906816090:web:f2b3c69a31dfa4db7b5e63"
+  apiKey:    window.localStorage.getItem('fb_apikey')    || '',
+  projectId: window.localStorage.getItem('fb_projectid') || '',
+  appId:     window.localStorage.getItem('fb_appid')     || ''
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
 var _db = null;
 var _fbReady = false;
-var _fbDocId = 'shared';
 
+// Keys yang disync ke cloud — tiap key = 1 dokumen di Firestore koleksi 'kv'
+// Ini menghindari batas 1MB per dokumen Firestore
 var CLOUD_KEYS = [
   'schedule','po_overrides','proj_comments','stock_history','proj_history',
   'suppliers','proj_hidden_cols','proj_snapshots',
@@ -848,6 +821,24 @@ var CLOUD_KEYS = [
   'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
   'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
 ];
+
+// ── Sync indicator di header ──────────────────────────────────────────────────
+var _syncEl = null;
+function _setSyncStatus(status) {
+  // status: 'saving' | 'saved' | 'error' | 'off'
+  if(!_syncEl) {
+    _syncEl = document.createElement('div');
+    _syncEl.id = 'cloud-sync-indicator';
+    _syncEl.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:99px;padding:4px 12px;font-size:11px;font-family:var(--font);display:flex;align-items:center;gap:6px;z-index:500;opacity:0;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(_syncEl);
+  }
+  var icons = {saving:'⏳',saved:'☁ Tersimpan',error:'⚠ Gagal sync',off:''};
+  var colors = {saving:'var(--muted)',saved:'var(--green)',error:'var(--red)',off:''};
+  _syncEl.style.color = colors[status]||'var(--muted)';
+  _syncEl.textContent = icons[status]||'';
+  _syncEl.style.opacity = (status==='off') ? '0' : '1';
+  if(status==='saved'){ clearTimeout(_syncEl._t); _syncEl._t=setTimeout(function(){ _syncEl.style.opacity='0'; },2500); }
+}
 
 function saveFirebaseConfig() {
   var apiKey    = (document.getElementById('fb-apikey')||{}).value.trim();
@@ -857,26 +848,21 @@ function saveFirebaseConfig() {
   window.localStorage.setItem('fb_apikey', apiKey);
   window.localStorage.setItem('fb_projectid', projectId);
   window.localStorage.setItem('fb_appid', appId);
-  FIREBASE_CONFIG.apiKey    = apiKey;
-  FIREBASE_CONFIG.projectId = projectId;
-  FIREBASE_CONFIG.appId     = appId;
-
-  // Generate snippet untuk di-paste ke HTML agar laptop lain tidak perlu setting
+  FIREBASE_CONFIG.apiKey = apiKey; FIREBASE_CONFIG.projectId = projectId; FIREBASE_CONFIG.appId = appId;
   var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
-  var box = document.getElementById('fb-embed-snippet');
-  if(box) { box.value = snippet; box.parentElement.style.display='block'; }
-
-  toast('Config disimpan ✓ — lihat snippet di bawah untuk embed ke HTML','ok');
+  var box = document.getElementById('fb-embed-snippet'); var wrap = document.getElementById('fb-snippet-wrap');
+  if(box) box.value = snippet; if(wrap) wrap.style.display='block';
+  toast('Config disimpan ✓','ok');
   initFirebase();
 }
 
 function clearFirebaseConfig() {
   if(!confirm('Hapus config Firebase?')) return;
   ['fb_apikey','fb_projectid','fb_appid'].forEach(function(k){ window.localStorage.removeItem(k); });
-  FIREBASE_CONFIG.apiKey = FIREBASE_CONFIG.projectId = FIREBASE_CONFIG.appId = '';
-  _db = null; _fbReady = false;
-  var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot off';
-  var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='Config dihapus.';
+  FIREBASE_CONFIG.apiKey=FIREBASE_CONFIG.projectId=FIREBASE_CONFIG.appId='';
+  _db=null; _fbReady=false;
+  var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot off';
+  var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Config dihapus.';
   toast('Firebase config dihapus','ok');
 }
 
@@ -884,58 +870,62 @@ function initFirebase() {
   var cfg = FIREBASE_CONFIG;
   if(!cfg.apiKey || !cfg.projectId || !cfg.appId) return;
   try {
-    var app;
-    try { app = firebase.app(); } catch(e){ app = null; }
-    if(!app || app.options.projectId !== cfg.projectId) {
-      firebase.initializeApp({ apiKey: cfg.apiKey, projectId: cfg.projectId, appId: cfg.appId });
-    }
+    var app; try{ app=firebase.app(); }catch(e){ app=null; }
+    if(!app || app.options.projectId !== cfg.projectId)
+      firebase.initializeApp({apiKey:cfg.apiKey, projectId:cfg.projectId, appId:cfg.appId});
     _db = firebase.firestore();
     _fbReady = true;
-    var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot';
-    var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='☁ Firebase aktif';
+    var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot';
+    var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='☁ Firebase aktif';
   } catch(e) {
-    _fbReady = false;
-    var dot = document.getElementById('fb-dot'); if(dot) dot.className='dot off';
-    var msg = document.getElementById('fb-status-msg'); if(msg) msg.textContent='Error: '+e.message;
-    console.warn('Firebase init error:', e.message);
+    _fbReady=false;
+    var dot=document.getElementById('fb-dot'); if(dot) dot.className='dot off';
+    var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Error: '+e.message;
+    console.warn('Firebase init error:',e.message);
   }
 }
 
 function testFirebase() {
-  if(!_fbReady || !_db){ toast('Firebase belum terhubung','err'); return; }
-  var msg = document.getElementById('fb-status-msg');
-  if(msg) msg.textContent = 'Testing...';
-  _db.collection('planner').doc(_fbDocId).get().then(function(doc){
-    if(msg) msg.textContent = '✓ OK — '+(doc.exists?'data ditemukan':'belum ada data')+' ('+new Date().toLocaleTimeString('id-ID')+')';
-    toast('Firebase OK ✓','ok');
-  }).catch(function(e){ if(msg) msg.textContent='Error: '+e.message; toast('Test gagal: '+e.message,'err'); });
+  if(!_fbReady||!_db){ toast('Firebase belum terhubung','err'); return; }
+  var msg=document.getElementById('fb-status-msg'); if(msg) msg.textContent='Testing...';
+  _db.collection('kv').doc('sheet_url_master').get()
+    .then(function(doc){
+      if(msg) msg.textContent='✓ OK ('+new Date().toLocaleTimeString('id-ID')+')';
+      toast('Firebase OK ✓','ok');
+    }).catch(function(e){ if(msg) msg.textContent='Error: '+e.message; toast('Test gagal: '+e.message,'err'); });
 }
 
-function showFirebaseGuide() { document.getElementById('modal-fb-guide').classList.add('open'); }
+function showFirebaseGuide(){ document.getElementById('modal-fb-guide').classList.add('open'); }
 
-// Throttled cloud save
-var _cloudSaveTimer = null, _cloudDirty = {};
+// ── Cloud save: tiap key = 1 dokumen di koleksi 'kv' ─────────────────────────
+var _saveTimers = {};
 function cloudSave(key, value) {
   if(!_fbReady || !_db) return;
-  _cloudDirty[key] = value;
-  clearTimeout(_cloudSaveTimer);
-  _cloudSaveTimer = setTimeout(function(){
-    var patch = {}; Object.keys(_cloudDirty).forEach(function(k){ patch[k]=_cloudDirty[k]; }); _cloudDirty={};
-    _db.collection('planner').doc(_fbDocId).set(patch,{merge:true}).catch(function(e){ console.warn('Cloud save failed:',e.message); });
-  }, 1200);
+  _setSyncStatus('saving');
+  clearTimeout(_saveTimers[key]);
+  _saveTimers[key] = setTimeout(function(){
+    _db.collection('kv').doc(key).set({v: value})
+      .then(function(){ _setSyncStatus('saved'); })
+      .catch(function(e){ _setSyncStatus('error'); console.warn('Save failed',key,e.message); });
+  }, 400); // 400ms — cepat
 }
 
+// ── Cloud load: baca semua dokumen di koleksi 'kv' ───────────────────────────
 function cloudLoad(callback) {
   if(!_fbReady || !_db){ callback({}); return; }
-  _db.collection('planner').doc(_fbDocId).get()
-    .then(function(doc){ callback(doc.exists ? doc.data() : {}); })
+  _db.collection('kv').get()
+    .then(function(snapshot){
+      var data = {};
+      snapshot.forEach(function(doc){ data[doc.id] = doc.data().v; });
+      callback(data);
+    })
     .catch(function(e){ console.warn('Cloud load failed:',e.message); callback({}); });
 }
 
-// localStorage shim — writes to real localStorage + cloud for CLOUD_KEYS
+// ── localStorage shim ─────────────────────────────────────────────────────────
 var _origLS = window.localStorage;
 var _lsMem = {};
-for(var _i=0; _i<_origLS.length; _i++){ var _k=_origLS.key(_i); if(_k) _lsMem[_k]=_origLS.getItem(_k); }
+for(var _i=0; _i<_origLS.length; _i++){ var _lk=_origLS.key(_i); if(_lk) _lsMem[_lk]=_origLS.getItem(_lk); }
 var localStorage = {
   getItem:    function(k){ return _lsMem.hasOwnProperty(k) ? _lsMem[k] : null; },
   setItem:    function(k,v){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} if(CLOUD_KEYS.indexOf(k)>=0) cloudSave(k,v); },
@@ -944,11 +934,10 @@ var localStorage = {
   get length(){ return Object.keys(_lsMem).length; }
 };
 
-// ── BOOT SEQUENCE ─────────────────────────────────────────────────────────────
+// ── Boot sequence ─────────────────────────────────────────────────────────────
 function appStart() {
   initFirebase();
 
-  // Show splash while loading cloud data
   var overlay = document.createElement('div');
   overlay.id = 'boot-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:var(--font)';
@@ -956,53 +945,38 @@ function appStart() {
     '<div style="font-size:32px">📦</div>'+
     '<div style="font-size:15px;font-weight:600;color:var(--text)">Material Planner</div>'+
     '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px">'+
-      '<div class="spin"></div><span id="boot-msg">'+((_fbReady)?'Mengambil data dari cloud...':'Memuat data lokal...')+'</span>'+
+      '<div class="spin"></div><span id="boot-msg">'+(_fbReady?'Mengambil data dari cloud...':'Memuat...')+'</span>'+
     '</div>'+
     '<div style="width:220px;height:3px;background:var(--border);border-radius:99px;overflow:hidden">'+
       '<div id="boot-bar" style="height:100%;background:var(--accent);border-radius:99px;width:10%;transition:width .4s"></div>'+
     '</div>';
   document.body.appendChild(overlay);
 
-  function setProgress(pct, msg) {
-    var b = document.getElementById('boot-bar'); if(b) b.style.width = pct+'%';
-    var m = document.getElementById('boot-msg'); if(m) m.textContent = msg;
-  }
+  function setP(pct,msg){ var b=document.getElementById('boot-bar');if(b)b.style.width=pct+'%';var m=document.getElementById('boot-msg');if(m)m.textContent=msg; }
+  function removeSplash(){ var o=document.getElementById('boot-overlay');if(o){o.style.opacity='0';o.style.transition='opacity .3s';setTimeout(function(){if(document.body.contains(o))document.body.removeChild(o);},300);} }
 
-  function removeSplash() {
-    var o = document.getElementById('boot-overlay');
-    if(o){ o.style.opacity='0'; o.style.transition='opacity .3s'; setTimeout(function(){ if(document.body.contains(o)) document.body.removeChild(o); },300); }
-  }
-
-  function afterCloudLoad(cloudData) {
-    setProgress(60, 'Memuat state aplikasi...');
-    // Cloud wins over local for CLOUD_KEYS
+  function afterLoad(cloudData) {
+    setP(60,'Memuat data...');
+    // Cloud data wins — write to mem+localStorage without re-uploading
     Object.keys(cloudData||{}).forEach(function(k){
-      var v = cloudData[k];
-      if(v !== null && v !== undefined){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
+      var v=cloudData[k]; if(v!=null){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
     });
-    setProgress(80, 'Menyiapkan tampilan...');
+    setP(85,'Menyiapkan tampilan...');
     _appInit();
-    setProgress(100, 'Siap!');
-    setTimeout(removeSplash, 400);
-
-    // Auto-load sheets if master/mrp not in local cache but URLs are in cloud
+    setP(100,'Siap!');
+    setTimeout(removeSplash, 350);
+    // Auto-load sheets jika URL ada di cloud tapi data belum di cache lokal
     setTimeout(function(){
-      var needsSheets = !STATE.masterData || !STATE.mrpData;
-      var hasUrls = localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp');
-      if(needsSheets && hasUrls){
+      if((!STATE.masterData || !STATE.mrpData) &&
+         (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))) {
         toast('Memuat data dari Google Sheets...','inf');
         loadAllSheets();
       }
-    }, 800);
+    }, 600);
   }
 
-  if(_fbReady) {
-    setProgress(30, 'Mengambil data dari cloud...');
-    cloudLoad(afterCloudLoad);
-  } else {
-    setProgress(50, 'Firebase tidak aktif — pakai data lokal...');
-    setTimeout(function(){ afterCloudLoad({}); }, 200);
-  }
+  if(_fbReady){ setP(30,'Mengambil dari cloud...'); cloudLoad(afterLoad); }
+  else { setP(50,'Data lokal...'); setTimeout(function(){ afterLoad({}); }, 150); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1249,46 +1223,128 @@ async function testSAP() {
 var BTG_WHS = ['GBEX','GBFP','GBHB','GBHK','GBJD','GBNS','GKIB','GSBC','GTIM','PFFG'];
 var SNG_WHS = ['SBFP','SBHB','SBHK','SFFG','SKIB','SSBC'];
 
-async function loadStock() {
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚡ SMART CACHE SYSTEM — pakai data cache, refresh di background
+// ═══════════════════════════════════════════════════════════════════════════════
+var CACHE_TTL = {
+  stock:  30 * 60 * 1000,   // 30 menit
+  po:     60 * 60 * 1000,   // 1 jam
+  grpo:   4  * 60 * 60 * 1000, // 4 jam
+  ospo:   6  * 60 * 60 * 1000, // 6 jam
+  ospr:   6  * 60 * 60 * 1000  // 6 jam
+};
+
+function cacheKey(type)  { return 'cache_data_' + type; }
+function cacheTs(type)   { return 'cache_ts_' + type; }
+
+function cacheGet(type) {
+  var ts  = parseInt(localStorage.getItem(cacheTs(type)) || '0');
+  var ttl = CACHE_TTL[type] || 3600000;
+  var age = Date.now() - ts;
+  var raw = localStorage.getItem(cacheKey(type));
+  if(!raw) return null;
+  try { return { data: JSON.parse(raw), age: age, expired: age > ttl, ts: ts }; } catch(e) { return null; }
+}
+
+function cacheSet(type, data) {
+  var ts = Date.now();
   try {
-    var whsParam = JSON.stringify(BTG_WHS.concat(SNG_WHS));
-    var itemGroupParam = JSON.stringify([101,102,103,104]);
-    var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/90?' +
-      encodeURIComponent('[%0]') + '=' + encodeURIComponent(whsParam) + '&' +
-      encodeURIComponent('[%1]') + '=' + encodeURIComponent(itemGroupParam);
-    var res = await fetch(url, { headers: { Authorization: sapAuth() } });
-    if(!res.ok) throw new Error('Stock API error: ' + res.status);
-    var raw = await res.json();
+    localStorage.setItem(cacheKey(type), JSON.stringify(data));
+    localStorage.setItem(cacheTs(type), String(ts));
+  } catch(e) { console.warn('Cache write failed:', e.message); }
+  return ts;
+}
 
-    STATE.stockData = {};
-    (raw || []).forEach(function(r) {
-      var ic = r.ItemCode;
-      var whs = r.WhsCode;
-      var onHand = parseFloat(r.OnHand) || 0;
-      var uom = (r.UOM || '').toUpperCase();
+function fmtCacheAge(ts) {
+  if(!ts) return 'belum pernah';
+  var d = new Date(ts);
+  return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+}
 
-      // Konversi GR → KG (bagi 1000)
-      if(uom === 'GR') onHand = onHand / 1000;
+function fmtAge(ms) {
+  if(ms < 60000)  return Math.round(ms/1000) + ' detik lalu';
+  if(ms < 3600000) return Math.round(ms/60000) + ' menit lalu';
+  return Math.round(ms/3600000) + ' jam lalu';
+}
 
-      // Skip GBJD kecuali item 11/12
-      if(whs === 'GBJD' && ic && !/^11|^12/.test(String(ic))) return;
-      // Skip kalau onHand 0
-      if(onHand <= 0) return;
+// Tampilkan info cache di dashboard
+function updateCacheStatus() {
+  var el = document.getElementById('dash-cache-status');
+  if(!el) return;
+  var types = ['stock','po','grpo','ospo','ospr'];
+  var labels = {stock:'Stock', po:'PO', grpo:'GRPO', ospo:'OSPO', ospr:'OSPR'};
+  el.innerHTML = types.map(function(t){
+    var c = cacheGet(t);
+    var color = !c ? 'var(--muted)' : (c.expired ? 'var(--amber)' : 'var(--green)');
+    var txt   = !c ? 'belum ada' : (fmtCacheAge(c.ts) + ' (' + fmtAge(c.age) + ')');
+    return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px">' +
+           '<span style="width:6px;height:6px;border-radius:50%;background:'+color+';flex-shrink:0"></span>' +
+           '<span style="color:var(--text);font-weight:500">' + labels[t] + '</span>' +
+           '<span style="color:var(--muted)">' + txt + '</span>' +
+           '</span>';
+  }).join('');
+}
 
-      if(!STATE.stockData[ic]) STATE.stockData[ic] = { btg: 0, sng: 0 };
-      if(BTG_WHS.indexOf(whs) >= 0) STATE.stockData[ic].btg += onHand;
-      if(SNG_WHS.indexOf(whs) >= 0) STATE.stockData[ic].sng += onHand;
-    });
+// ── SMART LOAD WRAPPERS ───────────────────────────────────────────────────────
+async function _fetchStock() {
+  var whsParam = JSON.stringify(BTG_WHS.concat(SNG_WHS));
+  var itemGroupParam = JSON.stringify([101,102,103,104]);
+  var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/90?' +
+    encodeURIComponent('[%0]') + '=' + encodeURIComponent(whsParam) + '&' +
+    encodeURIComponent('[%1]') + '=' + encodeURIComponent(itemGroupParam);
+  var res = await fetch(url, { headers: { Authorization: sapAuth() } });
+  if(!res.ok) throw new Error('Stock API error: ' + res.status);
+  return res.json();
+}
 
+async function loadStock(forceRefresh) {
+  var cached = cacheGet('stock');
+  if(cached && !cached.expired && !forceRefresh) {
+    _applyStockData(cached.data);
+    toast('Stock dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    // Refresh di background kalau sudah > 15 menit
+    if(cached.age > 15*60*1000) setTimeout(function(){ loadStock(true); }, 100);
+    return;
+  }
+  try {
+    var raw = await _fetchStock();
+    var processed = _processStockRaw(raw);
+    cacheSet('stock', processed);
+    _applyStockData(processed);
     toast(Object.keys(STATE.stockData).length + ' item stock dimuat ✓', 'ok');
+    updateCacheStatus();
   } catch(e) {
-    toast('Gagal load stock: ' + e.message, 'err');
-    STATE.stockData = {};
+    if(cached) { _applyStockData(cached.data); toast('Stock: pakai cache (API error: ' + e.message + ')', 'err'); }
+    else { toast('Gagal load stock: ' + e.message, 'err'); STATE.stockData = {}; }
   }
 }
 
-// ─── LOAD OSPR (PR — ReportId 34) ────────────────────────────────────────────
-async function loadOSPR() {
+function _processStockRaw(raw) {
+  var stockData = {};
+  (raw || []).forEach(function(r) {
+    var ic = r.ItemCode, whs = r.WhsCode;
+    var onHand = parseFloat(r.OnHand) || 0;
+    var uom = (r.UOM || '').toUpperCase();
+    if(uom === 'GR') onHand = onHand / 1000;
+    if(whs === 'GBJD' && ic && !/^11|^12/.test(String(ic))) return;
+    if(onHand <= 0) return;
+    if(!stockData[ic]) stockData[ic] = { btg: 0, sng: 0 };
+    if(BTG_WHS.indexOf(whs) >= 0) stockData[ic].btg += onHand;
+    if(SNG_WHS.indexOf(whs) >= 0) stockData[ic].sng += onHand;
+  });
+  return stockData;
+}
+function _applyStockData(data) { STATE.stockData = data || {}; }
+
+async function loadOSPR(forceRefresh) {
+  var cached = cacheGet('ospr');
+  if(cached && !cached.expired && !forceRefresh) {
+    STATE.osprData = cached.data.list || [];
+    STATE.osprByItem = cached.data.byItem || {};
+    toast('OSPR dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    return;
+  }
   try {
     var raw = await sapFetch(34, { '[%0]': '2025-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
     STATE.osprData = (raw || []).filter(function(r) {
@@ -1299,30 +1355,35 @@ async function loadOSPR() {
       if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
       return true;
     }).map(function(r) {
-      return {
-        docNum: r.DocNum, itemCode: r.ItemCode, itemName: r.Dscription,
+      return { docNum: r.DocNum, itemCode: r.ItemCode, itemName: r.Dscription,
         supplierName: r.CardName, openQty: r.OpenQty, uom: r.unitMsr,
-        prReqDate: fmtSAPDate(r.PR_Req_Date), site: r.U_ReqSite||''
-      };
+        prReqDate: fmtSAPDate(r.PR_Req_Date), site: r.U_ReqSite||'' };
     });
-
-    // Build OSPR by item by month
     STATE.osprByItem = {};
     STATE.osprData.forEach(function(r) {
       if(!STATE.osprByItem[r.itemCode]) STATE.osprByItem[r.itemCode] = 0;
       STATE.osprByItem[r.itemCode] += (r.openQty || 0);
     });
-
+    cacheSet('ospr', { list: STATE.osprData, byItem: STATE.osprByItem });
     toast(STATE.osprData.length + ' OSPR dimuat ✓', 'ok');
+    updateCacheStatus();
   } catch(e) {
-    toast('Gagal load OSPR: ' + e.message, 'err');
-    STATE.osprData = []; STATE.osprByItem = {};
+    if(cached) { STATE.osprData = cached.data.list||[]; STATE.osprByItem = cached.data.byItem||{}; toast('OSPR: pakai cache', 'inf'); }
+    else { toast('Gagal load OSPR: ' + e.message, 'err'); STATE.osprData = []; STATE.osprByItem = {}; }
   }
 }
 
-
-async function loadPO() {
-  document.getElementById('po-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat PO dari SAP...</div>';
+async function loadPO(forceRefresh) {
+  document.getElementById('po-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat PO...</div>';
+  var cached = cacheGet('po');
+  if(cached && !cached.expired && !forceRefresh) {
+    STATE.poData = cached.data;
+    document.getElementById('s-po').textContent = STATE.poData.length;
+    renderPO();
+    toast('PO dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    if(cached.age > 30*60*1000) setTimeout(function(){ loadPO(true); }, 200);
+    return;
+  }
   try {
     var raw = await sapFetch(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
     STATE.poData = (raw || []).filter(function(r){
@@ -1333,20 +1394,131 @@ async function loadPO() {
       if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
       return true;
     }).map(function(r){
-      return {
-        docNum: r.DocNum, docDate: fmtSAPDate(r.DocDate),
+      return { docNum: r.DocNum, docDate: fmtSAPDate(r.DocDate),
         poReqDate: fmtSAPDate(r.PO_Req_Date), site: r.U_ReqSite||'',
         supplierName: r.CardName, itemCode: r.ItemCode,
         itemName: r.Dscription, openQty: r.OpenQty, uom: r.unitMsr,
-        status: r.DocStatus, lineStatus: r.PO_LineStatus
-      };
+        status: r.DocStatus, lineStatus: r.PO_LineStatus };
     });
+    cacheSet('po', STATE.poData);
     document.getElementById('s-po').textContent = STATE.poData.length;
     renderPO();
     toast(STATE.poData.length + ' PO aktif dimuat ✓', 'ok');
+    updateCacheStatus();
   } catch(e) {
-    document.getElementById('po-table').innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
-    toast('Gagal load PO: ' + e.message, 'err');
+    if(cached) {
+      STATE.poData = cached.data;
+      document.getElementById('s-po').textContent = STATE.poData.length;
+      renderPO();
+      toast('PO: pakai cache (API error)', 'err');
+    } else {
+      document.getElementById('po-table').innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
+      toast('Gagal load PO: ' + e.message, 'err');
+    }
+  }
+}
+
+async function loadGRPO(forceRefresh) {
+  var monthVal = document.getElementById('grpo-month').value;
+  if(!monthVal) { toast('Pilih bulan terlebih dahulu', 'err'); return; }
+  var cacheKeyMonth = 'grpo_' + monthVal;
+  var cached = cacheGet(cacheKeyMonth);
+
+  // GRPO per bulan punya TTL sendiri — cached per monthVal
+  var grpoTTL = CACHE_TTL.grpo;
+  if(cached && (Date.now() - cached.ts) < grpoTTL && !forceRefresh) {
+    STATE.grpoData = cached.data;
+    document.getElementById('s-grpo').textContent = STATE.grpoData.length;
+    renderGRPO();
+    toast('GRPO dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    return;
+  }
+  var parts = monthVal.split('-');
+  var y = parts[0], m = parts[1];
+  var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+  var startDate = y+'-'+m+'-01T00:00:00.000Z';
+  var endDate   = y+'-'+m+'-'+lastDay+'T00:00:00.000Z';
+  document.getElementById('grpo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO dari SAP...</div>';
+  try {
+    var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
+    STATE.grpoData = (raw || []).filter(function(r){
+      var s = (r.DocStatus||'').toLowerCase();
+      if(s === 'cancelled' || s === 'cancellation') return false;
+      var ic = (r.ItemCode||'').toString();
+      if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
+      return true;
+    }).map(function(r){
+      return { grpoDate: fmtSAPDate(r.GRPO_Date), itemCode: r.ItemCode,
+        itemName: r.Dscription, supplierName: r.CardName, qty: r.Quantity, uom: r.unitMsr };
+    });
+    cacheSet(cacheKeyMonth, STATE.grpoData);
+    document.getElementById('s-grpo').textContent = STATE.grpoData.length;
+    renderGRPO();
+    toast(STATE.grpoData.length + ' GRPO dimuat ✓', 'ok');
+    updateCacheStatus();
+  } catch(e) {
+    if(cached) { STATE.grpoData = cached.data; renderGRPO(); toast('GRPO: pakai cache', 'inf'); }
+    else { document.getElementById('grpo-table').innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load GRPO: '+e.message,'err'); }
+  }
+}
+
+async function loadOSPO(forceRefresh) {
+  document.getElementById('ospo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat OSPO...</div>';
+  var cached = cacheGet('ospo');
+  if(cached && !cached.expired && !forceRefresh) {
+    STATE.ospoData = cached.data;
+    populateOSPOMonths(); renderOSPO();
+    toast('OSPO dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    if(cached.age > 2*60*60*1000) setTimeout(function(){ loadOSPO(true); }, 300);
+    return;
+  }
+  try {
+    var raw = await sapFetch(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
+    STATE.ospoData = (raw || []).filter(function(r){
+      var s=(r.DocStatus||'').toLowerCase();
+      if(s==='cancelled'||s==='cancellation') return false;
+      if((r.OpenQty||0)<=0) return false;
+      var ic=(r.ItemCode||'').toString();
+      if(/^6/.test(ic)&&r.CardName!=='Berkat Asia Kemasindo, PT') return false;
+      return true;
+    }).map(function(r){
+      return { docNum:r.DocNum, itemCode:r.ItemCode, itemName:r.Dscription,
+        supplierName:r.CardName, openQty:r.OpenQty, uom:r.unitMsr,
+        poReqDate:fmtSAPDate(r.PO_Req_Date), site:r.U_ReqSite||'' };
+    });
+    cacheSet('ospo', STATE.ospoData);
+    populateOSPOMonths(); renderOSPO();
+    toast(STATE.ospoData.length + ' OSPO dimuat ✓', 'ok');
+    updateCacheStatus();
+  } catch(e) {
+    if(cached) { STATE.ospoData=cached.data; populateOSPOMonths(); renderOSPO(); toast('OSPO: pakai cache','inf'); }
+    else { document.getElementById('ospo-table').innerHTML='<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load OSPO: '+e.message,'err'); }
+  }
+}
+
+async function syncAll(forceRefresh) {
+  toast('Sync data dari SAP...', 'inf');
+  document.getElementById('dash-sub').textContent = 'Menyinkronkan...';
+  try {
+    await Promise.all([
+      loadPO(forceRefresh),
+      loadOSPO(forceRefresh),
+      loadStock(forceRefresh),
+      loadOSPR(forceRefresh)
+    ]);
+    var now = new Date();
+    document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    await loadGRPO(forceRefresh);
+    if(STATE.mrpData) buildProjection();
+    var ts = now.toLocaleString('id-ID');
+    document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ts;
+    localStorage.setItem('last_sync', ts);
+    updateDashStats();
+    updateCacheStatus();
+    toast('Sync berhasil ✓', 'ok');
+  } catch(e) {
+    document.getElementById('dash-sub').textContent = 'Sync gagal — cek Settings';
+    toast('Sync gagal: ' + e.message, 'err');
   }
 }
 
@@ -1585,42 +1757,7 @@ function resetPOOverrides() {
 function initGRPO() {
   var now = new Date();
   document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  if(!STATE.grpoData.length) loadGRPO();
-  else renderGRPO();
-}
-
-async function loadGRPO() {
-  var monthVal = document.getElementById('grpo-month').value;
-  if(!monthVal) { toast('Pilih bulan terlebih dahulu', 'err'); return; }
-  var parts = monthVal.split('-');
-  var y = parts[0], m = parts[1];
-  var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
-  var startDate = y + '-' + m + '-01T00:00:00.000Z';
-  var endDate = y + '-' + m + '-' + lastDay + 'T00:00:00.000Z';
-
-  document.getElementById('grpo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO dari SAP...</div>';
-  try {
-    var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
-    STATE.grpoData = (raw || []).filter(function(r){
-      var s = (r.DocStatus||'').toLowerCase();
-      if(s === 'cancelled' || s === 'cancellation') return false;
-      var ic = (r.ItemCode||'').toString();
-      if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
-      return true;
-    }).map(function(r){
-      return {
-        grpoDate: fmtSAPDate(r.GRPO_Date), itemCode: r.ItemCode,
-        itemName: r.Dscription, supplierName: r.CardName,
-        qty: r.Quantity, uom: r.unitMsr
-      };
-    });
-    document.getElementById('s-grpo').textContent = STATE.grpoData.length;
-    renderGRPO();
-    toast(STATE.grpoData.length + ' GRPO dimuat ✓', 'ok');
-  } catch(e) {
-    document.getElementById('grpo-table').innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
-    toast('Gagal load GRPO: ' + e.message, 'err');
-  }
+  if(!STATE.grpoData.length) loadGRPO(); else renderGRPO();
 }
 
 function renderGRPO() {
@@ -1656,34 +1793,6 @@ function renderGRPO() {
     }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+(r.qty||0).toLocaleString('id-ID')+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' GRPO</div>';
-}
-
-// ─── LOAD OSPO ───────────────────────────────────────────────────────────────
-async function loadOSPO() {
-  document.getElementById('ospo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat OSPO dari SAP...</div>';
-  try {
-    var raw = await sapFetch(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
-    STATE.ospoData = (raw || []).filter(function(r){
-      var s = (r.DocStatus||'').toLowerCase();
-      if(s === 'cancelled' || s === 'cancellation') return false;
-      if((r.OpenQty||0) <= 0) return false;
-      var ic = (r.ItemCode||'').toString();
-      if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
-      return true;
-    }).map(function(r){
-      return {
-        docNum: r.DocNum, itemCode: r.ItemCode, itemName: r.Dscription,
-        supplierName: r.CardName, openQty: r.OpenQty, uom: r.unitMsr,
-        poReqDate: fmtSAPDate(r.PO_Req_Date), site: r.U_ReqSite||''
-      };
-    });
-    populateOSPOMonths();
-    renderOSPO();
-    toast(STATE.ospoData.length + ' OSPO dimuat ✓', 'ok');
-  } catch(e) {
-    document.getElementById('ospo-table').innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
-    toast('Gagal load OSPO: ' + e.message, 'err');
-  }
 }
 
 function populateOSPOMonths() {
@@ -1889,29 +1998,65 @@ function processMRP(rows, headers) {
 
 function processMatcom(rows, headers) {
   var result = {};
+  // Cari kolom average — cek berbagai kemungkinan nama kolom
   var avgKey = null;
+  var avgCandidates = ['average x max','avg x max','average','avg usg','avg usage','average usage','pemakaian rata','rata-rata'];
   if(headers) {
-    headers.forEach(function(h) {
-      var hl = String(h).toLowerCase().trim();
-      if(!avgKey && (hl === 'average x max' || hl.includes('average x max'))) avgKey = String(h).trim();
-    });
-  }
-  rows.forEach(function(row) {
-    var code = String(row['Code'] || row['SAP Code'] || row['ItemCode'] || row['Item Code'] || '').trim();
-    if(!code || !code.match(/^\d/)) return;
-    var avgUsg = 0;
-    if(avgKey && row[avgKey] !== undefined) avgUsg = parseFloat(String(row[avgKey]).replace(',','.')) || 0;
-    if(!avgUsg) {
-      Object.keys(row).forEach(function(k) {
-        if(!avgUsg && String(k).toLowerCase().includes('average x max')) avgUsg = parseFloat(String(row[k]).replace(',','.')) || 0;
+    // Pass 1: exact match priority list
+    for(var ci=0; ci<avgCandidates.length; ci++) {
+      headers.forEach(function(h){
+        if(!avgKey && String(h).toLowerCase().trim() === avgCandidates[ci]) avgKey = String(h).trim();
+      });
+      if(avgKey) break;
+    }
+    // Pass 2: partial match
+    if(!avgKey) {
+      headers.forEach(function(h){
+        var hl = String(h).toLowerCase().trim();
+        if(!avgKey && avgCandidates.some(function(c){ return hl.includes(c); })) avgKey = String(h).trim();
       });
     }
+  }
+
+  rows.forEach(function(row) {
+    var code = String(row['Code'] || row['SAP Code'] || row['Item Code'] || row['ItemCode'] || row['Item No.'] || row['Item No'] || '').trim();
+    if(!code || !code.match(/^\d/)) return;
+    var avgUsg = 0;
+
+    // Try matched key first
+    if(avgKey && row[avgKey] !== undefined && row[avgKey] !== '') {
+      avgUsg = parseFloat(String(row[avgKey]).replace(/\./g,'').replace(',','.')) || 0;
+    }
+    // Fallback: scan all columns
+    if(!avgUsg) {
+      Object.keys(row).forEach(function(k){
+        if(avgUsg) return;
+        var kl = String(k).toLowerCase();
+        if(avgCandidates.some(function(c){ return kl.includes(c); })) {
+          var v = parseFloat(String(row[k]).replace(/\./g,'').replace(',','.')) || 0;
+          if(v > 0) avgUsg = v;
+        }
+      });
+    }
+    // Last resort: pick largest numeric value from row (likely the avg column)
+    if(!avgUsg) {
+      var maxVal = 0;
+      Object.keys(row).forEach(function(k){
+        var kl = String(k).toLowerCase();
+        // Skip clearly irrelevant columns
+        if(kl.includes('code') || kl.includes('item') || kl.includes('name') || kl.includes('category') || kl.includes('uom')) return;
+        var v = parseFloat(String(row[k]).replace(/\./g,'').replace(',','.')) || 0;
+        if(v > maxVal) maxVal = v;
+      });
+      avgUsg = maxVal;
+    }
+
     result[code] = {
-      category: String(row['Category'] || '').trim(),
+      category:    String(row['Category'] || '').trim(),
       invCategory: String(row['Inventory category'] || row['Inventory Category'] || '').trim(),
-      sapName: String(row['SAP Name'] || '').trim(),
-      uom: String(row['Inventory UoM'] || row['UoM'] || '').trim(),
-      avgUsg: avgUsg
+      sapName:     String(row['SAP Name'] || row['Item Name'] || row['Name'] || '').trim(),
+      uom:         String(row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim(),
+      avgUsg:      avgUsg
     };
   });
   return result;
@@ -2501,29 +2646,6 @@ function updateDashStats() {
   var urgent = STATE.projectionData.filter(function(p){return p.isUrgent}).length;
   document.getElementById('s-urgent').textContent = urgent || '—';
   if(STATE.projectionData.length) renderDashUrgent();
-}
-
-async function syncAll() {
-  toast('Sync semua data dari SAP...', 'inf');
-  document.getElementById('dash-sub').textContent = 'Menyinkronkan...';
-  try {
-    // Sync semua paralel
-    await Promise.all([loadPO(), loadOSPO(), loadStock(), loadOSPR()]);
-    // GRPO bulan ini
-    var now = new Date();
-    document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-    await loadGRPO();
-    // Rebuild projection kalau MRP sudah ada
-    if(STATE.mrpData) buildProjection();
-    var ts = now.toLocaleString('id-ID');
-    document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ts;
-    localStorage.setItem('last_sync', ts);
-    updateDashStats();
-    toast('Sync berhasil ✓', 'ok');
-  } catch(e) {
-    document.getElementById('dash-sub').textContent = 'Sync gagal — cek Settings';
-    toast('Sync gagal: ' + e.message, 'err');
-  }
 }
 
 // ─── SCHEDULE ────────────────────────────────────────────────────────────────
@@ -3825,6 +3947,15 @@ function _appInit() {
     var ts=localStorage.getItem(t+'_upload_ts'), el=document.getElementById(t+'-ts');
     if(ts&&el) el.textContent='Dimuat: '+ts;
   });
+
+  // Load SAP data from cache into STATE (no API call)
+  var sc = cacheGet('stock'); if(sc) { _applyStockData(sc.data); }
+  var pc = cacheGet('po');    if(pc) { STATE.poData = pc.data; var spo = document.getElementById('s-po'); if(spo) spo.textContent = pc.data.length; }
+  var oc = cacheGet('ospo');  if(oc) { STATE.ospoData = oc.data; }
+  var or = cacheGet('ospr');  if(or) { STATE.osprData = or.data.list||[]; STATE.osprByItem = or.data.byItem||{}; }
+
+  // Show cache timestamps
+  updateCacheStatus();
 
   scheduleAutoRefresh();
 }
