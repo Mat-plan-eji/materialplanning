@@ -438,10 +438,13 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <div class="page" id="pg-grpo">
 <div class="page-inner">
   <div class="ph">
-    <div class="ph-l"><h2>GRPO</h2><p>Goods Receipt PO bulan berjalan dari SAP</p></div>
-    <div class="ph-r">
-      <input type="month" id="grpo-month" style="width:140px">
-      <button class="btn btn-primary" onclick="loadGRPO()">↺ Load GRPO</button>
+    <div class="ph-l"><h2>GRPO</h2><p>Goods Receipt PO bulan berjalan — otomatis tarik bulan ini</p></div>
+    <div class="ph-r" style="gap:6px">
+      <span style="font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px">
+        History:
+        <input type="month" id="grpo-month" style="width:130px" onchange="loadGRPOMonth()" title="Lihat GRPO bulan lain">
+      </span>
+      <button class="btn btn-primary" onclick="loadGRPO(true)">↺ Refresh Bulan Ini</button>
     </div>
   </div>
   <div class="fbar">
@@ -521,9 +524,14 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="card">
       <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Code | Average x Max</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom wajib: <span style="font-family:var(--mono);color:var(--teal)">Code | [kolom avg usage]</span></div>
         <div class="fg"><label>URL Google Sheets</label><input id="matcom-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
         <div class="fg"><label>Nama Tab</label><input id="matcom-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
+        <div class="fg">
+          <label>Nama Kolom Avg Usage <span style="color:var(--hint)">(kosong = auto-detect)</span></label>
+          <input id="matcom-avg-col" type="text" placeholder="contoh: Average x Max  atau  Max  atau  Usg/day" style="width:100%;font-size:11.5px">
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">Tulis nama kolom persis seperti di header sheet (case-insensitive)</div>
+        </div>
         <button class="btn btn-sm" style="width:100%;border-color:rgba(16,185,129,.3);color:var(--green)" onclick="loadSheetData('matcom')">↓ Muat Matcom</button>
         <div id="matcom-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
         <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
@@ -993,7 +1001,7 @@ function _sheetsCSVUrl(url, sheetName) {
 
 function _parseCSV(text) {
   // RFC 4180 CSV parser
-  var rows = []; var row = []; var cell = ''; var inQ = false;
+  var allRows = []; var row = []; var cell = ''; var inQ = false;
   for(var i=0;i<text.length;i++){
     var c=text[i];
     if(inQ){ if(c==='"'&&text[i+1]==='"'){ cell+='"'; i++; } else if(c==='"'){ inQ=false; } else { cell+=c; } }
@@ -1001,20 +1009,31 @@ function _parseCSV(text) {
     else if(c===','){ row.push(cell); cell=''; }
     else if(c==='\n'||c==='\r'){
       row.push(cell); cell='';
-      if(row.some(function(x){return x!=='';})) rows.push(row);
+      if(row.some(function(x){return x!=='';})) allRows.push(row);
       row=[];
       if(c==='\r'&&text[i+1]==='\n') i++;
     } else { cell+=c; }
   }
-  if(cell||row.length){ row.push(cell); if(row.some(function(x){return x!=='';})) rows.push(row); }
-  if(rows.length<2) return {headers:[],rows:[]};
-  var headers = rows[0];
-  var data = rows.slice(1).map(function(r){
+  if(cell||row.length){ row.push(cell); if(row.some(function(x){return x!=='';})) allRows.push(row); }
+  if(allRows.length<2) return {headers:[],rows:[],headerRowIdx:0};
+
+  // Auto-detect header row: cari baris yang mengandung kata kunci kolom data
+  // Hindari baris judul seperti "Raw Material & Packaging Consumption"
+  var HEADER_KEYWORDS = ['code','item','category','nama','name','description','uom','satuan','no'];
+  var headerRowIdx = 0;
+  for(var ri=0; ri<Math.min(allRows.length-1, 5); ri++){
+    var rowLower = allRows[ri].map(function(c){ return String(c).toLowerCase().trim(); });
+    var matches = rowLower.filter(function(h){ return HEADER_KEYWORDS.some(function(k){ return h.includes(k); }); }).length;
+    if(matches >= 2){ headerRowIdx = ri; break; }
+  }
+
+  var headers = allRows[headerRowIdx].map(function(h){ return String(h).trim(); });
+  var data = allRows.slice(headerRowIdx+1).map(function(r){
     var obj={};
     headers.forEach(function(h,i){ obj[h]=(r[i]!==undefined?r[i]:''); });
     return obj;
   });
-  return {headers:headers, rows:data};
+  return {headers:headers, rows:data, headerRowIdx:headerRowIdx};
 }
 
 function saveSheetUrl(type) {
@@ -1065,13 +1084,26 @@ function loadSheetData(type) {
       toast('MRP: '+cnt+' item ✓','ok');
 
     } else if(type==='matcom'){
-      STATE.matcomData = processMatcom(rows, headers);
+      // Ambil nama kolom avg dari input user (kalau ada)
+      var customAvgCol = (document.getElementById('matcom-avg-col')||{value:''}).value.trim();
+      if(customAvgCol) localStorage.setItem('matcom_avg_col', customAvgCol);
+      else customAvgCol = localStorage.getItem('matcom_avg_col')||'';
+
+      STATE.matcomData = processMatcom(rows, headers, customAvgCol);
       localStorage.setItem('matcom_data', JSON.stringify(STATE.matcomData));
       localStorage.setItem('matcom_upload_ts', ts);
       var cnt = Object.keys(STATE.matcomData).length;
-      if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
-      if(dotEl) dotEl.className='dot';
-      toast('Matcom: '+cnt+' item ✓','ok');
+      var avgFound = STATE.matcomData && cnt > 0
+        ? (function(){ var sample=Object.values(STATE.matcomData).find(function(x){return x.avgUsg>0;}); return sample?'avgUsg OK':'avgUsg = 0 semua'; })()
+        : 'kosong';
+      if(infoEl) infoEl.innerHTML = cnt+' item dimuat ✓ &nbsp;<span style="color:var(--muted);font-size:10.5px">| header row '+(parsed.headerRowIdx+1)+' | '+avgFound+'</span>';
+      // Tampilkan kolom yang tersedia untuk debug
+      if(infoEl && cnt > 0) {
+        var colList = headers.slice(0, 20).filter(function(h){ return h; }).join(', ');
+        infoEl.innerHTML += '<br><span style="font-size:10px;color:var(--hint)">Kolom: '+colList+'</span>';
+      }
+      if(dotEl) dotEl.className = cnt>0 ? 'dot' : 'dot warn';
+      toast('Matcom: '+cnt+' item ('+avgFound+')','ok');
 
     } else if(type==='realname'){
       STATE.realNameData = processRealName(rows);
@@ -1105,6 +1137,10 @@ function _restoreSheetUrls() {
     var ts=localStorage.getItem(t+'_upload_ts'), te=document.getElementById(t+'-ts');
     if(ts&&te) te.textContent='Dimuat: '+ts;
   });
+  // Restore matcom avg col
+  var ac = localStorage.getItem('matcom_avg_col');
+  var ace = document.getElementById('matcom-avg-col');
+  if(ac && ace) ace.value = ac;
 }
 // ─── PERF UTILS ──────────────────────────────────────────────────────────────
 function debounce(fn, ms) {
@@ -1419,16 +1455,19 @@ async function loadPO(forceRefresh) {
 }
 
 async function loadGRPO(forceRefresh) {
-  var monthVal = document.getElementById('grpo-month').value;
-  if(!monthVal) { toast('Pilih bulan terlebih dahulu', 'err'); return; }
+  // Selalu pakai bulan berjalan — tidak perlu pilih manual
+  var now = new Date();
+  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  var monthEl = document.getElementById('grpo-month');
+  if(monthEl) monthEl.value = curMonth;
+  var monthVal = curMonth;
+
   var cacheKeyMonth = 'grpo_' + monthVal;
   var cached = cacheGet(cacheKeyMonth);
-
-  // GRPO per bulan punya TTL sendiri — cached per monthVal
   var grpoTTL = CACHE_TTL.grpo;
   if(cached && (Date.now() - cached.ts) < grpoTTL && !forceRefresh) {
     STATE.grpoData = cached.data;
-    document.getElementById('s-grpo').textContent = STATE.grpoData.length;
+    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
     renderGRPO();
     toast('GRPO dari cache (' + fmtAge(cached.age) + ')', 'inf');
     return;
@@ -1438,7 +1477,8 @@ async function loadGRPO(forceRefresh) {
   var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
   var startDate = y+'-'+m+'-01T00:00:00.000Z';
   var endDate   = y+'-'+m+'-'+lastDay+'T00:00:00.000Z';
-  document.getElementById('grpo-table').innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO dari SAP...</div>';
+  var grpoEl = document.getElementById('grpo-table');
+  if(grpoEl) grpoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO ' + m + '/' + y + ' dari SAP...</div>';
   try {
     var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
     STATE.grpoData = (raw || []).filter(function(r){
@@ -1452,13 +1492,13 @@ async function loadGRPO(forceRefresh) {
         itemName: r.Dscription, supplierName: r.CardName, qty: r.Quantity, uom: r.unitMsr };
     });
     cacheSet(cacheKeyMonth, STATE.grpoData);
-    document.getElementById('s-grpo').textContent = STATE.grpoData.length;
+    var sgrpo2 = document.getElementById('s-grpo'); if(sgrpo2) sgrpo2.textContent = STATE.grpoData.length;
     renderGRPO();
-    toast(STATE.grpoData.length + ' GRPO dimuat ✓', 'ok');
+    toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' dimuat ✓', 'ok');
     updateCacheStatus();
   } catch(e) {
     if(cached) { STATE.grpoData = cached.data; renderGRPO(); toast('GRPO: pakai cache', 'inf'); }
-    else { document.getElementById('grpo-table').innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load GRPO: '+e.message,'err'); }
+    else { if(grpoEl) grpoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>'; toast('Gagal load GRPO: '+e.message,'err'); }
   }
 }
 
@@ -1506,8 +1546,6 @@ async function syncAll(forceRefresh) {
       loadStock(forceRefresh),
       loadOSPR(forceRefresh)
     ]);
-    var now = new Date();
-    document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
     await loadGRPO(forceRefresh);
     if(STATE.mrpData) buildProjection();
     var ts = now.toLocaleString('id-ID');
@@ -1755,9 +1793,60 @@ function resetPOOverrides() {
 
 // ─── LOAD GRPO ───────────────────────────────────────────────────────────────
 function initGRPO() {
+  // Set picker ke bulan ini tapi jangan ubah kalau user sudah pilih bulan lain
+  var el = document.getElementById('grpo-month');
   var now = new Date();
-  document.getElementById('grpo-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  if(!el.value) el.value = curMonth;
   if(!STATE.grpoData.length) loadGRPO(); else renderGRPO();
+}
+
+// Load GRPO bulan yang dipilih di history picker (bukan current month)
+async function loadGRPOMonth() {
+  var monthEl = document.getElementById('grpo-month');
+  var monthVal = monthEl ? monthEl.value : '';
+  if(!monthVal) return;
+
+  var now = new Date();
+  var curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  if(monthVal === curMonth) { loadGRPO(); return; } // bulan ini → pakai loadGRPO biasa
+
+  var cacheKeyMonth = 'grpo_' + monthVal;
+  var cached = cacheGet(cacheKeyMonth);
+  if(cached) {
+    STATE.grpoData = cached.data;
+    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = STATE.grpoData.length;
+    renderGRPO();
+    toast('GRPO ' + monthVal + ' dari cache (' + fmtAge(cached.age) + ')', 'inf');
+    return;
+  }
+  var parts = monthVal.split('-');
+  var y = parts[0], m = parts[1];
+  var lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+  var startDate = y+'-'+m+'-01T00:00:00.000Z';
+  var endDate   = y+'-'+m+'-'+lastDay+'T00:00:00.000Z';
+  var grpoEl = document.getElementById('grpo-table');
+  if(grpoEl) grpoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat GRPO ' + m + '/' + y + '...</div>';
+  try {
+    var raw = await sapFetch(27, { '[%0]': startDate, '[%1]': endDate });
+    STATE.grpoData = (raw || []).filter(function(r){
+      var s=(r.DocStatus||'').toLowerCase();
+      if(s==='cancelled'||s==='cancellation') return false;
+      var ic=(r.ItemCode||'').toString();
+      if(/^6/.test(ic)&&r.CardName!=='Berkat Asia Kemasindo, PT') return false;
+      return true;
+    }).map(function(r){
+      return { grpoDate:fmtSAPDate(r.GRPO_Date), itemCode:r.ItemCode,
+        itemName:r.Dscription, supplierName:r.CardName, qty:r.Quantity, uom:r.unitMsr };
+    });
+    cacheSet(cacheKeyMonth, STATE.grpoData);
+    var sg2 = document.getElementById('s-grpo'); if(sg2) sg2.textContent = STATE.grpoData.length;
+    renderGRPO();
+    toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' dimuat ✓', 'ok');
+  } catch(e) {
+    if(grpoEl) grpoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">'+e.message+'</div>';
+    toast('Gagal: '+e.message, 'err');
+  }
 }
 
 function renderGRPO() {
@@ -1996,21 +2085,25 @@ function processMRP(rows, headers) {
   return result;
 }
 
-function processMatcom(rows, headers) {
+function processMatcom(rows, headers, customAvgCol) {
   var result = {};
-  // Cari kolom average — cek berbagai kemungkinan nama kolom
   var avgKey = null;
-  var avgCandidates = ['average x max','avg x max','average','avg usg','avg usage','average usage','pemakaian rata','rata-rata'];
-  if(headers) {
-    // Pass 1: exact match priority list
-    for(var ci=0; ci<avgCandidates.length; ci++) {
+  // Prioritas: kolom yang ditentukan user → exact match → partial match
+  var avgCandidates = ['average x max','avg x max','max','average 3','usg/day','usg per day',
+                       'average','avg usg','avg usage','average usage','pemakaian rata','rata-rata'];
+
+  if(customAvgCol && customAvgCol.trim()) {
+    avgKey = customAvgCol.trim(); // User-specified, langsung pakai
+  } else if(headers) {
+    // Pass 1: exact match
+    for(var ci=0; ci<avgCandidates.length; ci++){
       headers.forEach(function(h){
         if(!avgKey && String(h).toLowerCase().trim() === avgCandidates[ci]) avgKey = String(h).trim();
       });
       if(avgKey) break;
     }
     // Pass 2: partial match
-    if(!avgKey) {
+    if(!avgKey){
       headers.forEach(function(h){
         var hl = String(h).toLowerCase().trim();
         if(!avgKey && avgCandidates.some(function(c){ return hl.includes(c); })) avgKey = String(h).trim();
@@ -2019,43 +2112,33 @@ function processMatcom(rows, headers) {
   }
 
   rows.forEach(function(row) {
-    var code = String(row['Code'] || row['SAP Code'] || row['Item Code'] || row['ItemCode'] || row['Item No.'] || row['Item No'] || '').trim();
+    var code = String(row['Code']||row['SAP Code']||row['Item Code']||row['ItemCode']||row['Item No.']||row['Item No']||'').trim();
     if(!code || !code.match(/^\d/)) return;
     var avgUsg = 0;
 
-    // Try matched key first
-    if(avgKey && row[avgKey] !== undefined && row[avgKey] !== '') {
-      avgUsg = parseFloat(String(row[avgKey]).replace(/\./g,'').replace(',','.')) || 0;
-    }
-    // Fallback: scan all columns
-    if(!avgUsg) {
+    function parseNum(v) { return parseFloat(String(v).replace(/\s/g,'').replace(/\./g,'').replace(',','.')) || 0; }
+
+    if(avgKey && row[avgKey] !== undefined && row[avgKey] !== '') avgUsg = parseNum(row[avgKey]);
+
+    // Fallback: scan kolom yang namanya mengandung kata kunci
+    if(!avgUsg){
+      var skipWords = ['code','item','name','category','uom','satuan','no','sap','inventory','ss','cov','min','max ss'];
       Object.keys(row).forEach(function(k){
         if(avgUsg) return;
         var kl = String(k).toLowerCase();
-        if(avgCandidates.some(function(c){ return kl.includes(c); })) {
-          var v = parseFloat(String(row[k]).replace(/\./g,'').replace(',','.')) || 0;
+        if(skipWords.some(function(s){ return kl === s; })) return;
+        if(avgCandidates.some(function(c){ return kl.includes(c); })){
+          var v = parseNum(row[k]);
           if(v > 0) avgUsg = v;
         }
       });
     }
-    // Last resort: pick largest numeric value from row (likely the avg column)
-    if(!avgUsg) {
-      var maxVal = 0;
-      Object.keys(row).forEach(function(k){
-        var kl = String(k).toLowerCase();
-        // Skip clearly irrelevant columns
-        if(kl.includes('code') || kl.includes('item') || kl.includes('name') || kl.includes('category') || kl.includes('uom')) return;
-        var v = parseFloat(String(row[k]).replace(/\./g,'').replace(',','.')) || 0;
-        if(v > maxVal) maxVal = v;
-      });
-      avgUsg = maxVal;
-    }
 
     result[code] = {
-      category:    String(row['Category'] || '').trim(),
-      invCategory: String(row['Inventory category'] || row['Inventory Category'] || '').trim(),
-      sapName:     String(row['SAP Name'] || row['Item Name'] || row['Name'] || '').trim(),
-      uom:         String(row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim(),
+      category:    String(row['Category']||'').trim(),
+      invCategory: String(row['Inventory category']||row['Inventory Category']||'').trim(),
+      sapName:     String(row['SAP Name']||row['Item Name']||row['Name']||'').trim(),
+      uom:         String(row['Inventory UoM']||row['UoM']||row['UOM']||'').trim(),
       avgUsg:      avgUsg
     };
   });
