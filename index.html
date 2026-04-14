@@ -245,6 +245,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div class="logo-mark">
       <div class="logo-icon">RM</div>
       <h1>Material Planner</h1>
+      <span id="sync-status-dot" title="Status cloud sync" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;margin-left:2px"></span>
     </div>
     <p>Raw Material Dashboard</p>
   </div>
@@ -282,15 +283,15 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph">
     <div class="ph-l"><h2>Material Planner Dashboard</h2><p id="dash-sub">Sync data untuk memulai</p></div>
     <div class="ph-r">
-      <button class="btn" onclick="syncAll(false)" title="Pakai cache jika belum expired">↺ Sync (Cache)</button>
-      <button class="btn btn-amber btn-sm" onclick="syncAll(true)" title="Paksa ambil ulang semua data dari SAP">⚡ Force Refresh</button>
+      <button class="btn btn-sm" onclick="_backgroundRefreshSAP()" title="Refresh data SAP yang expired saja">↺ Refresh Expired</button>
+      <button class="btn btn-amber btn-sm" onclick="syncAll(true)" title="Paksa ambil ulang SEMUA data dari SAP sekarang">⚡ Force Refresh SAP</button>
       <button class="btn btn-primary" onclick="buildProjection();showPage('projection',document.querySelectorAll('.ni')[1])">⚡ Build Projection</button>
     </div>
   </div>
   <!-- Cache status bar -->
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span style="font-size:10.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Cache SAP:</span>
-    <div id="dash-cache-status" style="flex:1;min-width:0"></div>
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:7px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:10.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Data SAP terakhir:</span>
+    <div id="dash-cache-status" style="flex:1;min-width:0;font-size:11px"></div>
     <button class="btn btn-xs" onclick="updateCacheStatus()" style="flex-shrink:0">↺</button>
   </div>
   <div class="stats" id="dash-stats">
@@ -820,14 +821,36 @@ var FIREBASE_CONFIG = {
 var _db = null;
 var _fbReady = false;
 
+// Helper bulan berjalan untuk cache key GRPO
+function _curMonthKey(){ var n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
+
+// Status sync indicator di header
+function _setSyncStatus(s){
+  var el=document.getElementById('sync-status-dot');
+  if(!el) return;
+  if(s==='saving')      { el.style.background='var(--amber)'; el.title='Menyimpan ke cloud...'; }
+  else if(s==='saved')  { el.style.background='var(--green)'; el.title='Tersimpan di cloud ✓'; }
+  else if(s==='error')  { el.style.background='var(--red)';   el.title='Gagal simpan ke cloud'; }
+}
+
 // Keys yang disync ke cloud — tiap key = 1 dokumen di Firestore koleksi 'kv'
 // Ini menghindari batas 1MB per dokumen Firestore
 var CLOUD_KEYS = [
+  // State aplikasi
   'schedule','po_overrides','proj_comments','stock_history','proj_history',
   'suppliers','proj_hidden_cols','proj_snapshots',
+  // URL Google Sheets
   'sheet_url_master','sheet_url_mrp','sheet_url_matcom','sheet_url_realname',
   'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
-  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
+  'matcom_avg_col',
+  // Settings
+  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync',
+  // SAP Cache — disync ke Firebase agar laptop lain tidak fetch ulang
+  'cache_data_stock','cache_ts_stock',
+  'cache_data_po',   'cache_ts_po',
+  'cache_data_ospo', 'cache_ts_ospo',
+  'cache_data_ospr', 'cache_ts_ospr',
+  'cache_data_grpo_'+_curMonthKey(), 'cache_ts_grpo_'+_curMonthKey()
 ];
 
 // ── Sync indicator di header ──────────────────────────────────────────────────
@@ -942,49 +965,103 @@ var localStorage = {
   get length(){ return Object.keys(_lsMem).length; }
 };
 
-// ── Boot sequence ─────────────────────────────────────────────────────────────
+// ── Boot sequence — CEPAT: tampil dari cache dulu, SAP di background ──────────
 function appStart() {
   initFirebase();
 
+  // Splash screen ringan
   var overlay = document.createElement('div');
   overlay.id = 'boot-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:var(--font)';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:var(--font)';
   overlay.innerHTML =
-    '<div style="font-size:32px">📦</div>'+
+    '<div style="font-size:28px">📦</div>'+
     '<div style="font-size:15px;font-weight:600;color:var(--text)">Material Planner</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px">'+
-      '<div class="spin"></div><span id="boot-msg">'+(_fbReady?'Mengambil data dari cloud...':'Memuat...')+'</span>'+
-    '</div>'+
-    '<div style="width:220px;height:3px;background:var(--border);border-radius:99px;overflow:hidden">'+
-      '<div id="boot-bar" style="height:100%;background:var(--accent);border-radius:99px;width:10%;transition:width .4s"></div>'+
+    '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px">'+
+      '<div class="spin"></div>'+
+      '<span id="boot-msg">'+(_fbReady ? 'Mengambil dari cloud...' : 'Memuat...')+'</span>'+
     '</div>';
   document.body.appendChild(overlay);
 
-  function setP(pct,msg){ var b=document.getElementById('boot-bar');if(b)b.style.width=pct+'%';var m=document.getElementById('boot-msg');if(m)m.textContent=msg; }
-  function removeSplash(){ var o=document.getElementById('boot-overlay');if(o){o.style.opacity='0';o.style.transition='opacity .3s';setTimeout(function(){if(document.body.contains(o))document.body.removeChild(o);},300);} }
+  function setMsg(m){ var el=document.getElementById('boot-msg'); if(el) el.textContent=m; }
+  function removeSplash(){
+    var o=document.getElementById('boot-overlay');
+    if(o){ o.style.opacity='0'; o.style.transition='opacity .25s'; setTimeout(function(){ if(document.body.contains(o)) document.body.removeChild(o); }, 250); }
+  }
 
   function afterLoad(cloudData) {
-    setP(60,'Memuat data...');
-    // Cloud data wins — write to mem+localStorage without re-uploading
+    // Tulis cloud data ke memori lokal (cloud wins)
     Object.keys(cloudData||{}).forEach(function(k){
       var v=cloudData[k]; if(v!=null){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
     });
-    setP(85,'Menyiapkan tampilan...');
-    _appInit();
-    setP(100,'Siap!');
-    setTimeout(removeSplash, 350);
-    // Auto-load sheets jika URL ada di cloud tapi data belum di cache lokal
+
+    setMsg('Menyiapkan tampilan...');
+    _appInit();       // render app dari cache — TIDAK ada SAP call di sini
+    removeSplash();   // hapus splash segera
+
+    // Background: auto-load Sheets jika data belum ada
     setTimeout(function(){
       if((!STATE.masterData || !STATE.mrpData) &&
-         (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))) {
-        toast('Memuat data dari Google Sheets...','inf');
+         (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))){
+        toast('Memuat data Sheets di background...','inf');
         loadAllSheets();
       }
-    }, 600);
+    }, 500);
+
+    // Background: refresh SAP data yang expired — TIDAK blocking tampilan
+    setTimeout(function(){ _backgroundRefreshSAP(); }, 1000);
   }
 
-  if(_fbReady){ setP(30,'Mengambil dari cloud...'); cloudLoad(afterLoad); }
-  else { setP(50,'Data lokal...'); setTimeout(function(){ afterLoad({}); }, 150); }
+  if(_fbReady){ setMsg('Mengambil dari cloud...'); cloudLoad(afterLoad); }
+  else { setTimeout(function(){ afterLoad({}); }, 50); }
+}
+
+// Refresh SAP data di background — hanya yang expired, tidak blocking UI
+function _backgroundRefreshSAP() {
+  var tasks = [];
+
+  var sc = cacheGet('stock');
+  var pc = cacheGet('po');
+  var oc = cacheGet('ospo');
+  var or2 = cacheGet('ospr');
+  var monthKey = _curMonthKey();
+  var gc = cacheGet('grpo_' + monthKey);
+
+  // Kumpulkan yang expired atau belum ada
+  if(!sc || sc.expired) tasks.push({name:'Stock', fn: function(){ return loadStock(true); }});
+  if(!pc || pc.expired) tasks.push({name:'PO',    fn: function(){ return loadPO(true); }});
+  if(!oc || oc.expired) tasks.push({name:'OSPO',  fn: function(){ return loadOSPO(true); }});
+  if(!or2|| or2.expired)tasks.push({name:'OSPR',  fn: function(){ return loadOSPR(true); }});
+  if(!gc || gc.expired) tasks.push({name:'GRPO',  fn: function(){
+    document.getElementById('grpo-month').value = monthKey;
+    return loadGRPO(true);
+  }});
+
+  if(!tasks.length) { updateCacheStatus(); return; }
+
+  // Update status bar
+  var subEl = document.getElementById('dash-sub');
+  var origText = subEl ? subEl.textContent : '';
+  if(subEl) subEl.textContent = '⟳ Refresh SAP di background (' + tasks.length + ' data)...';
+
+  // Jalankan satu per satu agar tidak spam SAP
+  var idx = 0;
+  function runNext() {
+    if(idx >= tasks.length) {
+      if(subEl) subEl.textContent = origText;
+      // Rebuild projection dengan data baru
+      if(STATE.mrpData && STATE.masterData) buildProjection();
+      updateDashStats();
+      updateCacheStatus();
+      toast('Background refresh selesai ✓', 'ok');
+      return;
+    }
+    var task = tasks[idx++];
+    Promise.resolve(task.fn()).then(runNext).catch(function(e){
+      console.warn('Background refresh gagal:', task.name, e);
+      runNext(); // lanjut meski satu gagal
+    });
+  }
+  runNext();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
