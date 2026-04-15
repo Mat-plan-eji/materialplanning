@@ -2505,7 +2505,6 @@ function renderProjection() {
       td('<span class="mono">' + n_id(p.estUsageMRP||0) + '</span>','estusg','text-align:right') +
       td('<span class="mono">' + n_id(p.actualMRP||0) + '</span>','actualmrp','text-align:right') +
       td('<span class="mono">' + n_id(p.max3MRP||0) + '</span>','mrp21','text-align:right') +
-      
       td('<span class="mono">' + n_id(p.totalIncoming||0) + '</span>','grpo','text-align:right') +
       td('<span class="mono" style="color:var(--amber)">' + n_id(p.actualUsageDaily||0) + '</span>','actualusg','text-align:right') +
       td('<span class="mono ' + covClass + '">' + (p.coverageDateStr||'') + '</span>','coverage') +
@@ -2543,7 +2542,7 @@ function renderProjection() {
     '<th><input class="th-filter" oninput="projColFilters.realname=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.realname||'') + '"></th>' +
     '<th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.supplier=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.supplier||'') + '"></th>' +
-    '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
+    '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.cat=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.cat||'') + '"></th>' +
     '<th></th>' +
     (colHidden('ospo') ? '' : '<th></th><th></th><th></th><th></th>') +
@@ -2570,7 +2569,6 @@ function renderProjection() {
     th('Est Usg/day','estusg') +
     th('Actual MRP','actualmrp') +
     th('MRP Max','mrp21') +
-     +
     th('GRPO Bln Ini','grpo') +
     th('Actual Usg','actualusg') +
     th('Est. Coverage','coverage') +
