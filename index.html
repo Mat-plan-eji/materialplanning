@@ -1990,10 +1990,18 @@ function processMRP(rows, headers) {
       }
     });
 
-    if(max3Key && row[max3Key] !== undefined) max3MRP = parseIDNum(row[max3Key]);
+    // Cari kolom Maximal — scan semua key case-insensitive (lebih robust dari lookup langsung)
+    Object.keys(row).forEach(function(k) {
+      var kl = String(k).toLowerCase().trim();
+      if(!max3MRP && kl === 'maximal') max3MRP = parseIDNum(row[k]);
+    });
+    // Fallback: nama kolom lain
     if(!max3MRP) {
-      ['Maximal','Max 3 Bulan MRP','Max avg 2 bulan + MRP'].forEach(function(c) {
-        if(!max3MRP && row[c] !== undefined) max3MRP = parseIDNum(row[c]);
+      Object.keys(row).forEach(function(k) {
+        var kl = String(k).toLowerCase().trim();
+        if(!max3MRP && (kl === 'max 3 bulan mrp' || kl === 'max avg 2 bulan + mrp' || (kl.includes('max') && kl.includes('mrp')))) {
+          max3MRP = parseIDNum(row[k]);
+        }
       });
     }
 
