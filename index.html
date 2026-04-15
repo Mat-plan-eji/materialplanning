@@ -336,12 +336,12 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('site',this)"> Site</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('stockbtg',this)"> Stock BTG</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('stocksng',this)"> Stock SNG</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('doifc',this)"> DOI FC</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('doimatcom',this)"> DOI Matcom</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('doifc',this)"> DOI Max</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('doimatcom',this)"> DOI Real</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('estusg',this)"> Est Usg/day</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('actualmrp',this)"> Actual MRP</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('mrp21',this)"> MRP 2+1</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('avgusg',this)"> Avg Usg</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('mrp21',this)"> MRP Max</label>
+          
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('grpo',this)"> GRPO Bln Ini</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('actualusg',this)"> Actual Usg</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('coverage',this)"> Est. Coverage</label>
@@ -521,18 +521,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadSheetData('mrp')">↓ Muat MRP</button>
         <div id="mrp-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
         <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Code (col C) | Average 3 months (col L)</span> — header baris 3</div>
-        <div class="fg"><label>URL Google Sheets</label><input id="matcom-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="matcom-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-sm" style="width:100%;border-color:rgba(16,185,129,.3);color:var(--green)" onclick="loadSheetData('matcom')">↓ Muat Matcom</button>
-        <div id="matcom-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
 
@@ -823,9 +811,8 @@ var _fbReady = false;
 var CLOUD_KEYS = [
   'schedule','po_overrides','proj_comments','stock_history','proj_history',
   'suppliers','proj_hidden_cols','proj_snapshots',
-  'sheet_url_master','sheet_url_mrp','sheet_url_matcom','sheet_url_realname',
-  'sheet_tab_master','sheet_tab_mrp','sheet_tab_matcom','sheet_tab_realname',
-  'matcom_avg_col',
+  'sheet_url_master','sheet_url_mrp','sheet_url_realname',
+  'sheet_tab_master','sheet_tab_mrp','sheet_tab_realname',
   'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
 ];
 
@@ -1123,14 +1110,14 @@ function loadSheetData(type) {
 
 function loadAllSheets() {
   var loaded=0;
-  ['master','mrp','matcom','realname'].forEach(function(t){
+  ['master','mrp','realname'].forEach(function(t){
     if(localStorage.getItem('sheet_url_'+t)){ loaded++; loadSheetData(t); }
   });
   if(!loaded) toast('Belum ada URL Sheets. Buka menu Data Source terlebih dahulu.','err');
 }
 
 function _restoreSheetUrls() {
-  ['master','mrp','matcom','realname'].forEach(function(t){
+  ['master','mrp','realname'].forEach(function(t){
     var u=localStorage.getItem('sheet_url_'+t), s=localStorage.getItem('sheet_tab_'+t);
     var ue=document.getElementById(t+'-url'), se=document.getElementById(t+'-sheet');
     if(ue&&u) ue.value=u; if(se&&s) se.value=s;
@@ -2251,16 +2238,16 @@ function _doBuildProjection() {
     var totalIncoming = grpoByItem[code] || 0;
     var totalOSPR = osprByItem[code] || 0;
 
-    // Est usage per day
-    // DOI FC pakai MRP 2+1 (Maximal) sebagai basis coverage
-    var estUsageMRP = actualMRP > 0 ? actualMRP / daysInMonth : 0;
-    var estUsage21  = max3MRP > 0 ? max3MRP / daysInMonth : (avgUsg > 0 ? avgUsg / daysInMonth : 0);
+    // DOI Max = stock / (MRP Max / days) — basis coverage & kategori
+    var estUsgMax  = max3MRP > 0 ? max3MRP / daysInMonth : 0;
+    var doiFC      = estUsgMax > 0 ? totalStock / estUsgMax : (totalStock > 0 ? 999 : 0);
 
-    // DOI FC = stock / (MRP 2+1 per hari) → basis est. coverage & kategori
-    var doiFC     = estUsage21 > 0 ? totalStock / estUsage21   : (totalStock > 0 ? 999 : 0);
-    var doiMatcom = estUsage21 > 0 ? totalStock / estUsage21   : (totalStock > 0 ? 999 : 0);
-    // estUsageMRP tetap disimpan untuk kolom "Est Usg/day" di tabel
-    var estUsageMRPDisplay = estUsage21;  // Est Usg/day pakai MRP 2+1
+    // DOI Real = stock / (Actual MRP / days)
+    var estUsgReal = actualMRP > 0 ? actualMRP / daysInMonth : 0;
+    var doiMatcom  = estUsgReal > 0 ? totalStock / estUsgReal : (totalStock > 0 ? 999 : 0);
+
+    // Est Usg/day ditampilkan dari MRP Max (untuk coverage calculation)
+    var estUsageMRP = estUsgMax;
 
     var coverageDate = new Date(now);
     coverageDate.setDate(coverageDate.getDate() + Math.floor(Math.min(doiFC, 999)));
@@ -2297,13 +2284,19 @@ function _doBuildProjection() {
 
     var ospoRaw = ospoByItem[code] || {};
     // Compute 4 OSPO buckets: sd Apr 2026, Mei 2026, Juni 2026, Juli dst
+    // OSPO buckets: bulan ini, +1, +2, dst — dinamis mengikuti bulan berjalan
+    var curYM  = now.getFullYear() * 100 + (now.getMonth() + 1);
+    var nextYM = now.getMonth() === 11
+      ? (now.getFullYear()+1)*100 + 1
+      : now.getFullYear()*100 + (now.getMonth()+2);
+    var next2YM = (function(ym){ var y=Math.floor(ym/100),m=ym%100; m++;if(m>12){y++;m=1;} return y*100+m; })(nextYM);
     var ospoSdApr = 0, ospoMei = 0, ospoJuni = 0, ospoJulDst = 0;
     Object.keys(ospoRaw).forEach(function(k) {
       var yyyymm = parseInt(k);
-      if(yyyymm <= 202604) ospoSdApr += ospoRaw[k];
-      else if(yyyymm === 202605) ospoMei += ospoRaw[k];
-      else if(yyyymm === 202606) ospoJuni += ospoRaw[k];
-      else if(yyyymm >= 202607) ospoJulDst += ospoRaw[k];
+      if(yyyymm <= curYM)   ospoSdApr += ospoRaw[k];
+      else if(yyyymm === nextYM)  ospoMei   += ospoRaw[k];
+      else if(yyyymm === next2YM) ospoJuni  += ospoRaw[k];
+      else if(yyyymm > next2YM)   ospoJulDst += ospoRaw[k];
     });
     var supplier = supplierByItem[code] || '';
     var realName = (STATE.realNameData && STATE.realNameData[code]) || '';
@@ -2512,7 +2505,7 @@ function renderProjection() {
       td('<span class="mono">' + n_id(p.estUsageMRP||0) + '</span>','estusg','text-align:right') +
       td('<span class="mono">' + n_id(p.actualMRP||0) + '</span>','actualmrp','text-align:right') +
       td('<span class="mono">' + n_id(p.max3MRP||0) + '</span>','mrp21','text-align:right') +
-      td('<span class="mono">' + n_id(p.avgUsg||0) + '</span>','avgusg','text-align:right') +
+      
       td('<span class="mono">' + n_id(p.totalIncoming||0) + '</span>','grpo','text-align:right') +
       td('<span class="mono" style="color:var(--amber)">' + n_id(p.actualUsageDaily||0) + '</span>','actualusg','text-align:right') +
       td('<span class="mono ' + covClass + '">' + (p.coverageDateStr||'') + '</span>','coverage') +
@@ -2539,10 +2532,10 @@ function renderProjection() {
   }).join('');
 
   var ospoHeaders = colHidden('ospo') ? '' :
-    '<th>OSPO Sd Apr<div class="col-resizer"></div></th>' +
-    '<th>OSPO Mei<div class="col-resizer"></div></th>' +
-    '<th>OSPO Juni<div class="col-resizer"></div></th>' +
-    '<th>OSPO Jul+<div class="col-resizer"></div></th>';
+    '<th>OSPO Sd Bln Ini<div class="col-resizer"></div></th>' +
+    '<th>OSPO Bln+1<div class="col-resizer"></div></th>' +
+    '<th>OSPO Bln+2<div class="col-resizer"></div></th>' +
+    '<th>OSPO Bln+3+<div class="col-resizer"></div></th>';
 
   var filterRow = colFilter ? '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" oninput="projColFilters.kode=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.kode||'') + '"></th>' +
@@ -2572,12 +2565,12 @@ function renderProjection() {
     th('Site','site') +
     th('Stock BTG','stockbtg') +
     th('Stock SNG','stocksng') +
-    th('DOI FC','doifc') +
-    th('DOI Matcom','doimatcom') +
+    th('DOI Max','doifc') +
+    th('DOI Real','doimatcom') +
     th('Est Usg/day','estusg') +
     th('Actual MRP','actualmrp') +
-    th('MRP 2+1','mrp21') +
-    th('Avg Usg','avgusg') +
+    th('MRP Max','mrp21') +
+     +
     th('GRPO Bln Ini','grpo') +
     th('Actual Usg','actualusg') +
     th('Est. Coverage','coverage') +
@@ -2726,10 +2719,19 @@ function generateSchedule() {
   var delivMonISO = delivWeek[0].toISOString().split('T')[0];
   var delivFriISO = delivFri.toISOString().split('T')[0];
 
+  // Helper: pastikan hari kerja (Mon-Fri), geser ke Senin kalau weekend
+  function nextWorkday(isoStr) {
+    var d = new Date(isoStr + 'T12:00:00Z');
+    var dow = d.getUTCDay();
+    if(dow === 0) d.setUTCDate(d.getUTCDate() + 1); // Minggu → Senin
+    if(dow === 6) d.setUTCDate(d.getUTCDate() + 2); // Sabtu → Senin
+    return d.toISOString().split('T')[0];
+  }
+
   urgentItems.forEach(function(item){
     var raw = new Date(item.coverageDate);
     raw.setDate(raw.getDate() - CFG.wn);
-    var rawISO = raw.toISOString().split('T')[0];
+    var rawISO = nextWorkday(raw.toISOString().split('T')[0]);
     // Clamp ke delivery week
     if(rawISO <= delivMonISO) {
       item._delivISO = delivMonISO;
@@ -2738,7 +2740,7 @@ function generateSchedule() {
     } else {
       // Cari hari kerja di delivery week yang >= rawISO
       var matched = delivWeek.find(function(d){ return d.toISOString().split('T')[0] >= rawISO; });
-      item._delivISO = (matched || delivFri).toISOString().split('T')[0];
+      item._delivISO = nextWorkday((matched || delivFri).toISOString().split('T')[0]);
     }
   });
 
@@ -4039,7 +4041,7 @@ function _appInit() {
     var col = cb.getAttribute('onchange').match(/toggleProjCol\('([^']+)'/);
     if(col && PROJ_HIDDEN_COLS.indexOf(col[1]) >= 0) cb.checked = false;
   });
-  ['master','mrp','matcom','realname'].forEach(function(t){
+  ['master','mrp','realname'].forEach(function(t){
     var ts=localStorage.getItem(t+'_upload_ts'), el=document.getElementById(t+'-ts');
     if(ts&&el) el.textContent='Dimuat: '+ts;
   });
