@@ -2705,9 +2705,9 @@ function generateSchedule() {
   var coverageCutoff = new Date(delivFri);
   coverageCutoff.setDate(delivFri.getDate() + CFG.wn);
 
-  // ── 3. Filter item urgent ────────────────────────────────────────────────────
+  // ── 3. Filter item urgent — hanya yg max3MRP > 0 ─────────────────────────────
   var urgentItems = STATE.projectionData.filter(function(p){
-    if(p.actualMRP <= 0 && p.max3MRP <= 0) return false;
+    if(p.max3MRP <= 0) return false;  // MRP Max = 0 → skip
     return p.coverageDate <= coverageCutoff;
   });
 
@@ -2779,7 +2779,7 @@ function generateSchedule() {
         }
       });
     });
-    if(manualDate) { sup.delivISO = manualDate; sup._isManual = true; }
+    if(manualDate) { sup.delivISO = nextWorkday(manualDate); sup._isManual = true; }
   });
 
   // ── 7. Inisialisasi day buckets ───────────────────────────────────────────────
