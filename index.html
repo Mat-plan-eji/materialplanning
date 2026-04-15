@@ -2687,13 +2687,31 @@ function getWorkdays(from, n) {
 }
 
 function generateSchedule() {
+  // ── Helper: format tanggal lokal sebagai YYYY-MM-DD (bukan UTC) ──────────────
+  function localISO(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0');
+  }
+
+  // ── Helper: pastikan hari kerja Mon-Fri, pakai LOCAL day ─────────────────────
+  function nextWorkday(isoStr) {
+    // Parse date tanpa timezone shift
+    var parts = isoStr.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    var dow = d.getDay();
+    if(dow === 0) d.setDate(d.getDate() + 1); // Minggu → Senin
+    if(dow === 6) d.setDate(d.getDate() + 2); // Sabtu → Senin
+    return localISO(d);
+  }
+
   // ── 1. Delivery week = minggu depan (Mon-Fri) ───────────────────────────────
   var today = new Date(); today.setHours(0,0,0,0);
-  var dow = today.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  var dow = today.getDay();
   var daysToNextMon = (dow === 0) ? 1 : (8 - dow);
   var delivMon = new Date(today); delivMon.setDate(today.getDate() + daysToNextMon);
 
-  // Build delivery workdays Mon-Fri
+  // Build delivery workdays Mon-Fri (pakai local day)
   var delivWeek = [];
   for(var di = 0; di < 5; di++) {
     var wd = new Date(delivMon); wd.setDate(delivMon.getDate() + di);
@@ -2707,29 +2725,20 @@ function generateSchedule() {
 
   // ── 3. Filter item urgent — hanya yg max3MRP > 0 ─────────────────────────────
   var urgentItems = STATE.projectionData.filter(function(p){
-    if(p.max3MRP <= 0) return false;  // MRP Max = 0 → skip
+    if(!(p.max3MRP > 0)) return false;  // MRP Max = 0 / null / undefined → skip
     return p.coverageDate <= coverageCutoff;
   });
 
   if(!urgentItems.length) { toast('Tidak ada item untuk dijadwalkan', 'inf'); return; }
 
   // ── 4. Per item: delivery date = coverage - W+N, clamp ke delivery week ──────
-  var delivMonISO = delivWeek[0].toISOString().split('T')[0];
-  var delivFriISO = delivFri.toISOString().split('T')[0];
-
-  // Helper: pastikan hari kerja (Mon-Fri), geser ke Senin kalau weekend
-  function nextWorkday(isoStr) {
-    var d = new Date(isoStr + 'T12:00:00Z');
-    var dow = d.getUTCDay();
-    if(dow === 0) d.setUTCDate(d.getUTCDate() + 1); // Minggu → Senin
-    if(dow === 6) d.setUTCDate(d.getUTCDate() + 2); // Sabtu → Senin
-    return d.toISOString().split('T')[0];
-  }
+  var delivMonISO = localISO(delivWeek[0]);
+  var delivFriISO = localISO(delivFri);
 
   urgentItems.forEach(function(item){
     var raw = new Date(item.coverageDate);
     raw.setDate(raw.getDate() - CFG.wn);
-    var rawISO = nextWorkday(raw.toISOString().split('T')[0]);
+    var rawISO = nextWorkday(localISO(raw));
     // Clamp ke delivery week
     if(rawISO <= delivMonISO) {
       item._delivISO = delivMonISO;
@@ -2737,8 +2746,8 @@ function generateSchedule() {
       item._delivISO = delivFriISO;
     } else {
       // Cari hari kerja di delivery week yang >= rawISO
-      var matched = delivWeek.find(function(d){ return d.toISOString().split('T')[0] >= rawISO; });
-      item._delivISO = nextWorkday((matched || delivFri).toISOString().split('T')[0]);
+      var matched = delivWeek.find(function(d){ return localISO(d) >= rawISO; });
+      item._delivISO = nextWorkday(localISO(matched || delivFri));
     }
   });
 
@@ -2784,7 +2793,7 @@ function generateSchedule() {
 
   // ── 7. Inisialisasi day buckets ───────────────────────────────────────────────
   var dayBuckets = {}; // ISO → [supplier, ...]
-  delivWeek.forEach(function(d){ dayBuckets[d.toISOString().split('T')[0]] = []; });
+  delivWeek.forEach(function(d){ dayBuckets[localISO(d)] = []; });
   // Untuk tanggal manual yang mungkin di luar delivery week
   suppliers.forEach(function(sup){
     if(!dayBuckets[sup.delivISO]) dayBuckets[sup.delivISO] = [];
@@ -2814,7 +2823,7 @@ function generateSchedule() {
 
     // Init buckets for this type
     var typeBuckets = {};
-    delivWeek.forEach(function(d){ typeBuckets[d.toISOString().split('T')[0]] = []; });
+    delivWeek.forEach(function(d){ typeBuckets[localISO(d)] = []; });
     group.forEach(function(sup){
       if(!typeBuckets[sup.delivISO]) typeBuckets[sup.delivISO] = [];
       typeBuckets[sup.delivISO].push(sup);
@@ -2827,13 +2836,13 @@ function generateSchedule() {
     for(var iter = 0; iter < 20; iter++) {
       var moved = false;
       for(var wi = 0; wi < delivWeek.length - 1; wi++) {
-        var iso  = delivWeek[wi].toISOString().split('T')[0];
-        var next = delivWeek[wi+1].toISOString().split('T')[0];
+        var iso  = localISO(delivWeek[wi]);
+        var next = localISO(delivWeek[wi+1]);
         var list = typeBuckets[iso];
         if(list && list.length > maxPerDayType) {
           list.sort(function(a,b){ return a.earliestCoverage - b.earliestCoverage; });
           var toMove = list.pop();
-          toMove.assignedISO = next;
+          toMove.assignedISO = nextWorkday(next);
           if(!typeBuckets[next]) typeBuckets[next] = [];
           typeBuckets[next].push(toMove);
           moved = true;
