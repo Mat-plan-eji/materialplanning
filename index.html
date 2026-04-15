@@ -2330,7 +2330,7 @@ function _doBuildProjection() {
     var itemType = /^3/.test(code) ? 'RM' : (/^4/.test(code) ? 'PM' : (/^1/.test(code) ? 'FG' : 'OTHER'));
 
     // Urgent: skip if no demand at all (MRP=0, max3MRP=0, avgUsg=0)
-    var hasNoDemand = actualMRP === 0 && max3MRP === 0 && avgUsg === 0;
+    var hasNoDemand = actualMRP === 0 && max3MRP === 0;
     var isUrgent = !hasNoDemand && coverageDate <= getCutoff();
 
     // % Usage vs Forecast: if(MRP2+1=0; if(actualUsage<=0; 0; 1); actualUsage/MRP2+1)
@@ -2344,9 +2344,9 @@ function _doBuildProjection() {
       doiFC: doiFC >= 999 ? '\u221e' : Math.floor(doiFC),
       doiMatcom: doiMatcom >= 999 ? '\u221e' : Math.floor(doiMatcom),
       doiFCNum: doiFC >= 999 ? 999 : doiFC,
-      estUsageMRP: Math.round(estUsage21 * 100) / 100,
-      estUsageMatcom: Math.round(estUsage21 * 100) / 100,
-      actualMRP: actualMRP, max3MRP: max3MRP, avgUsg: avgUsg,
+      estUsageMRP: Math.round(estUsageMRP * 100) / 100,
+      estUsageMatcom: Math.round(estUsgReal * 100) / 100,
+      actualMRP: actualMRP, max3MRP: max3MRP,
       actualUsageDaily: Math.round(actualUsageDaily * 100) / 100,
       totalIncoming: Math.round(totalIncoming), totalOSPR: Math.round(totalOSPR),
       coverageDate: coverageDate, coverageDateStr: fmtDateID(coverageDate),
@@ -2366,7 +2366,7 @@ function _doBuildProjection() {
   STATE.projectionHistory[todayISO] = projection.map(function(p){
     return {productCode:p.productCode,description:p.description,realName:p.realName,uom:p.uom,
       supplier:p.supplier,site:p.site,stockBTG:p.stockBTG,stockSNG:p.stockSNG,doiFC:p.doiFC,
-      doiMatcom:p.doiMatcom,actualMRP:p.actualMRP,max3MRP:p.max3MRP,avgUsg:p.avgUsg,
+      doiMatcom:p.doiMatcom,actualMRP:p.actualMRP,max3MRP:p.max3MRP,
       actualUsageDaily:p.actualUsageDaily,totalIncoming:p.totalIncoming,totalOSPR:p.totalOSPR,
       coverageDateStr:p.coverageDateStr,category:p.category,endStock:p.endStock,
       comment:p.comment,itemType:p.itemType};
@@ -2862,7 +2862,7 @@ function generateSchedule() {
     sup.entries.forEach(function(e){
       var item = e.item;
       var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return String(a.docNum).localeCompare(String(b.docNum)); });
-      var needed = Math.max(0, (item.max3MRP || item.avgUsg || 0) - (item.stockBTG||0) - (item.stockSNG||0));
+      var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0));
       var accumulated = 0, pickedPOs = [];
       for(var pi = 0; pi < sortedPOs.length; pi++) {
         pickedPOs.push(sortedPOs[pi]);
@@ -3299,7 +3299,7 @@ function exportProjectionCSV() {
   var headers = ['Product Code','Description','Real Name','UOM','Supplier','Site','Stock BTG','Stock SNG','DOI FC','DOI Matcom','Est Usg/day MRP','Actual MRP','MRP 2+1','Avg Usg','GRPO Bln Ini','Actual Usg','OSPR','Est Coverage','Kategori','End Stock vs MRP','OSPO Sd Apr','OSPO Mei','OSPO Juni','OSPO Jul+','% Usg vs FC','Comment'];
   var rows = STATE.projectionData.map(function(p){
     var pct = p.pctUsageVsForecast !== undefined ? (Math.round(p.pctUsageVsForecast*1000)/10) : 0;
-    return [p.productCode,p.description,p.realName||'',p.uom,p.supplier||'',p.site||'',p.stockBTG,p.stockSNG,p.doiFC,p.doiMatcom,p.estUsageMRP,p.actualMRP,p.max3MRP,p.avgUsg,p.totalIncoming,p.actualUsageDaily||0,p.totalOSPR||0,p.coverageDateStr,p.category,p.endStock,p.ospoSdApr||0,p.ospoMei||0,p.ospoJuni||0,p.ospoJulDst||0,pct+'%',p.comment||''].map(esc).join(',');
+    return [p.productCode,p.description,p.realName||'',p.uom,p.supplier||'',p.site||'',p.stockBTG,p.stockSNG,p.doiFC,p.doiMatcom,p.estUsageMRP,p.actualMRP,p.max3MRP,p.totalIncoming,p.actualUsageDaily||0,p.totalOSPR||0,p.coverageDateStr,p.category,p.endStock,p.ospoSdApr||0,p.ospoMei||0,p.ospoJuni||0,p.ospoJulDst||0,pct+'%',p.comment||''].map(esc).join(',');
   });
   var csv = headers.map(esc).join(',') + '\n' + rows.join('\n');
   var a = document.createElement('a');
@@ -3594,7 +3594,7 @@ function saveProjectionSnapshot() {
       uom:p.uom, supplier:p.supplier||'', site:p.site||'',
       stockBTG:p.stockBTG, stockSNG:p.stockSNG,
       doiFC:p.doiFC, doiMatcom:p.doiMatcom,
-      actualMRP:p.actualMRP, max3MRP:p.max3MRP, avgUsg:p.avgUsg,
+      actualMRP:p.actualMRP, max3MRP:p.max3MRP,
       totalIncoming:p.totalIncoming, totalOSPR:p.totalOSPR||0,
       coverageDateStr:p.coverageDateStr, category:p.category,
       endStock:p.endStock, comment:p.comment||''
