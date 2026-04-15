@@ -1074,7 +1074,7 @@ function loadSheetData(type) {
     var headerRowHint = (type === 'matcom') ? 3 : 0;
     var parsed = _parseCSV(text, headerRowHint);
     var rows = parsed.rows; var headers = parsed.headers;
-    var ts = new Date().toLocaleString('id-ID');
+    var _tsd = new Date(); var ts = _tsd.toLocaleDateString('id-ID')||(_tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()) + ' ' + _tsd.toLocaleTimeString();
 
     if(type==='master'){
       STATE.masterData = processMasterData(rows);
@@ -1454,7 +1454,7 @@ async function syncAll() {
   try {
     await Promise.all([loadStock(), loadPO(), loadOSPO(), loadOSPR(), loadGRPO()]);
     if(STATE.mrpData) buildProjection();
-    var ts = new Date().toLocaleString('id-ID');
+    var _tsd = new Date(); var ts = _tsd.toLocaleDateString('id-ID')||(_tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()) + ' ' + _tsd.toLocaleTimeString();
     document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ts;
     localStorage.setItem('last_sync', ts);
     updateDashStats();
@@ -1529,7 +1529,7 @@ function renderPO() {
     row += '<td class="mono">' + (p.itemCode||'') + '</td>';
     row += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">' + (p.itemName||'') + '</td>';
     row += '<td>' + (p.site||'—') + '</td>';
-    row += '<td class="mono td-right">' + (p.openQty||0).toLocaleString('id-ID') + '</td>';
+    row += '<td class="mono td-right">' + n_id(p.openQty||0) + '</td>';
     row += '<td>' + (p.uom||'') + '</td>';
     row += '<td class="mono">' + (p.poReqDate||'—') + '</td>';
     // Tgl Request Kirim — editable, color by source
@@ -1631,7 +1631,7 @@ function updateProjComment(key) {
   if(totalQty > 0 || confDates.length > 0) {
     confDates.sort();
     var dtStr = confDates.map(function(d){ return d.split('-').reverse().join('/'); }).join(', ');
-    var autoComment = (dtStr||'') + (totalQty > 0 ? ' Qty:' + Math.round(totalQty).toLocaleString('id-ID') : '');
+    var autoComment = (dtStr||'') + (totalQty > 0 ? ' Qty:' + n_id(Math.round(totalQty)) : '');
     proj.comment = autoComment;
     STATE.projComments[itemCode] = { text: autoComment, _manual: false };
     try { localStorage.setItem('proj_comments', JSON.stringify(STATE.projComments)); } catch(e) {}
@@ -1657,7 +1657,7 @@ function setPOField(el, field) {
     if(proj) {
       var qty = STATE.poOverrides[key].confQty || '';
       var dt = STATE.poOverrides[key].confDate || '';
-      if(qty || dt) proj.comment = 'KONFIRM' + (qty?' QTY:'+Number(qty).toLocaleString('id-ID'):'') + (dt?' TGL:'+dt.split('-').reverse().join('/'):'');
+      if(qty || dt) proj.comment = 'KONFIRM' + (qty?' QTY:'+n_id(qty):'') + (dt?' TGL:'+dt.split('-').reverse().join('/'):'');
     }
   }
 }
@@ -1771,7 +1771,7 @@ function renderGRPO() {
       if(gn && !(r.itemName||'').toLowerCase().includes(gn)) return false;
       if(gs && !(r.supplierName||'').toLowerCase().includes(gs)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+(r.qty||0).toLocaleString('id-ID')+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
+    }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+n_id(r.qty||0)+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' GRPO</div>';
 }
@@ -1821,7 +1821,7 @@ function renderOSPO() {
       if(oc && !(r.itemCode||'').toLowerCase().includes(oc)) return false;
       if(on && !(r.itemName||'').toLowerCase().includes(on)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+r.itemName+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+(r.openQty||0).toLocaleString('id-ID')+'</td><td>'+r.uom+'</td><td class="mono">'+(r.poReqDate||'—')+'</td></tr>'}).join('') +
+    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+r.itemName+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+r.uom+'</td><td class="mono">'+(r.poReqDate||'—')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' OSPO</div>';
 }
@@ -1928,19 +1928,31 @@ function parseIDNum(v) {
   // Hanya titik → cek apakah ribuan atau desimal
   else if(s.includes('.') && !s.includes(',')) {
     var parts = s.split('.');
-    // "8.817" → bagian setelah titik = 3 digit → ribuan separator
-    // "8.5" atau "293.9" → bagian setelah titik ≠ 3 digit → desimal
     if(parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1) {
-      s = s.replace(/\./g,''); // hapus titik ribuan
+      s = s.replace(/\./g,''); // ribuan: "8.817" → 8817
+    } else if(parts.length > 2) {
+      s = s.replace(/\./g,''); // multiple titik: "1.234.567" → 1234567
     }
-    // Multiple titik → semua titik = ribuan: "1.234.567" → 1234567
-    else if(parts.length > 2) {
-      s = s.replace(/\./g,'');
-    }
-    // Else: biarkan apa adanya (titik = desimal)
+    // else: biarkan (titik = desimal)
   }
   return parseFloat(s) || 0;
 }
+
+// ── Format angka Indonesia — TIDAK pakai toLocaleString('id-ID') ──────────────
+// Bekerja di semua browser tanpa tergantung locale OS/browser
+function fmtNum(n, dec) {
+  if(n === null || n === undefined || isNaN(n)) return '0';
+  dec = (dec === undefined) ? 0 : dec;
+  var neg = n < 0;
+  var s = Math.abs(n).toFixed(dec);
+  var parts = s.split('.');
+  // Tambah titik ribuan
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  var result = parts[0] + (dec > 0 ? ',' + parts[1] : '');
+  return neg ? '-' + result : result;
+}
+// Shorthand — ganti semua .toLocaleString('id-ID') dengan ini
+function n_id(n, dec) { return fmtNum(n, dec); }
 
 // ── Normalize SAP item code ────────────────────────────────────────────────────
 // Kode SAP adalah angka murni (misal 3000010001). Google Sheets Indonesia
@@ -2314,7 +2326,7 @@ function _doBuildProjection() {
     });
     if(confQtyTotal > 0 || confDateList.length > 0) {
       comment = (confDateList.length ? confDateList.map(function(d){return d.split('-').reverse().join('/')}).join(',') : '') +
-        (confQtyTotal > 0 ? ' Qty:' + confQtyTotal.toLocaleString('id-ID') : '');
+        (confQtyTotal > 0 ? ' Qty:' + n_id(confQtyTotal) : '');
     }
     // Manual comment override takes priority
     if(STATE.projComments && STATE.projComments[code]) {
@@ -2336,8 +2348,8 @@ function _doBuildProjection() {
       moq: master.moq || 0, supplier: supplier,
       site: stockBTG > 0 && stockSNG > 0 ? 'BTG&SNG' : (stockBTG > 0 ? 'BTG' : (stockSNG > 0 ? 'SNG' : '')),
       stockBTG: Math.round(stockBTG), stockSNG: Math.round(stockSNG),
-      doiFC: doiFC >= 999 ? '\u221e' : Math.round(doiFC * 10) / 10,
-      doiMatcom: doiMatcom >= 999 ? '\u221e' : Math.round(doiMatcom * 10) / 10,
+      doiFC: doiFC >= 999 ? '\u221e' : Math.floor(doiFC),
+      doiMatcom: doiMatcom >= 999 ? '\u221e' : Math.floor(doiMatcom),
       doiFCNum: doiFC >= 999 ? 999 : doiFC,
       estUsageMRP: Math.round(estUsage21 * 100) / 100,
       estUsageMatcom: Math.round(estUsage21 * 100) / 100,
@@ -2475,15 +2487,15 @@ function renderProjection() {
   var rows = items.map(function(p){
     var covClass = p.isUrgent ? 'cov-critical' : (p.category === 'GOOD' ? 'cov-ok' : 'cov-warn');
     var ospoStr = colHidden('ospo') ? '' :
-      '<td class="mono td-right">' + (p.ospoSdApr||0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right">' + (p.ospoMei||0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right">' + (p.ospoJuni||0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right">' + (p.ospoJulDst||0).toLocaleString('id-ID') + '</td>';
+      '<td class="mono td-right">' + n_id(p.ospoSdApr||0) + '</td>' +
+      '<td class="mono td-right">' + n_id(p.ospoMei||0) + '</td>' +
+      '<td class="mono td-right">' + n_id(p.ospoJuni||0) + '</td>' +
+      '<td class="mono td-right">' + n_id(p.ospoJulDst||0) + '</td>';
     var pct = p.pctUsageVsForecast !== undefined ? p.pctUsageVsForecast : 0;
     var pctStr = colHidden('pctusage') ? '' : (function(){
       var pctPct = Math.round(pct * 1000) / 10;
       var pctColor = pct > 1 ? 'var(--red)' : (pct >= 0.8 ? 'var(--amber)' : 'var(--green)');
-      return '<td class="mono td-right" style="color:' + pctColor + '">' + pctPct.toLocaleString('id-ID') + '%</td>';
+      return '<td class="mono td-right" style="color:' + pctColor + '">' + n_id(pctPct) + '%</td>';
     })();
     var typeBadge = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:9px">RM</span>' : (p.itemType === 'PM' ? '<span class="badge b-purple" style="font-size:9px">PM</span>' : (p.itemType === 'FG' ? '<span class="badge b-green" style="font-size:9px">FG</span>' : ''));
     return '<tr>' +
@@ -2493,21 +2505,21 @@ function renderProjection() {
       td((p.uom||''),'uom') +
       td((p.supplier||'—'),'supplier','max-width:130px;overflow:hidden;text-overflow:ellipsis') +
       td((p.site||'—'),'site') +
-      td('<span class="mono td-right" style="display:block">' + (p.stockBTG||0).toLocaleString('id-ID') + '</span>','stockbtg') +
-      td('<span class="mono td-right" style="display:block">' + (p.stockSNG||0).toLocaleString('id-ID') + '</span>','stocksng') +
+      td('<span class="mono td-right" style="display:block">' + n_id(p.stockBTG||0) + '</span>','stockbtg') +
+      td('<span class="mono td-right" style="display:block">' + n_id(p.stockSNG||0) + '</span>','stocksng') +
       td('<span class="mono">' + p.doiFC + '</span>','doifc','text-align:right') +
       td('<span class="mono">' + p.doiMatcom + '</span>','doimatcom','text-align:right') +
-      td('<span class="mono">' + (p.estUsageMRP||0).toLocaleString('id-ID') + '</span>','estusg','text-align:right') +
-      td('<span class="mono">' + (p.actualMRP||0).toLocaleString('id-ID') + '</span>','actualmrp','text-align:right') +
-      td('<span class="mono">' + (p.max3MRP||0).toLocaleString('id-ID') + '</span>','mrp21','text-align:right') +
-      td('<span class="mono">' + (p.avgUsg||0).toLocaleString('id-ID') + '</span>','avgusg','text-align:right') +
-      td('<span class="mono">' + (p.totalIncoming||0).toLocaleString('id-ID') + '</span>','grpo','text-align:right') +
-      td('<span class="mono" style="color:var(--amber)">' + (p.actualUsageDaily||0).toLocaleString('id-ID') + '</span>','actualusg','text-align:right') +
+      td('<span class="mono">' + n_id(p.estUsageMRP||0) + '</span>','estusg','text-align:right') +
+      td('<span class="mono">' + n_id(p.actualMRP||0) + '</span>','actualmrp','text-align:right') +
+      td('<span class="mono">' + n_id(p.max3MRP||0) + '</span>','mrp21','text-align:right') +
+      td('<span class="mono">' + n_id(p.avgUsg||0) + '</span>','avgusg','text-align:right') +
+      td('<span class="mono">' + n_id(p.totalIncoming||0) + '</span>','grpo','text-align:right') +
+      td('<span class="mono" style="color:var(--amber)">' + n_id(p.actualUsageDaily||0) + '</span>','actualusg','text-align:right') +
       td('<span class="mono ' + covClass + '">' + (p.coverageDateStr||'') + '</span>','coverage') +
       td(catBadge(p.category),'kategori') +
-      td('<span class="mono" style="color:' + ((p.endStock||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + (p.endStock||0).toLocaleString('id-ID') + '</span>','endstock','text-align:right') +
+      td('<span class="mono" style="color:' + ((p.endStock||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + n_id(p.endStock||0) + '</span>','endstock','text-align:right') +
       ospoStr +
-      td('<span class="mono">' + (p.totalOSPR||0).toLocaleString('id-ID') + '</span>','ospr','text-align:right') +
+      td('<span class="mono">' + n_id(p.totalOSPR||0) + '</span>','ospr','text-align:right') +
       pctStr +
       (colHidden('comment') ? '' : (function(){
         var cmtVal = (p.comment||'');
@@ -2623,7 +2635,7 @@ function filterUrgent() {
       '<td class="mono cov-critical">' + (p.coverageDateStr||'') + '</td>' +
       '<td class="mono td-right">' + (p.doiFC||0) + ' hari</td>' +
       '<td>' + catBadge(p.category) + '</td>' +
-      '<td class="mono td-right" style="color:' + ((p.endStock||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + (p.endStock||0).toLocaleString('id-ID') + '</td>' +
+      '<td class="mono td-right" style="color:' + ((p.endStock||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + n_id(p.endStock||0) + '</td>' +
       '<td>' + (hasPO ? '<span class="badge b-blue">Ada PO</span>' : '<span class="badge b-gray">No PO</span>') + '</td>' +
       '<td>' + (hasScheduled ? '<span class="badge b-green">Terjadwal</span>' : '<span class="badge b-amber">Belum</span>') + '</td>' +
       '<td style="font-size:10.5px;color:var(--teal)">' + (p.comment||'—') + '</td>' +
@@ -2730,27 +2742,28 @@ function generateSchedule() {
     }
   });
 
-  // ── 5. Group by supplier: pakai delivery date TERCEPAT ──────────────────────
+  // ── 5. Group by (supplier + type): pakai delivery date TERCEPAT ─────────────
+  // RM/PM/FG dipisah karena beda warehouse
   var bySupplier = {};
   urgentItems.forEach(function(item){
     var matchedPOs = STATE.poData.filter(function(p){ return p.itemCode === item.productCode && p.openQty > 0; });
     var supName = item.supplier || (matchedPOs.length ? matchedPOs[0].supplierName : 'Unknown');
-    if(!bySupplier[supName]) {
-      bySupplier[supName] = {
-        supName: supName, entries: [],
+    var key = supName + '|||' + item.itemType; // pisah per type
+    if(!bySupplier[key]) {
+      bySupplier[key] = {
+        supName: supName, itemType: item.itemType, entries: [],
         delivISO: item._delivISO,
         earliestCoverage: item.coverageDate,
         totalQty: 0
       };
     } else {
-      // Ambil tanggal pengiriman TERCEPAT (item paling urgent)
-      if(item._delivISO < bySupplier[supName].delivISO)
-        bySupplier[supName].delivISO = item._delivISO;
-      if(item.coverageDate < bySupplier[supName].earliestCoverage)
-        bySupplier[supName].earliestCoverage = item.coverageDate;
+      if(item._delivISO < bySupplier[key].delivISO)
+        bySupplier[key].delivISO = item._delivISO;
+      if(item.coverageDate < bySupplier[key].earliestCoverage)
+        bySupplier[key].earliestCoverage = item.coverageDate;
     }
-    bySupplier[supName].entries.push({ item: item, pos: matchedPOs });
-    matchedPOs.forEach(function(po){ bySupplier[supName].totalQty += (po.openQty || 0); });
+    bySupplier[key].entries.push({ item: item, pos: matchedPOs });
+    matchedPOs.forEach(function(po){ bySupplier[key].totalQty += (po.openQty || 0); });
   });
 
   var suppliers = Object.values(bySupplier);
@@ -2789,27 +2802,46 @@ function generateSchedule() {
     sup.assignedISO = sup.delivISO;
   });
 
-  // ── 8. Load balancing: kalau satu hari terlalu banyak → mundurkan yg least urgent ──
-  var maxPerDay = Math.max(3, Math.ceil(suppliers.length / delivWeek.length));
-  // Iterasi beberapa kali sampai stabil
-  for(var iter = 0; iter < 20; iter++) {
-    var moved = false;
-    for(var wi = 0; wi < delivWeek.length - 1; wi++) {
-      var iso   = delivWeek[wi].toISOString().split('T')[0];
-      var next  = delivWeek[wi+1].toISOString().split('T')[0];
-      var list  = dayBuckets[iso];
-      if(list && list.length > maxPerDay) {
-        // Sort: most urgent (earliest coverage) stays → least urgent (latest coverage) moves
-        list.sort(function(a,b){ return a.earliestCoverage - b.earliestCoverage; });
-        var toMove = list.pop(); // least urgent = last item
-        toMove.assignedISO = next;
-        if(!dayBuckets[next]) dayBuckets[next] = [];
-        dayBuckets[next].push(toMove);
-        moved = true;
+  // ── 8. Load balancing per TYPE (RM/PM/FG dipisah karena beda warehouse) ──────
+  var typeGroups = { RM: [], PM: [], FG: [], OTHER: [] };
+  suppliers.forEach(function(sup){
+    (typeGroups[sup.itemType] || typeGroups.OTHER).push(sup);
+  });
+
+  Object.keys(typeGroups).forEach(function(type){
+    var group = typeGroups[type];
+    if(!group.length) return;
+
+    // Init buckets for this type
+    var typeBuckets = {};
+    delivWeek.forEach(function(d){ typeBuckets[d.toISOString().split('T')[0]] = []; });
+    group.forEach(function(sup){
+      if(!typeBuckets[sup.delivISO]) typeBuckets[sup.delivISO] = [];
+      typeBuckets[sup.delivISO].push(sup);
+      sup.assignedISO = sup.delivISO;
+    });
+
+    // Max per day for this type
+    var maxPerDayType = Math.max(2, Math.ceil(group.length / delivWeek.length));
+
+    for(var iter = 0; iter < 20; iter++) {
+      var moved = false;
+      for(var wi = 0; wi < delivWeek.length - 1; wi++) {
+        var iso  = delivWeek[wi].toISOString().split('T')[0];
+        var next = delivWeek[wi+1].toISOString().split('T')[0];
+        var list = typeBuckets[iso];
+        if(list && list.length > maxPerDayType) {
+          list.sort(function(a,b){ return a.earliestCoverage - b.earliestCoverage; });
+          var toMove = list.pop();
+          toMove.assignedISO = next;
+          if(!typeBuckets[next]) typeBuckets[next] = [];
+          typeBuckets[next].push(toMove);
+          moved = true;
+        }
       }
+      if(!moved) break;
     }
-    if(!moved) break;
-  }
+  });
 
   // ── 9. Generate schedule entries (FIFO PO selection) ─────────────────────────
   var newSchedule = [];
@@ -2840,7 +2872,7 @@ function generateSchedule() {
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
       var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
-      itemSummaryParts.push((item.description||'') + (qtySum ? ' · ' + qtySum.toLocaleString('id-ID') + ' ' + uom : ''));
+      itemSummaryParts.push((item.description||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : ''));
       selectedEntries.push({ item: item, pos: pickedPOs });
     });
 
@@ -2881,7 +2913,7 @@ function generateSchedule() {
     .sort()
     .map(function(k){ return k.split('-').reverse().join('/') + ': ' + dayLoad[k].count + ' sup'; })
     .join(' | ');
-  var coverageCutoffStr = coverageCutoff.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+  var coverageCutoffStr = fmtDateID(coverageCutoff);
   toast('Jadwal ' + newSchedule.length + ' supplier (coverage s/d ' + coverageCutoffStr + ') | ' + distSummary, 'ok');
   showPage('schedule', document.querySelectorAll('.ni')[5]);
 }
@@ -2925,7 +2957,7 @@ function renderSchedule() {
     totalAll += entries.length;
     var d = new Date(date.includes('/') ? date.split('/').reverse().join('-') : date);
     var dayName = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()] || '';
-    html += '<div class="sday"><div class="sday-hdr">📅 ' + date + ' <span style="color:var(--muted);font-weight:400">' + dayName + '</span><span class="sday-pill">' + entries.length + ' supplier</span>' + (dailyQty > 0 ? '<span class="sday-pill" style="background:var(--accent-bg);color:var(--accent)">Total qty: ' + dailyQty.toLocaleString('id-ID') + '</span>' : '') + '</div>';
+    html += '<div class="sday"><div class="sday-hdr">📅 ' + date + ' <span style="color:var(--muted);font-weight:400">' + dayName + '</span><span class="sday-pill">' + entries.length + ' supplier</span>' + (dailyQty > 0 ? '<span class="sday-pill" style="background:var(--accent-bg);color:var(--accent)">Total qty: ' + n_id(dailyQty) + '</span>' : '') + '</div>';
     entries.forEach(function(e){
       var idx = STATE.scheduleData.indexOf(e);
       var isOn = ['approved','sent','confirmed'].indexOf(e.status) >= 0;
@@ -2992,7 +3024,7 @@ function buildWAMsg(entry) {
   var itemList = '';
   if(entry.entries) {
     entry.entries.forEach(function(e){
-      (e.pos||[]).forEach(function(p){ itemList += '• PO ' + p.docNum + ' - ' + p.itemName + ' (' + (p.openQty||0).toLocaleString('id-ID') + ' ' + p.uom + ')\n'; });
+      (e.pos||[]).forEach(function(p){ itemList += '• PO ' + p.docNum + ' - ' + p.itemName + ' (' + n_id(p.openQty||0) + ' ' + p.uom + ')\n'; });
       if(!(e.pos||[]).length) itemList += '• ' + e.item.description + '\n';
     });
   } else itemList = entry.items + '\n';
@@ -3088,7 +3120,7 @@ function openFbModal(idx) {
             + '<div style="font-size:11.5px">' + (po.itemName||'') + '</div>'
             + '</td>';
       html += '<td style="padding:7px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + (po.docNum||'—') + '</td>';
-      html += '<td style="padding:7px 10px;text-align:right;font-family:var(--mono)">' + reqQty.toLocaleString('id-ID') + '</td>';
+      html += '<td style="padding:7px 10px;text-align:right;font-family:var(--mono)">' + n_id(reqQty) + '</td>';
       html += '<td style="padding:5px 8px">'
             + '<input type="number" class="fb-qty-input" data-po-key="' + (poKey||'') + '" data-req-qty="' + reqQty + '"'
             + ' value="' + confQty + '" min="0"'
@@ -3198,7 +3230,7 @@ function saveFeedback() {
     if(totalQty > 0 || confDates.length > 0) {
       confDates.sort();
       var dtStr = confDates.map(function(d){ return d.split('-').reverse().join('/'); }).join(', ');
-      var autoComment = (dtStr || '') + (totalQty > 0 ? ' Qty:' + Math.round(totalQty).toLocaleString('id-ID') : '');
+      var autoComment = (dtStr || '') + (totalQty > 0 ? ' Qty:' + n_id(Math.round(totalQty)) : '');
 
       // Only overwrite if no manual comment exists, or comment was previously auto-set
       var existing = STATE.projComments[ic];
@@ -3247,7 +3279,7 @@ function clearManualComment(code) {
     if(totalQty > 0 || confDates.length > 0) {
       confDates.sort();
       var dtStr = confDates.map(function(d){ return d.split('-').reverse().join('/'); }).join(', ');
-      autoComment = (dtStr||'') + (totalQty > 0 ? ' Qty:' + Math.round(totalQty).toLocaleString('id-ID') : '');
+      autoComment = (dtStr||'') + (totalQty > 0 ? ' Qty:' + n_id(Math.round(totalQty)) : '');
     }
     STATE.projComments[code] = autoComment ? { text: autoComment, _manual: false } : null;
     var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
@@ -3421,7 +3453,7 @@ function renderOSPR() {
   if(!f.length){el.innerHTML='<div class="empty"><div class="empty-ico">📋</div><h3>Tidak ada OSPR</h3></div>';return;}
   el.innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
     '<thead><tr><th>Doc Num</th><th>Supplier</th><th>Item Code</th><th>Item Name</th><th>Site</th><th>Open Qty</th><th>UOM</th><th>PR Req Date</th></tr></thead>' +
-    '<tbody>' + f.map(function(r){return '<tr><td class="mono">'+(r.docNum||'')+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+(r.openQty||0).toLocaleString('id-ID')+'</td><td>'+(r.uom||'')+'</td><td class="mono">'+(r.prReqDate||'—')+'</td></tr>'}).join('') +
+    '<tbody>' + f.map(function(r){return '<tr><td class="mono">'+(r.docNum||'')+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+(r.uom||'')+'</td><td class="mono">'+(r.prReqDate||'—')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:8px 0;font-size:11px;color:var(--muted)">' + f.length + ' OSPR</div>';
 }
@@ -3508,9 +3540,9 @@ function renderStockDaily() {
       '<td class="mono" style="font-size:10.5px">' + r.date + '</td>' +
       '<td class="mono" style="font-size:10.5px">' + r.ic + '</td>' +
       '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">' + (r.itemName||'—') + '</td>' +
-      '<td class="mono td-right">' + r.btg.toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right">' + r.sng.toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="font-weight:500">' + (r.btg+r.sng).toLocaleString('id-ID') + '</td>' +
+      '<td class="mono td-right">' + n_id(r.btg) + '</td>' +
+      '<td class="mono td-right">' + n_id(r.sng) + '</td>' +
+      '<td class="mono td-right" style="font-weight:500">' + n_id(r.btg+r.sng) + '</td>' +
     '</tr>';
   }).join('');
 
@@ -3603,8 +3635,8 @@ function viewSnapshot(key, rowEl) {
       '<td>'+p.uom+'</td>' +
       '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(p.supplier||'—')+'</td>' +
       '<td>'+(p.site||'—')+'</td>' +
-      '<td class="mono td-right">'+(p.stockBTG||0).toLocaleString('id-ID')+'</td>' +
-      '<td class="mono td-right">'+(p.stockSNG||0).toLocaleString('id-ID')+'</td>' +
+      '<td class="mono td-right">'+n_id(p.stockBTG||0)+'</td>' +
+      '<td class="mono td-right">'+n_id(p.stockSNG||0)+'</td>' +
       '<td class="mono td-right">'+p.doiFC+'</td>' +
       '<td class="mono '+covColor+'">'+p.coverageDateStr+'</td>' +
       '<td>'+catBadge(p.category)+'</td>' +
@@ -3759,7 +3791,7 @@ function renderDailyList() {
     // Plan badges
     var planBadges = Object.keys(planQty).filter(function(t){ return planQty[t].BTG+planQty[t].SNG > 0; }).map(function(t){
       var cls = t==='RM'?'b-blue':t==='PM'?'b-purple':'b-green';
-      return '<span class="badge '+cls+'" style="font-size:9px">'+t+' '+(planQty[t].BTG+planQty[t].SNG).toLocaleString('id-ID')+'</span>';
+      return '<span class="badge '+cls+'" style="font-size:9px">'+t+' '+n_id(planQty[t].BTG+planQty[t].SNG)+'</span>';
     }).join(' ');
 
     html += '<div style="margin-bottom:20px">' +
@@ -3782,7 +3814,7 @@ function renderDailyList() {
           '<td style="color:var(--teal);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis">'+(e.realName||'—')+'</td>' +
           '<td><span class="badge '+typeCls+'" style="font-size:9px">'+e.itemType+'</span></td>' +
           '<td>'+(e.site||'—')+'</td>' +
-          '<td class="mono td-right">'+e.openQty.toLocaleString('id-ID')+'</td>' +
+          '<td class="mono td-right">'+n_id(e.openQty)+'</td>' +
           '<td>'+e.uom+'</td>' +
           '<td class="mono td-right">'+(e.confQty||'—')+'</td>' +
           '<td class="mono">'+(e.confDate||'—')+'</td>' +
@@ -3796,7 +3828,7 @@ function renderDailyList() {
   // Summary table at top
   var summaryHTML = '<div class="card" style="margin-bottom:18px">' +
     '<div class="card-hdr"><span class="card-title">📊 Ringkasan Per Hari</span>' +
-    '<span style="font-size:11px;color:var(--muted)">Total: ' + grandTotalSupplier + ' supplier | BTG: ' + grandTotalBTG.toLocaleString('id-ID') + ' | SNG: ' + grandTotalSNG.toLocaleString('id-ID') + '</span>' +
+    '<span style="font-size:11px;color:var(--muted)">Total: ' + grandTotalSupplier + ' supplier | BTG: ' + n_id(grandTotalBTG) + ' | SNG: ' + n_id(grandTotalSNG) + '</span>' +
     '</div>' +
     '<div class="tbl-wrap"><table>' +
     '<thead><tr><th>Tanggal</th><th>Hari</th><th>Supplier</th><th>PO</th>' +
@@ -3811,28 +3843,28 @@ function renderDailyList() {
         '<td>' + r.dayName + '</td>' +
         '<td class="mono td-right">' + r.supplierCount + '</td>' +
         '<td class="mono td-right">' + (byDate[r.date]||[]).length + '</td>' +
-        '<td class="mono td-right" style="color:var(--accent)">' + (r.planQty.RM.BTG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="color:var(--accent)">' + (r.planQty.RM.SNG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="color:var(--purple)">' + (r.planQty.PM.BTG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="color:var(--purple)">' + (r.planQty.PM.SNG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="color:var(--green)">' + (r.planQty.FG.BTG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="color:var(--green)">' + (r.planQty.FG.SNG||0).toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="font-weight:600">' + r.totalBTG.toLocaleString('id-ID') + '</td>' +
-        '<td class="mono td-right" style="font-weight:600">' + r.totalSNG.toLocaleString('id-ID') + '</td>' +
+        '<td class="mono td-right" style="color:var(--accent)">' + n_id(r.planQty.RM.BTG||0) + '</td>' +
+        '<td class="mono td-right" style="color:var(--accent)">' + n_id(r.planQty.RM.SNG||0) + '</td>' +
+        '<td class="mono td-right" style="color:var(--purple)">' + n_id(r.planQty.PM.BTG||0) + '</td>' +
+        '<td class="mono td-right" style="color:var(--purple)">' + n_id(r.planQty.PM.SNG||0) + '</td>' +
+        '<td class="mono td-right" style="color:var(--green)">' + n_id(r.planQty.FG.BTG||0) + '</td>' +
+        '<td class="mono td-right" style="color:var(--green)">' + n_id(r.planQty.FG.SNG||0) + '</td>' +
+        '<td class="mono td-right" style="font-weight:600">' + n_id(r.totalBTG) + '</td>' +
+        '<td class="mono td-right" style="font-weight:600">' + n_id(r.totalSNG) + '</td>' +
       '</tr>';
     }).join('') +
     '<tr style="background:var(--bg4);font-weight:600">' +
       '<td colspan="2">TOTAL</td>' +
       '<td class="mono td-right">' + grandTotalSupplier + '</td>' +
       '<td class="mono td-right">' + entries.length + '</td>' +
-      '<td class="mono td-right" style="color:var(--accent)">' + summaryRows.reduce(function(s,r){return s+r.planQty.RM.BTG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="color:var(--accent)">' + summaryRows.reduce(function(s,r){return s+r.planQty.RM.SNG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="color:var(--purple)">' + summaryRows.reduce(function(s,r){return s+r.planQty.PM.BTG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="color:var(--purple)">' + summaryRows.reduce(function(s,r){return s+r.planQty.PM.SNG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="color:var(--green)">' + summaryRows.reduce(function(s,r){return s+r.planQty.FG.BTG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="color:var(--green)">' + summaryRows.reduce(function(s,r){return s+r.planQty.FG.SNG},0).toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="font-weight:600">' + grandTotalBTG.toLocaleString('id-ID') + '</td>' +
-      '<td class="mono td-right" style="font-weight:600">' + grandTotalSNG.toLocaleString('id-ID') + '</td>' +
+      '<td class="mono td-right" style="color:var(--accent)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.RM.BTG},0)) + '</td>' +
+      '<td class="mono td-right" style="color:var(--accent)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.RM.SNG},0)) + '</td>' +
+      '<td class="mono td-right" style="color:var(--purple)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.PM.BTG},0)) + '</td>' +
+      '<td class="mono td-right" style="color:var(--purple)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.PM.SNG},0)) + '</td>' +
+      '<td class="mono td-right" style="color:var(--green)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.FG.BTG},0)) + '</td>' +
+      '<td class="mono td-right" style="color:var(--green)">' + n_id(summaryRows.reduce(function(s,r){return s+r.planQty.FG.SNG},0)) + '</td>' +
+      '<td class="mono td-right" style="font-weight:600">' + n_id(grandTotalBTG) + '</td>' +
+      '<td class="mono td-right" style="font-weight:600">' + n_id(grandTotalSNG) + '</td>' +
     '</tr>' +
     '</tbody></table></div></div>';
 
