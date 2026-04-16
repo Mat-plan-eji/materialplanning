@@ -364,7 +364,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <select id="f-proj-site" onchange="renderProjection()"><option value="">Semua Site</option><option>BTG</option><option>SNG</option><option>BTG&SNG</option></select>
     <select id="f-proj-cat" onchange="renderProjection()"><option value="">Semua Kategori</option><option>UNDER</option><option>GOOD</option><option>OVER</option></select>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
-      Coverage ≤ <input type="date" id="f-proj-coverage" onchange="renderProjection()" style="width:130px" title="Tampilkan item yang coverage-nya habis sebelum tanggal ini">
+      Coverage s/d: <input type="date" id="f-proj-coverage" onchange="renderProjection()" style="width:130px" title="Filter tampilan dan generate jadwal: tampilkan item coverage ≤ tanggal ini. Kosong = otomatis (hari ini + W+N)">
+      <button class="btn btn-xs" onclick="document.getElementById('f-proj-coverage').value='';renderProjection()" title="Reset ke default">✕</button>
     </label>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
       <input type="checkbox" id="f-proj-mrp-nonzero" onchange="renderProjection()"> MRP ≠ 0
@@ -374,9 +375,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </label>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
       <input type="checkbox" id="f-proj-col-filter" onchange="renderProjection()"> Filter kolom
-    </label>
-    <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
-      Cutoff: <input type="date" id="urgent-cutoff" style="width:130px" onchange="renderProjection()" title="Batas tanggal filter urgent">
     </label>
   </div>
   <div id="proj-table"><div class="loading"><div class="spin"></div>Upload Master Data lalu klik Build Projection...</div></div>
@@ -648,15 +646,13 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div id="fb-snippet-wrap" style="display:none">
           <div style="background:var(--green-bg);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:12px;margin-bottom:8px">
             <div style="font-size:11.5px;font-weight:600;color:var(--green);margin-bottom:8px">
-              ✓ Langkah terakhir — embed ke GitHub agar laptop lain otomatis konek:
+              ✓ Config Firebase tersimpan di browser ini
             </div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
-              1. Buka file HTML di GitHub → cari baris <code style="background:var(--bg4);padding:1px 4px;border-radius:3px">var FIREBASE_CONFIG = {</code><br>
-              2. Ganti 3 baris di dalamnya dengan snippet di bawah ini:<br>
-              3. Commit & push → selesai, tidak perlu setting di laptop manapun
+            <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+              Klik tombol di bawah untuk download file HTML baru yang sudah include semua config (Firebase, SAP, Sheet URLs). File ini bisa langsung dibuka di laptop manapun tanpa perlu setting ulang.
             </div>
-            <textarea id="fb-embed-snippet" readonly onclick="this.select()" style="width:100%;height:70px;background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:11px;color:var(--teal);resize:none"></textarea>
-            <button class="btn btn-sm btn-green" style="margin-top:6px;width:100%" onclick="var t=document.getElementById('fb-embed-snippet');t.select();document.execCommand('copy');toast('Snippet di-copy ✓','ok')">📋 Copy Snippet</button>
+            <button class="btn btn-green" style="width:100%;margin-bottom:6px" onclick="exportConfigHTML()">⬇ Download HTML dengan Semua Config</button>
+            <div style="font-size:10px;color:var(--muted)">Config yang disertakan: Firebase, SAP API, Sheet URLs, W+N, Workdays</div>
           </div>
         </div>
 
@@ -797,9 +793,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 // ═══════════════════════════════════════════════════════════════════════════════
 // ⚠️  GANTI 3 BARIS INI DENGAN CONFIG FIREBASE KAMU → PUSH KE GITHUB
 var FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDfUvdnJC9e-lWN_Mioy-niLs9kZcwNYu8",
-  projectId: "material-planner-eji",
-  appId: "1:468906816090:web:f2b3c69a31dfa4db7b5e63"};
+  apiKey:    window.localStorage.getItem('fb_apikey')    || '',
+  projectId: window.localStorage.getItem('fb_projectid') || '',
+  appId:     window.localStorage.getItem('fb_appid')     || ''
+};
 // ─────────────────────────────────────────────────────────────────────────────
 
 var _db = null;
@@ -2395,12 +2392,13 @@ function getCutoff() {
 
 function setUrgentCutoff() {
   var cutoff = getCutoff();
-  var el = document.getElementById('urgent-cutoff');
-  if(el && !el.value) el.value = cutoff.toISOString().split('T')[0];
+  var el = document.getElementById('f-proj-coverage');
+  // Hanya set default jika belum ada nilai
+  if(el && !el.value) el.placeholder = fmtDate(cutoff) + ' (default)';
   var lbl = document.getElementById('cutoff-lbl');
   if(lbl) lbl.textContent = fmtDate(cutoff);
   var sub = document.getElementById('proj-sub');
-  if(sub) sub.textContent = 'Master Data + MRP + Stock | Cutoff Urgent: W+' + (CFG.wn/7|0) + ' (' + fmtDate(cutoff) + ')';
+  if(sub) sub.textContent = 'Master Data + MRP + Stock | Cutoff default: W+' + (CFG.wn/7|0) + ' (' + fmtDate(cutoff) + ')';
 }
 
 function populateSKUFilter() {
@@ -2428,6 +2426,8 @@ function renderProjection() {
   var histDate = (document.getElementById('f-proj-history-date')||{value:''}).value;
   var fCoverage = (document.getElementById('f-proj-coverage')||{value:''}).value;
   var fMrpNonzero = document.getElementById('f-proj-mrp-nonzero') && document.getElementById('f-proj-mrp-nonzero').checked;
+  // Cutoff untuk warna merah = f-proj-coverage jika diisi, else default getCutoff
+  var displayCutoffISO = fCoverage || (function(){ var d = getCutoff(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
   // Use history data if date selected
   var sourceData = STATE.projectionData;
   var isHistory = false;
@@ -2444,16 +2444,24 @@ function renderProjection() {
     if(ftype && p.itemType !== ftype) return false;
     if(fsite && !(p.site||'').includes(fsite)) return false;
     if(fcat && p.category !== fcat) return false;
-    if(urgOnly && !p.isUrgent) return false;
     if(fMrpNonzero && (p.max3MRP||0) === 0) return false;
+    // Coverage filter — pakai f-proj-coverage (satu input untuk display + jadwal)
     if(fCoverage) {
       var covISO = p.coverageDateISO || p.coverageDateStr || '';
-      // Convert DD/MM/YYYY to ISO if needed
       if(covISO && covISO.includes('/')) {
         var cp = covISO.split('/');
         if(cp.length === 3) covISO = cp[2] + '-' + cp[1] + '-' + cp[0];
       }
       if(!covISO || covISO > fCoverage) return false;
+    }
+    // Urgent only filter — pakai displayCutoffISO
+    if(urgOnly) {
+      var covISO2 = p.coverageDateISO || '';
+      if(!covISO2 && p.coverageDateStr && p.coverageDateStr.includes('/')) {
+        var cp2 = p.coverageDateStr.split('/');
+        if(cp2.length === 3) covISO2 = cp2[2]+'-'+cp2[1]+'-'+cp2[0];
+      }
+      if(!covISO2 || covISO2 > displayCutoffISO) return false;
     }
     if(projColFilters.kode && !(p.productCode||'').toLowerCase().includes(projColFilters.kode)) return false;
     if(projColFilters.desc && !(p.description||'').toLowerCase().includes(projColFilters.desc)) return false;
@@ -2477,12 +2485,12 @@ function renderProjection() {
   var now = new Date();
 
   var rows = items.map(function(p){
-    var covClass = p.isUrgent ? 'cov-critical' : (p.category === 'GOOD' ? 'cov-ok' : 'cov-warn');
+    var covISO = p.coverageDateISO || '';
+    var isUrgentDisplay = covISO ? covISO <= displayCutoffISO : p.isUrgent;
+    var covClass = isUrgentDisplay ? 'cov-critical' : (p.category === 'GOOD' ? 'cov-ok' : 'cov-warn');
+    var ospoTotal = (p.ospoSdApr||0) + (p.ospoMei||0) + (p.ospoJuni||0) + (p.ospoJulDst||0);
     var ospoStr = colHidden('ospo') ? '' :
-      '<td class="mono td-right">' + n_id(p.ospoSdApr||0) + '</td>' +
-      '<td class="mono td-right">' + n_id(p.ospoMei||0) + '</td>' +
-      '<td class="mono td-right">' + n_id(p.ospoJuni||0) + '</td>' +
-      '<td class="mono td-right">' + n_id(p.ospoJulDst||0) + '</td>';
+      '<td class="mono td-right">' + n_id(ospoTotal) + '</td>';
     var pct = p.pctUsageVsForecast !== undefined ? p.pctUsageVsForecast : 0;
     var pctStr = colHidden('pctusage') ? '' : (function(){
       var pctPct = Math.round(pct * 1000) / 10;
@@ -2530,10 +2538,7 @@ function renderProjection() {
   }).join('');
 
   var ospoHeaders = colHidden('ospo') ? '' :
-    '<th>OSPO Sd Bln Ini<div class="col-resizer"></div></th>' +
-    '<th>OSPO Bln+1<div class="col-resizer"></div></th>' +
-    '<th>OSPO Bln+2<div class="col-resizer"></div></th>' +
-    '<th>OSPO Bln+3+<div class="col-resizer"></div></th>';
+    '<th>OSPO<div class="col-resizer"></div></th>';
 
   var filterRow = colFilter ? '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" oninput="projColFilters.kode=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.kode||'') + '"></th>' +
@@ -2544,7 +2549,7 @@ function renderProjection() {
     '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.cat=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.cat||'') + '"></th>' +
     '<th></th>' +
-    (colHidden('ospo') ? '' : '<th></th><th></th><th></th><th></th>') +
+    (colHidden('ospo') ? '' : '<th></th>') +
     '<th></th>' +
     (colHidden('pctusage') ? '' : '<th><input class="th-filter" oninput="projColFilters.pct=this.value;renderProjectionRAF()" placeholder="min%..." value="' + (projColFilters.pct||'') + '" title="Filter min % usage"></th>') +
     '<th></th>' +
@@ -2587,7 +2592,7 @@ function renderProjection() {
 
 // ─── URGENT / FILTER ─────────────────────────────────────────────────────────
 function filterUrgent() {
-  var cutoffInput = document.getElementById('urgent-cutoff').value;
+  var cutoffInput = (document.getElementById('f-proj-coverage')||{value:''}).value;
   var cutoff = cutoffInput ? new Date(cutoffInput) : getCutoff();
   var srch = (document.getElementById('srch-urgent')||{value:''}).value.toLowerCase();
   var ftype = (document.getElementById('f-urg-type')||{value:''}).value;
@@ -2718,9 +2723,18 @@ function generateSchedule() {
   }
   var delivFri = delivWeek[delivWeek.length - 1];
 
-  // ── 2. Coverage cutoff = hari terakhir delivery week + W+N ──────────────────
-  var coverageCutoff = new Date(delivFri);
-  coverageCutoff.setDate(delivFri.getDate() + CFG.wn);
+  // ── 2. Coverage cutoff = f-proj-coverage jika diisi, else Jumat + W+N ─────────
+  var manualCoverage = (document.getElementById('f-proj-coverage')||{value:''}).value;
+  var coverageCutoff;
+  if(manualCoverage) {
+    // Gunakan tanggal yang diinput user langsung
+    var cp = manualCoverage.split('-');
+    coverageCutoff = new Date(parseInt(cp[0]), parseInt(cp[1])-1, parseInt(cp[2]), 23, 59, 59);
+  } else {
+    // Default: Jumat delivery week + W+N
+    coverageCutoff = new Date(delivFri);
+    coverageCutoff.setDate(delivFri.getDate() + CFG.wn);
+  }
 
   // ── 3. Filter item urgent — hanya yg max3MRP > 0 ─────────────────────────────
   var urgentItems = STATE.projectionData.filter(function(p){
@@ -3378,6 +3392,70 @@ function saveSettings() {
   localStorage.setItem('wn',CFG.wn);
   localStorage.setItem('workdays',CFG.workdays);
   toast('Settings disimpan ✓','ok');
+}
+
+function exportConfigHTML() {
+  var apiKey    = window.localStorage.getItem('fb_apikey')    || '';
+  var projectId = window.localStorage.getItem('fb_projectid') || '';
+  var appId     = window.localStorage.getItem('fb_appid')     || '';
+
+  if(!apiKey || !projectId || !appId) {
+    toast('Firebase belum dikonfigurasi — isi dulu di atas','err');
+    return;
+  }
+
+  // Baca source HTML halaman ini
+  var src = document.documentElement.outerHTML;
+
+  // 1. Embed Firebase config
+  src = src.replace(
+    /apiKey:\s*window\.localStorage\.getItem\('fb_apikey'\)\s*\|\|\s*'',\s*\n\s*projectId:\s*window\.localStorage\.getItem\('fb_projectid'\)\s*\|\|\s*'',\s*\n\s*appId:\s*window\.localStorage\.getItem\('fb_appid'\)\s*\|\|\s*''/,
+    "apiKey:    '" + apiKey    + "',\n  projectId: '" + projectId + "',\n  appId:     '" + appId     + "'"
+  );
+
+  // 2. Embed SAP config
+  var sapUrl  = localStorage.getItem('sap_url')  || CFG.url;
+  var sapUser = localStorage.getItem('sap_user') || CFG.user;
+  var sapPass = localStorage.getItem('sap_pass') || CFG.pass;
+  var fonnte  = localStorage.getItem('fonnte')   || CFG.fonnte;
+  var wn      = localStorage.getItem('wn')       || CFG.wn;
+  var wd      = localStorage.getItem('workdays') || CFG.workdays;
+
+  // 3. Embed Sheet URLs
+  var sheetKeys = ['master','mrp','realname'];
+  var sheetInits = '';
+  sheetKeys.forEach(function(t) {
+    var u = localStorage.getItem('sheet_url_'+t)||'';
+    var s = localStorage.getItem('sheet_tab_'+t)||'';
+    if(u) sheetInits += "\n  localStorage.setItem('sheet_url_"+t+"', "+JSON.stringify(u)+");";
+    if(s) sheetInits += "\n  localStorage.setItem('sheet_tab_"+t+"', "+JSON.stringify(s)+");";
+  });
+
+  // 4. Inject bootstrap script setelah <body>
+  var bootstrapScript =
+    '<script id="config-bootstrap">' +
+    'if(!localStorage.getItem("sap_url")) {' +
+    "\n  localStorage.setItem('sap_url',  " + JSON.stringify(sapUrl)  + ");" +
+    "\n  localStorage.setItem('sap_user', " + JSON.stringify(sapUser) + ");" +
+    "\n  localStorage.setItem('sap_pass', " + JSON.stringify(sapPass) + ");" +
+    "\n  localStorage.setItem('fonnte',   " + JSON.stringify(fonnte)  + ");" +
+    "\n  localStorage.setItem('wn',       " + JSON.stringify(String(wn)) + ");" +
+    "\n  localStorage.setItem('workdays', " + JSON.stringify(String(wd)) + ");" +
+    sheetInits +
+    '\n}' +
+    '<\/script>';
+
+  src = src.replace('<body ', bootstrapScript + '<body ');
+
+  // Download
+  var blob = new Blob([src], {type:'text/html;charset=utf-8'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href   = url;
+  a.download = 'rm-planner-configured.html';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('File HTML dengan config didownload ✓','ok');
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
