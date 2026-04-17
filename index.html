@@ -1517,7 +1517,7 @@ async function syncAll() {
 
   var _tsd = new Date();
   var ts = _tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()+' '+
-    String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0');
+    String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0')+':'+String(_tsd.getSeconds()).padStart(2,'0');
   localStorage.setItem('last_sync', ts);
   _lastSyncMsg = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
 
@@ -2926,6 +2926,13 @@ function renderDashboard() {
   var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'—';
 }
 
+// Helper: display name — RM pakai Real Name, PM/FG pakai Description
+function _dispName(p) {
+  if(!p) return '';
+  if(p.itemType === 'RM' && p.realName) return p.realName;
+  return p.description || p.productCode || '';
+}
+
 function renderDashSchedule() {
   var el = document.getElementById('dash-schedule-week'); if(!el) return;
   var now=new Date(); var dow=now.getDay(); var daysToMon=dow===0?1:(8-dow);
@@ -2953,7 +2960,6 @@ function renderDashSchedule() {
 function renderDashUrgent(urgentItems) {
   var el = document.getElementById('dash-urgent-table'); if(!el) return;
   var items = (urgentItems || STATE.projectionData.filter(function(p){ return p.isUrgent; }));
-  // Sort by coverage date ASC (paling urgent = paling atas)
   items = items.slice().sort(function(a,b){
     var ai = a.coverageDateISO || (a.coverageDateStr&&a.coverageDateStr.includes('/')?a.coverageDateStr.split('/').reverse().join('-'):'9999');
     var bi = b.coverageDateISO || (b.coverageDateStr&&b.coverageDateStr.includes('/')?b.coverageDateStr.split('/').reverse().join('-'):'9999');
@@ -2963,16 +2969,21 @@ function renderDashUrgent(urgentItems) {
   el.innerHTML = items.map(function(p){
     var isRed=(p.doiFC||0)<5; var dotColor=isRed?'var(--red)':'var(--amber)';
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
-    var cmtStr = p.comment ? '<div style="font-size:10px;color:var(--teal);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.comment+'</div>' : '';
+    var name = _dispName(p);
+    var cmtStr = p.comment ? '<div style="font-size:10px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;text-align:right">'+p.comment+'</div>' : '';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">'+
-          '<span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.description+'</span>'+
-          '<span class="mono cov-critical" style="font-size:11px;flex-shrink:0">'+p.coverageDateStr+'</span>'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+          '<div style="min-width:0;flex:1">'+
+            '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
+            '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
+          '</div>'+
+          '<div style="flex-shrink:0;text-align:right">'+
+            '<div class="mono cov-critical" style="font-size:11px">'+p.coverageDateStr+'</div>'+
+            cmtStr+
+          '</div>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
-        cmtStr+
       '</div></div>';
   }).join('');
 }
@@ -3216,7 +3227,7 @@ function generateSchedule() {
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
       var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
-      itemSummaryParts.push((item.description||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : ''));
+      itemSummaryParts.push((_dispName(item)||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : ''));
       selectedEntries.push({ item: item, pos: pickedPOs });
     });
 
@@ -3321,7 +3332,7 @@ function renderSchedule() {
         var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
         var dispQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
         return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">' +
-          '<span style="font-size:10.5px;color:var(--muted);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (en.item.description||en.item.productCode) + '</span>' +
+          '<span style="font-size:10.5px;color:var(--muted);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</span>' +
           '<input type="number" value="' + dispQty + '" min="0" style="width:80px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono)" ' +
           'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" ' +
           'onchange="saveSchedQty(this)" title="Qty request kirim">' +
@@ -3408,7 +3419,7 @@ function saveSchedQty(input) {
     var ovr = pk ? (STATE.poOverrides[pk] || {}) : {};
     var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
     var qty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
-    summaryParts.push((en.item.description||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||''));
+    summaryParts.push((_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||''));
   });
   e.items = summaryParts.join(', ');
 
@@ -3453,7 +3464,7 @@ function buildWAMsg(entry) {
   if(entry.entries) {
     entry.entries.forEach(function(e){
       (e.pos||[]).forEach(function(p){ itemList += '• PO ' + p.docNum + ' - ' + p.itemName + ' (' + n_id(p.openQty||0) + ' ' + p.uom + ')\n'; });
-      if(!(e.pos||[]).length) itemList += '• ' + e.item.description + '\n';
+      if(!(e.pos||[]).length) itemList += '• ' + _dispName(e.item) + '\n';
     });
   } else itemList = entry.items + '\n';
   return 'Pagi ' + pic + ', berikut request pengiriman tgl ' + entry.date + ' ke alamat ' + siteStr + ', mohon konfirmasinya 🙏\n\n' + itemList.trim() + fyi;
@@ -3533,7 +3544,7 @@ function openFbModal(idx) {
   (e.entries||[]).forEach(function(en){
     var pos = (en.pos&&en.pos.length) ? en.pos : [{
       docNum:'—', itemCode:(en.item&&en.item.productCode)||'',
-      itemName:(en.item&&en.item.description)||'', openQty:0, uom:(en.item&&en.item.uom)||''
+      itemName:(en.item?_dispName(en.item):'')||'', openQty:0, uom:(en.item&&en.item.uom)||''
     }];
     pos.forEach(function(po){
       var itemCode = po.itemCode || '';
@@ -4440,30 +4451,41 @@ function renderHighlighted() {
   var el = document.getElementById('dash-highlighted'); if(!el) return;
   var codes = Object.keys(PROJ_HIGHLIGHTED);
   if(!codes.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom 📌 Projection Stock untuk menambahkan.</div>';
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom 📌 Projection Stock.</div>';
     return;
   }
   var items = codes.map(function(code){
-    return STATE.projectionData.find(function(p){ return p.productCode === code; }) || { productCode: code, description: code };
+    return STATE.projectionData.find(function(p){ return p.productCode === code; }) || { productCode: code, description: code, itemType:'', category:'', comment:'' };
   });
-  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">' +
-    items.map(function(p){
-      var covClass = p.isUrgent ? 'cov-critical' : (p.category === 'OVER' ? '' : 'cov-warn');
-      var tb = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:9px">RM</span>' : p.itemType === 'PM' ? '<span class="badge b-purple" style="font-size:9px">PM</span>' : p.itemType === 'FG' ? '<span class="badge b-green" style="font-size:9px">FG</span>' : '';
-      var catBdg = p.category === 'UNDER' ? '<span class="badge b-red" style="font-size:9px">UNDER</span>' : p.category === 'OVER' ? '<span class="badge b-blue" style="font-size:9px">OVER</span>' : '<span class="badge b-green" style="font-size:9px">GOOD</span>';
-      var nextPO = STATE.poData.filter(function(po){ return po.itemCode===p.productCode && (po.openQty||0)>0; }).sort(function(a,b){ var ta=a.poReqDate?a.poReqDate.split('/').reverse().join('-'):'9999'; var tb2=b.poReqDate?b.poReqDate.split('/').reverse().join('-'):'9999'; return ta.localeCompare(tb2); })[0];
-      return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;position:relative">' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px">' +
-          '<span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + (p.description||p.productCode) + '</span>' +
-          '<span onclick="toggleHighlight(\''+p.productCode+'\',false)" title="Hapus highlight" style="cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0">✕</span>' +
-        '</div>' +
-        '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">' + tb + catBdg + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">' + p.productCode + ' · ' + (p.supplier||'—') + '</div>' +
-        (p.coverageDateStr ? '<div style="font-size:11px;margin-bottom:3px">Coverage: <span class="mono ' + covClass + '">' + p.coverageDateStr + '</span> · DOI: ' + p.doiFC + '</div>' : '') +
-        (nextPO && nextPO.poReqDate ? '<div style="font-size:10px;color:var(--green)">→ Kiriman terdekat: ' + nextPO.poReqDate + '</div>' : '') +
-        (p.comment ? '<div style="font-size:10px;color:var(--teal);margin-top:4px;border-top:0.5px solid var(--border);padding-top:4px">' + p.comment + '</div>' : '') +
-      '</div>';
-    }).join('') + '</div>';
+  // Filter by dashboard type tab
+  if(_dashType !== 'ALL') items = items.filter(function(p){ return p.itemType === _dashType; });
+  if(!items.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Tidak ada highlighted item untuk ' + _dashType + '</div>';
+    return;
+  }
+  el.innerHTML = items.map(function(p){
+    var covClass = p.isUrgent ? 'cov-critical' : (p.category==='GOOD' ? '' : 'cov-warn');
+    var dotColor = p.isUrgent ? 'var(--red)' : (p.category==='UNDER' ? 'var(--amber)' : 'var(--green)');
+    var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
+    var name = _dispName(p);
+    var cmtStr = p.comment ? '<div style="font-size:10px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;text-align:right">'+p.comment+'</div>' : '';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+          '<div style="min-width:0;flex:1">'+
+            '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
+            '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+(p.doiFC||'—')+'</div>'+
+          '</div>'+
+          '<div style="flex-shrink:0;text-align:right">'+
+            '<div class="mono '+covClass+'" style="font-size:11px">'+(p.coverageDateStr||'—')+'</div>'+
+            cmtStr+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<span onclick="toggleHighlight(\''+p.productCode+'\',false)" title="Unpin" style="cursor:pointer;color:var(--muted);font-size:11px;flex-shrink:0;padding-top:2px">✕</span>'+
+    '</div>';
+  }).join('');
 }
 
 function toggleColMenu() {
