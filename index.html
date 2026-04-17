@@ -344,7 +344,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div id="dash-stock-bars" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
 
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
-  <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px">
+  <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card" style="padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
@@ -376,6 +376,15 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Highlighted Issues -->
+  <div class="card" style="padding:14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📌 Highlighted Issues</span>
+      <span style="font-size:11px;color:var(--muted)">Item yang kamu tandai dari Projection Stock</span>
+    </div>
+    <div id="dash-highlighted"><div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom Projection Stock untuk menambahkan.</div></div>
   </div>
 
   <div id="dash-alert-area"></div>
@@ -473,6 +482,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   </div>
   <div class="fbar">
     <input type="text" id="srch-po" placeholder="Cari Doc Num / item / supplier..." oninput="renderPO()" style="width:220px">
+    <select id="f-po-type" onchange="renderPO()"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
+    <select id="f-po-type" onchange="renderPO()" style="width:90px"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
     <select id="f-po-site" onchange="renderPO()"><option value="">Semua Site</option><option>BITUNG</option><option>SANGIANG</option></select>
     <select id="f-po-req" onchange="renderPO()"><option value="">Semua Status Request</option><option value="has">Sudah Dijadwal</option><option value="none">Belum Dijadwal</option><option value="manual">Edit Manual</option></select>
     <select id="f-po-conf" onchange="renderPO()"><option value="">Semua Status Konfirmasi</option><option value="confirmed">Sudah Konfirmasi</option><option value="unconfirmed">Belum Konfirmasi</option></select>
@@ -885,7 +896,7 @@ var CLOUD_KEYS = [
   'suppliers','proj_hidden_cols','proj_snapshots',
   'sheet_url_master','sheet_url_mrp','sheet_url_realname',
   'sheet_tab_master','sheet_tab_mrp','sheet_tab_realname',
-  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync'
+  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync','proj_highlighted'
 ];
 
 // ── Sync indicator di header ──────────────────────────────────────────────────
@@ -1505,17 +1516,26 @@ async function syncAll() {
   loadOSPO();
   var failed = results.filter(function(r){ return r.status === 'rejected'; });
 
-  if(STATE.mrpData) buildProjection();
   var _tsd = new Date();
   var ts = _tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()+' '+
     String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0');
-  document.getElementById('dash-sub').textContent = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
   localStorage.setItem('last_sync', ts);
-  updateDashStats();
+  var syncMsg = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
 
-  if(!failed.length) toast('Sync selesai ✓', 'ok');
-  else toast(failed.length + ' API gagal — data lain tetap tampil', 'inf');
-  setTimeout(function(){ _showSyncBar(false); }, 4000);
+  function _afterBuild() {
+    document.getElementById('dash-sub').textContent = syncMsg;
+    updateDashStats();
+    if(!failed.length) toast('Sync selesai ✓', 'ok');
+    else toast(failed.length + ' API gagal — data lain tetap tampil', 'inf');
+    setTimeout(function(){ _showSyncBar(false); }, 4000);
+  }
+
+  if(STATE.mrpData) {
+    buildProjection();
+    setTimeout(_afterBuild, 450); // tunggu buildProjection selesai (350ms + buffer)
+  } else {
+    _afterBuild();
+  }
 }
 
 function renderPO() {
@@ -1533,7 +1553,9 @@ function renderPO() {
   var hfConf  = (document.getElementById('hf-conf') ||{value:''}).value.toLowerCase();
   var hfNotes = (document.getElementById('hf-notes')||{value:''}).value.toLowerCase();
 
+  var fpoType = (document.getElementById('f-po-type')||{value:''}).value;
   var filtered = STATE.poData.filter(function(p){
+    if(fpoType) { var t=/^3/.test(p.itemCode||'')?'RM':(/^4/.test(p.itemCode||'')?'PM':'FG'); if(t!==fpoType) return false; }
     if(srch && !String(p.docNum).includes(srch) && !(p.itemCode||'').toLowerCase().includes(srch) && !(p.itemName||'').toLowerCase().includes(srch) && !(p.supplierName||'').toLowerCase().includes(srch)) return false;
     if(site && !(p.site||'').toUpperCase().includes(site)) return false;
     var ovr = STATE.poOverrides[p.docNum + '_' + p.itemCode] || {};
@@ -2645,6 +2667,7 @@ function renderProjection() {
     '<th></th>' +
     (colHidden('pctusage') ? '' : '<th><input class="th-filter" oninput="projColFilters.pct=this.value;renderProjectionRAF()" placeholder="min%..." value="' + (projColFilters.pct||'') + '" title="Filter min % usage"></th>') +
     '<th></th>' +
+    '<th></th>' +
   '</tr>' : '';
 
   var histBanner = isHistory ? '<div style="background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:var(--amber)">📅 Menampilkan history: <strong>' + histDate + '</strong> — <a onclick="clearHistoryView()" style="cursor:pointer;text-decoration:underline">Kembali ke hari ini</a></div>' : '';
@@ -2676,6 +2699,7 @@ function renderProjection() {
     th('OSPR','ospr') +
     th('% Usg vs FC','pctusage') +
     th('Comment','comment') +
+    '<th style="min-width:36px;text-align:center" title="Highlight">📌</th>' +
     '</tr>' + filterRow +
     '</thead>' +
     '<tbody>' + rows + '</tbody></table></div></div>' +
@@ -2887,6 +2911,7 @@ function renderDashboard() {
 
   renderDashUrgent(urgentItems);
   renderDashSchedule();
+  renderHighlighted();
 
   var sapDot=document.getElementById('status-sap'); if(sapDot) sapDot.className='dot'+(Object.keys(STATE.stockData||{}).length?'':' off');
   var fbDot=document.getElementById('status-fb'); if(fbDot) fbDot.className='dot'+(_fbReady?'':' off');
@@ -2932,6 +2957,10 @@ function renderDashUrgent(urgentItems) {
   el.innerHTML = items.map(function(p){
     var isRed=(p.doiFC||0)<5; var dotColor=isRed?'var(--red)':'var(--amber)';
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
+    // Next PO req date for this item
+    var nextPO = STATE.poData.filter(function(po){ return po.itemCode===p.productCode && (po.openQty||0)>0; }).sort(function(a,b){ var ta=a.poReqDate?a.poReqDate.split('/').reverse().join('-'):'9999'; var tb2=b.poReqDate?b.poReqDate.split('/').reverse().join('-'):'9999'; return ta.localeCompare(tb2); })[0];
+    var nextPOStr = nextPO && nextPO.poReqDate ? '<span style="font-size:10px;color:var(--green)">→ Kiriman: '+nextPO.poReqDate+'</span>' : '';
+    var cmtStr = p.comment ? '<span style="font-size:10px;color:var(--teal);margin-top:1px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.comment+'</span>' : '';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
       '<div style="flex:1;min-width:0">'+
@@ -2939,7 +2968,11 @@ function renderDashUrgent(urgentItems) {
           '<span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.description+'</span>'+
           '<span class="mono cov-critical" style="font-size:11px;flex-shrink:0">'+p.coverageDateStr+'</span>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px;gap:8px">'+
+          '<span style="font-size:10px;color:var(--muted)">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</span>'+
+          nextPOStr+
+        '</div>'+
+        cmtStr+
       '</div></div>';
   }).join('');
 }
@@ -4393,6 +4426,45 @@ function scheduleAutoRefresh() {
 
 // ─── PROJECTION COLUMN VISIBILITY ───────────────────────────────────────────
 var PROJ_HIDDEN_COLS = JSON.parse(localStorage.getItem('proj_hidden_cols') || '[]');
+var PROJ_HIGHLIGHTED = JSON.parse(localStorage.getItem('proj_highlighted') || '{}');
+
+function toggleHighlight(code, checked) {
+  if(checked) PROJ_HIGHLIGHTED[code] = true;
+  else delete PROJ_HIGHLIGHTED[code];
+  localStorage.setItem('proj_highlighted', JSON.stringify(PROJ_HIGHLIGHTED));
+  cloudSave('proj_highlighted', JSON.stringify(PROJ_HIGHLIGHTED));
+  renderHighlighted();
+}
+
+function renderHighlighted() {
+  var el = document.getElementById('dash-highlighted'); if(!el) return;
+  var codes = Object.keys(PROJ_HIGHLIGHTED);
+  if(!codes.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom 📌 Projection Stock untuk menambahkan.</div>';
+    return;
+  }
+  var items = codes.map(function(code){
+    return STATE.projectionData.find(function(p){ return p.productCode === code; }) || { productCode: code, description: code };
+  });
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">' +
+    items.map(function(p){
+      var covClass = p.isUrgent ? 'cov-critical' : (p.category === 'OVER' ? '' : 'cov-warn');
+      var tb = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:9px">RM</span>' : p.itemType === 'PM' ? '<span class="badge b-purple" style="font-size:9px">PM</span>' : p.itemType === 'FG' ? '<span class="badge b-green" style="font-size:9px">FG</span>' : '';
+      var catBdg = p.category === 'UNDER' ? '<span class="badge b-red" style="font-size:9px">UNDER</span>' : p.category === 'OVER' ? '<span class="badge b-blue" style="font-size:9px">OVER</span>' : '<span class="badge b-green" style="font-size:9px">GOOD</span>';
+      var nextPO = STATE.poData.filter(function(po){ return po.itemCode===p.productCode && (po.openQty||0)>0; }).sort(function(a,b){ var ta=a.poReqDate?a.poReqDate.split('/').reverse().join('-'):'9999'; var tb2=b.poReqDate?b.poReqDate.split('/').reverse().join('-'):'9999'; return ta.localeCompare(tb2); })[0];
+      return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;position:relative">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px">' +
+          '<span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + (p.description||p.productCode) + '</span>' +
+          '<span onclick="toggleHighlight(\''+p.productCode+'\',false)" title="Hapus highlight" style="cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0">✕</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">' + tb + catBdg + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">' + p.productCode + ' · ' + (p.supplier||'—') + '</div>' +
+        (p.coverageDateStr ? '<div style="font-size:11px;margin-bottom:3px">Coverage: <span class="mono ' + covClass + '">' + p.coverageDateStr + '</span> · DOI: ' + p.doiFC + '</div>' : '') +
+        (nextPO && nextPO.poReqDate ? '<div style="font-size:10px;color:var(--green)">→ Kiriman terdekat: ' + nextPO.poReqDate + '</div>' : '') +
+        (p.comment ? '<div style="font-size:10px;color:var(--teal);margin-top:4px;border-top:0.5px solid var(--border);padding-top:4px">' + p.comment + '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+}
 
 function toggleColMenu() {
   var m = document.getElementById('col-menu');
@@ -4453,6 +4525,7 @@ function _appInit() {
   CFG.workds   = parseInt(localStorage.getItem('workdays') || CFG.workdays);
 
   PROJ_HIDDEN_COLS = JSON.parse(localStorage.getItem('proj_hidden_cols') || '[]');
+  PROJ_HIGHLIGHTED  = JSON.parse(localStorage.getItem('proj_highlighted')  || '{}');
 
   var ls = localStorage.getItem('last_sync');
   if(ls) document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ls;
