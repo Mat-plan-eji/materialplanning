@@ -1047,7 +1047,7 @@ function appStart() {
       if((!STATE.masterData || !STATE.mrpData) &&
          (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))){
         toast('Memuat data Sheets...','inf');
-        loadAllSheets();
+        loadAllSheets(true);
       }
     }, 500);
   }
@@ -1127,25 +1127,24 @@ function loadSheetData(type) {
   saveSheetUrl(type);
   var url   = localStorage.getItem('sheet_url_'+type)||'';
   var sheet = localStorage.getItem('sheet_tab_'+type)||'';
-  if(!url){ toast('Masukkan URL Google Sheets untuk '+type,'err'); return; }
+  if(!url){ toast('Masukkan URL Google Sheets untuk '+type,'err'); return Promise.reject('no url'); }
 
   var csvUrl = _sheetsCSVUrl(url, sheet);
-  if(!csvUrl){ toast('URL tidak valid untuk '+type,'err'); return; }
+  if(!csvUrl){ toast('URL tidak valid untuk '+type,'err'); return Promise.reject('bad url'); }
 
   var infoEl = document.getElementById(type+'-info');
   var tsEl   = document.getElementById(type+'-ts');
   var dotEl  = document.getElementById(type+'-status');
   if(infoEl) infoEl.textContent='⏳ Memuat dari Google Sheets...';
 
-  fetch(csvUrl).then(function(r){
+  return fetch(csvUrl).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status+' — pastikan sheet sudah di-share "Anyone with link"');
     return r.text();
   }).then(function(text){
-    // Matcom: header selalu baris 3, kolom avg = "Average 3 months"
     var headerRowHint = (type === 'matcom') ? 3 : 0;
     var parsed = _parseCSV(text, headerRowHint);
     var rows = parsed.rows; var headers = parsed.headers;
-    var _tsd = new Date(); var ts = _tsd.toLocaleDateString('id-ID')||(_tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()) + ' ' + _tsd.toLocaleTimeString();
+    var _tsd = new Date(); var ts = _tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()+' '+String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0');
 
     if(type==='master'){
       STATE.masterData = processMasterData(rows);
@@ -1166,7 +1165,6 @@ function loadSheetData(type) {
       toast('MRP: '+cnt+' item ✓','ok');
 
     } else if(type==='matcom'){
-      // Hardcoded: header baris 3, kolom avg = "Average 3 months", kode = kolom C ("Code")
       STATE.matcomData = processMatcom(rows, headers, 'Average 3 months');
       localStorage.setItem('matcom_data', JSON.stringify(STATE.matcomData));
       localStorage.setItem('matcom_upload_ts', ts);
@@ -1192,12 +1190,20 @@ function loadSheetData(type) {
   });
 }
 
-function loadAllSheets() {
-  var loaded=0;
+function loadAllSheets(autoBuild) {
+  var promises = [];
   ['master','mrp','realname'].forEach(function(t){
-    if(localStorage.getItem('sheet_url_'+t)){ loaded++; loadSheetData(t); }
+    if(localStorage.getItem('sheet_url_'+t)) promises.push(loadSheetData(t));
   });
-  if(!loaded) toast('Belum ada URL Sheets. Buka menu Data Source terlebih dahulu.','err');
+  if(!promises.length) { toast('Belum ada URL Sheets. Buka menu Data Source terlebih dahulu.','err'); return Promise.resolve(); }
+  return Promise.allSettled(promises).then(function(){
+    if(autoBuild && STATE.masterData && STATE.mrpData) {
+      toast('Auto-build projection...', 'inf');
+      buildProjection();
+      // Update dash-sub setelah build selesai
+      setTimeout(function(){ if(_lastSyncMsg) document.getElementById('dash-sub').textContent = _lastSyncMsg; updateDashStats(); }, 500);
+    }
+  });
 }
 
 function _restoreSheetUrls() {
@@ -4600,25 +4606,33 @@ function _appInit() {
 
   scheduleAutoRefresh();
 
-  // ── Auto-sync SAP saat boot jika data kosong atau sudah > 1 jam ──────────────
+  // ── Auto-sync SAP + auto-build saat boot ──────────────────────────────────────
   var lastSync = localStorage.getItem('last_sync');
   var needSync = !STATE.stockData || !Object.keys(STATE.stockData).length;
   if(!needSync && lastSync) {
-    // Cek apakah sudah lebih dari 1 jam sejak sync terakhir
     try {
       var parts = lastSync.split(' ');
       var dp = parts[0].split('/');
-      var tp = (parts[1]||'').split(':');
+      var tp = (parts[1]||'00:00:00').split(':');
       var lastSyncDate = new Date(parseInt(dp[2]), parseInt(dp[1])-1, parseInt(dp[0]),
-        parseInt(tp[0]||0), parseInt(tp[1]||0));
-      needSync = (Date.now() - lastSyncDate.getTime()) > 3600000; // 1 jam
+        parseInt(tp[0]||0), parseInt(tp[1]||0), parseInt(tp[2]||0));
+      needSync = (Date.now() - lastSyncDate.getTime()) > 3600000;
     } catch(e) { needSync = true; }
   }
   if(needSync && CFG.url) {
     setTimeout(function(){
       toast('Auto-sync SAP...', 'inf');
-      syncAll();
-    }, 800); // delay sedikit agar UI sudah siap
+      syncAll().then(function(){
+        // Setelah sync selesai, pastikan sheets dimuat dan projection di-build
+        if(!STATE.mrpData) {
+          var hasSheetUrl = localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp');
+          if(hasSheetUrl) {
+            toast('Memuat Sheets & Build Projection...', 'inf');
+            loadAllSheets(true);
+          }
+        }
+      });
+    }, 800);
   }
 }
 
