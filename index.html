@@ -260,8 +260,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
   <div class="ni" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
-  <div class="ni" onclick="showPage('ospo',this)"><span class="ni-ico">◉</span>OSPO</div>
-  <div class="ni" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
+    <div class="ni" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
   <div class="ni" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
   <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets)</div>
   <div class="nav-divider"></div>
@@ -293,8 +292,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-stock">⏳</span> Stock</span>
     <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-po">⏳</span> PO</span>
     <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-grpo">⏳</span> GRPO</span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospo">⏳</span> OSPO</span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospr">⏳</span> OSPR</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospr">⏳</span> OSPR</span>
   </div>
   <div class="stats" id="dash-stats">
     <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub">coverage ≤ W+2</div></div>
@@ -457,98 +455,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 </div>
 </div>
 
-<!-- OSPO -->
-<div class="page" id="pg-ospo">
-<div class="page-inner">
-  <div class="ph">
-    <div class="ph-l"><h2>OSPO</h2><p>Outstanding PO dari SAP</p></div>
-    <div class="ph-r"><button class="btn btn-primary" onclick="loadOSPO()">↺ Refresh OSPO</button></div>
-  </div>
-  <div class="fbar">
-    <input type="text" id="srch-ospo" placeholder="Cari item / supplier..." oninput="renderOSPO()" style="width:200px">
-    <select id="f-ospo-month" onchange="renderOSPO()"><option value="">Semua Bulan</option></select>
-  </div>
-  <div id="ospo-table"><div class="loading"><div class="spin"></div>Klik Refresh OSPO...</div></div>
-</div>
-</div>
-
-<!-- DATA SOURCE / SHEETS -->
-<div class="page" id="pg-upload">
-<div class="page-inner">
-  <div class="ph">
-    <div class="ph-l"><h2>Data Source — Google Sheets</h2><p>Tarik data dari Google Sheet yang sudah dipublish. URL tersimpan online, tidak perlu input ulang di laptop lain.</p></div>
-    <div class="ph-r">
-      <button class="btn btn-primary" onclick="loadAllSheets()">↓ Muat Semua</button>
-    </div>
-  </div>
-
-  <div class="alert alert-info" style="margin-bottom:16px">
-    💡 <strong>Cara share Google Sheet:</strong> Buka sheet → klik <strong>Share</strong> → ubah ke <em>"Anyone with the link — Viewer"</em> → copy URL → paste di bawah.
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px">
-
-    <div class="card" style="border-color:rgba(59,127,255,.4)">
-      <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">⭐ Master Data Item</span><span id="master-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Minimum Order Qty | Inventory Uom | Supplier</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="master-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab <span style="color:var(--hint)">(kosong = tab pertama)</span></label><input id="master-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadSheetData('master')">↓ Muat Master Data</button>
-        <div id="master-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="master-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-hdr"><span class="card-title">🏷️ Real Name Item</span><span id="realname-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Real Name</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="realname-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="realname-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-sm" style="width:100%;border-color:rgba(6,182,212,.3);color:var(--teal)" onclick="loadSheetData('realname')">↓ Muat Real Name</button>
-        <div id="realname-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="realname-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-hdr"><span class="card-title">📊 MRP</span><span id="mrp-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Kolom: <span style="font-family:var(--mono);color:var(--teal)">Item | Bulan… | Maximal</span></div>
-        <div class="fg"><label>URL Google Sheets</label><input id="mrp-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11.5px"></div>
-        <div class="fg"><label>Nama Tab</label><input id="mrp-sheet" type="text" placeholder="Sheet1" style="width:100%"></div>
-        <button class="btn btn-primary btn-sm" style="width:100%" onclick="loadSheetData('mrp')">↓ Muat MRP</button>
-        <div id="mrp-info" style="margin-top:8px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
-      </div>
-    </div>
-
-  </div>
-  <div style="margin-top:8px;max-width:1000px" id="upload-preview"></div>
-</div>
-</div>
-
-<!-- HISTORY PROJECTION -->
-<div class="page" id="pg-proj-history">
-<div class="page-inner">
-  <div class="ph">
-    <div class="ph-l"><h2>History Projection Stock</h2><p>Snapshot projection yang disimpan per tanggal</p></div>
-    <div class="ph-r">
-      <button class="btn btn-red btn-sm" onclick="clearAllSnapshots()" style="font-size:11px">🗑 Hapus Semua</button>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 160px)">
-    <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
-      <div class="card-hdr"><span class="card-title">📅 Daftar Snapshot</span></div>
-      <div id="snapshot-list" style="overflow-y:auto;flex:1;padding:8px"></div>
-    </div>
-    <div>
-      <div id="snapshot-view"><div class="empty"><div class="empty-ico">📸</div><h3>Pilih snapshot dari daftar</h3><p>Klik tanggal di sebelah kiri untuk melihat data historis</p></div></div>
-    </div>
-  </div>
-</div>
-</div>
 
 <!-- OSPR -->
 <div class="page" id="pg-ospr">
@@ -1256,9 +1162,9 @@ function _showSyncBar(show) {
   if(el) el.style.display = show ? 'flex' : 'none';
 }
 
-async function sapFetchTO(reportId, params) {
+async function sapFetchTO(reportId, params, _retry) {
   var ctrl = new AbortController();
-  var timer = setTimeout(function(){ ctrl.abort(); }, 30000);
+  var timer = setTimeout(function(){ ctrl.abort(); }, 60000); // 60s timeout
   try {
     var url = CFG.url + '/report/api/Report/GetReportDataFromQuery/' + reportId + '?';
     var ps = Object.entries(params).map(function(kv){
@@ -1270,7 +1176,12 @@ async function sapFetchTO(reportId, params) {
     return res.json();
   } catch(e) {
     clearTimeout(timer);
-    if(e.name === 'AbortError') throw new Error('Timeout 30s — SAP tidak merespons');
+    // Auto-retry sekali jika timeout atau network error
+    if(!_retry && (e.name === 'AbortError' || e.name === 'TypeError' || e.message.includes('fetch'))) {
+      await new Promise(function(r){ setTimeout(r, 2000); }); // tunggu 2s
+      return sapFetchTO(reportId, params, true);
+    }
+    if(e.name === 'AbortError') throw new Error('Timeout 60s — SAP tidak merespons');
     throw e;
   }
 }
@@ -1403,52 +1314,40 @@ async function loadGRPO() {
   }
 }
 
-async function loadOSPO() {
-  _setSyncItem('ospo', 'loading');
-  var ospoEl = document.getElementById('ospo-table');
-  if(ospoEl) ospoEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat OSPO...</div>';
-  try {
-    var raw = await sapFetchTO(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
-    STATE.ospoData = (raw || []).filter(function(r){
-      var s = (r.DocStatus||'').toLowerCase();
-      if(s === 'cancelled' || s === 'cancellation') return false;
-      if((r.OpenQty||0) <= 0) return false;
-      var ic = (r.ItemCode||'').toString();
-      if(/^6/.test(ic) && r.CardName !== 'Berkat Asia Kemasindo, PT') return false;
-      return true;
-    }).map(function(r){
-      return { docNum: r.DocNum, itemCode: r.ItemCode, itemName: r.Dscription,
-        supplierName: r.CardName, openQty: r.OpenQty, uom: r.unitMsr,
-        poReqDate: fmtSAPDate(r.PO_Req_Date), site: r.U_ReqSite||'' };
-    });
-    populateOSPOMonths(); renderOSPO();
-    _setSyncItem('ospo', 'ok');
-    toast(STATE.ospoData.length + ' OSPO ✓', 'ok');
-  } catch(e) {
-    _setSyncItem('ospo', 'err');
-    if(ospoEl) ospoEl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
-    toast('OSPO gagal: ' + e.message, 'err');
-  }
+function loadOSPO() {
+  // OSPO = PO data yg sama — langsung pakai STATE.poData, tidak perlu SAP call lagi
+  STATE.ospoData = STATE.poData.map(function(p){
+    return { docNum: p.docNum, itemCode: p.itemCode, itemName: p.itemName,
+      supplierName: p.supplierName, openQty: p.openQty, uom: p.uom,
+      poReqDate: p.poReqDate, site: p.site||'' };
+  });
+  populateOSPOMonths();
+  return Promise.resolve();
 }
 
-// ─── SYNC ALL — 5 API paralel sekaligus ──────────────────────────────────────
+// ─── SYNC ALL — 5 API paralel, lanjut meski sebagian gagal ──────────────────
 async function syncAll() {
   _showSyncBar(true);
-  ['stock','po','grpo','ospo','ospr'].forEach(function(k){ _setSyncItem(k,'loading'); });
+  ['stock','po','grpo','ospr'].forEach(function(k){ _setSyncItem(k,'loading'); });
   document.getElementById('dash-sub').textContent = 'Menyinkronkan semua data...';
-  try {
-    await Promise.all([loadStock(), loadPO(), loadOSPO(), loadOSPR(), loadGRPO()]);
-    if(STATE.mrpData) buildProjection();
-    var _tsd = new Date(); var ts = _tsd.toLocaleDateString('id-ID')||(_tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()) + ' ' + _tsd.toLocaleTimeString();
-    document.getElementById('dash-sub').textContent = 'Tersinkron: ' + ts;
-    localStorage.setItem('last_sync', ts);
-    updateDashStats();
-    toast('Sync selesai ✓', 'ok');
-  } catch(e) {
-    document.getElementById('dash-sub').textContent = 'Sebagian gagal — lihat indikator';
-    toast('Ada yang gagal: ' + e.message, 'err');
-  }
-  setTimeout(function(){ _showSyncBar(false); }, 5000);
+
+  // Pakai allSettled — error satu tidak hentikan yang lain
+  var results = await Promise.allSettled([loadStock(), loadPO(), loadOSPR(), loadGRPO()]);
+  // Rebuild ospoData dari poData setelah PO selesai
+  loadOSPO();
+  var failed = results.filter(function(r){ return r.status === 'rejected'; });
+
+  if(STATE.mrpData) buildProjection();
+  var _tsd = new Date();
+  var ts = _tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()+' '+
+    String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0');
+  document.getElementById('dash-sub').textContent = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
+  localStorage.setItem('last_sync', ts);
+  updateDashStats();
+
+  if(!failed.length) toast('Sync selesai ✓', 'ok');
+  else toast(failed.length + ' API gagal — data lain tetap tampil', 'inf');
+  setTimeout(function(){ _showSyncBar(false); }, 4000);
 }
 
 function renderPO() {
@@ -4238,6 +4137,27 @@ function _appInit() {
   });
 
   scheduleAutoRefresh();
+
+  // ── Auto-sync SAP saat boot jika data kosong atau sudah > 1 jam ──────────────
+  var lastSync = localStorage.getItem('last_sync');
+  var needSync = !STATE.stockData || !Object.keys(STATE.stockData).length;
+  if(!needSync && lastSync) {
+    // Cek apakah sudah lebih dari 1 jam sejak sync terakhir
+    try {
+      var parts = lastSync.split(' ');
+      var dp = parts[0].split('/');
+      var tp = (parts[1]||'').split(':');
+      var lastSyncDate = new Date(parseInt(dp[2]), parseInt(dp[1])-1, parseInt(dp[0]),
+        parseInt(tp[0]||0), parseInt(tp[1]||0));
+      needSync = (Date.now() - lastSyncDate.getTime()) > 3600000; // 1 jam
+    } catch(e) { needSync = true; }
+  }
+  if(needSync && CFG.url) {
+    setTimeout(function(){
+      toast('Auto-sync SAP...', 'inf');
+      syncAll();
+    }, 800); // delay sedikit agar UI sudah siap
+  }
 }
 
 // Kick off — tries Firebase first, falls back to localStorage
