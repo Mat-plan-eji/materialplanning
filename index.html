@@ -278,34 +278,99 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
 <!-- DASHBOARD -->
 <div class="page active" id="pg-dashboard">
-<div class="page-inner">
-  <div class="ph">
-    <div class="ph-l"><h2>Material Planner Dashboard</h2><p id="dash-sub">Sync data untuk memulai</p></div>
-    <div class="ph-r">
+<div class="page-inner" style="padding:20px 24px 48px">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <!-- Notification Bell -->
+      <div style="position:relative">
+        <button class="btn" onclick="toggleNotifPanel()" id="notif-btn" style="position:relative">
+          🔔 Notifikasi<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:99px;font-weight:600">0</span>
+        </button>
+        <div id="notif-panel" style="display:none;position:absolute;right:0;top:calc(100%+6px);width:360px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.2)">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:13px;font-weight:500">Notifikasi</span>
+            <button class="btn btn-xs btn-red" onclick="clearNotifications()">Hapus Semua</button>
+          </div>
+          <div id="notif-list" style="max-height:380px;overflow-y:auto;padding:8px"></div>
+        </div>
+      </div>
+      <!-- Sync progress inline -->
+      <div id="sync-progress-bar" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:6px 12px;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:500;color:var(--muted)">Sync:</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span id="sync-item-stock">⏳</span> Stock</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span id="sync-item-po">⏳</span> PO</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span id="sync-item-grpo">⏳</span> GRPO</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span id="sync-item-ospr">⏳</span> OSPR</span>
+      </div>
       <button class="btn" onclick="syncAll()">↺ Sync Semua</button>
-      <button class="btn btn-primary" onclick="buildProjection();showPage('projection',document.querySelectorAll('.ni')[1])">⚡ Build Projection</button>
+      <button class="btn btn-primary" onclick="buildProjection();showPage('projection',document.querySelectorAll('.ni')[1])">⚡ Build</button>
     </div>
   </div>
-  <!-- Sync progress -->
-  <div id="sync-progress-bar" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 16px;margin-bottom:12px;align-items:center;gap:16px;flex-wrap:wrap">
-    <span style="font-size:11px;font-weight:500;color:var(--muted)">Sync SAP (paralel):</span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-stock">⏳</span> Stock</span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-po">⏳</span> PO</span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-grpo">⏳</span> GRPO</span>
-        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px"><span id="sync-item-ospr">⏳</span> OSPR</span>
+
+  <!-- Type Filter Tab -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:3px;width:fit-content">
+      <div class="tab on" id="dtab-ALL" onclick="switchDashType('ALL',this)" style="padding:4px 16px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--muted);transition:.1s">Semua</div>
+      <div class="tab" id="dtab-RM" onclick="switchDashType('RM',this)" style="padding:4px 16px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--muted);transition:.1s">RM</div>
+      <div class="tab" id="dtab-PM" onclick="switchDashType('PM',this)" style="padding:4px 16px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--muted);transition:.1s">PM</div>
+      <div class="tab" id="dtab-FG" onclick="switchDashType('FG',this)" style="padding:4px 16px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--muted);transition:.1s">FG</div>
+    </div>
+    <span id="dash-type-label" style="font-size:11px;color:var(--muted)">Semua tipe — RM + PM + FG</span>
   </div>
-  <div class="stats" id="dash-stats">
-    <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub">coverage ≤ W+2</div></div>
-    <div class="stat"><div class="stat-lbl">Total Item</div><div class="stat-val accent" id="s-total">—</div><div class="stat-sub">di projection stock</div></div>
+
+  <!-- Stat Cards -->
+  <div id="dash-stat-cards" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px">
+    <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub" id="dash-sub-urgent">coverage ≤ cutoff</div></div>
+    <div class="stat"><div class="stat-lbl">Total Item</div><div class="stat-val accent" id="s-total">—</div><div class="stat-sub" id="dash-sub-total">di projection stock</div></div>
     <div class="stat"><div class="stat-lbl">PO Open</div><div class="stat-val amber" id="s-po">—</div><div class="stat-sub">menunggu pengiriman</div></div>
-    <div class="stat"><div class="stat-lbl">GRPO Bulan Ini</div><div class="stat-val teal" id="s-grpo">—</div><div class="stat-sub">sudah diterima</div></div>
-    <div class="stat"><div class="stat-lbl">Jadwal Belum Confirm</div><div class="stat-val purple" id="s-unconfirmed">—</div><div class="stat-sub">menunggu konfirmasi</div></div>
+    <div class="stat"><div class="stat-lbl">Jadwal Belum Confirm</div><div class="stat-val purple" id="s-unconfirmed">—</div><div class="stat-sub">minggu ini</div></div>
   </div>
+
+  <!-- Stock Status Bars -->
+  <div id="dash-stock-bars" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+
+  <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
+  <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px">
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
+        <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
+      </div>
+      <div id="dash-urgent-table"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <!-- Schedule this week -->
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Jadwal Pengiriman Minggu Ini</div>
+        <div id="dash-schedule-week"><div style="font-size:12px;color:var(--muted);padding:4px 0">Generate jadwal terlebih dahulu</div></div>
+      </div>
+      <!-- GRPO -->
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">GRPO Bulan Ini</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--teal)" id="s-grpo">—</div><div style="font-size:10px;color:var(--muted)">transaksi</div></div>
+          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--accent)" id="dash-grpo-sup">—</div><div style="font-size:10px;color:var(--muted)">supplier</div></div>
+        </div>
+      </div>
+      <!-- System status -->
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Koneksi Sistem</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">SAP API</span><span class="dot" id="status-sap" title="SAP"></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Firebase Cloud</span><span class="dot" id="status-fb" title="Firebase"></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Data MRP</span><span id="status-mrp" style="font-size:10px;color:var(--muted)">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="dash-alert-area"></div>
-  <div class="card">
-    <div class="card-hdr"><span class="card-title">⚡ Item Kritis — Coverage ≤ <span id="cutoff-lbl">W+2</span></span><button class="btn btn-sm" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button></div>
-    <div id="dash-urgent-table"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
-  </div>
 </div>
 </div>
 
@@ -455,6 +520,101 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 </div>
 </div>
 
+
+
+<!-- DATA SOURCE -->
+<div class="page" id="pg-upload">
+<div class="page-inner">
+  <div class="ph"><div class="ph-l"><h2>Upload Data</h2><p>Upload Master Data, MRP, Material Consumption, dan Real Name</p></div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px">
+
+    <div class="card" style="border-color:rgba(59,127,255,.4)">
+      <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">⭐ Master Data Item</span><span id="master-status" class="dot off"></span></div>
+      <div style="padding:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Minimum Order Qty | Inventory Uom | Supplier</span></div>
+        <div class="upload-zone" id="master-zone" onclick="document.getElementById('master-file').click()" ondragover="dragOver(event,'master-zone')" ondragleave="dragLeave('master-zone')" ondrop="dropFile(event,'master')">
+          <div class="upload-ico">📋</div>
+          <div class="upload-title" id="master-fname">Klik atau drag file Master Data</div>
+          <div class="upload-sub">Projection Stock akan menggunakan item dari file ini</div>
+        </div>
+        <input type="file" id="master-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'master')">
+        <div id="master-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+        <div id="master-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">🏷️ Real Name Item</span><span id="realname-status" class="dot off"></span></div>
+      <div style="padding:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Real Name</span></div>
+        <div class="upload-zone" id="realname-zone" onclick="document.getElementById('realname-file').click()" ondragover="dragOver(event,'realname-zone')" ondragleave="dragLeave('realname-zone')" ondrop="dropFile(event,'realname')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="realname-fname">Klik atau drag file Real Name</div>
+          <div class="upload-sub">Kolom: Item No. + Real Name</div>
+        </div>
+        <input type="file" id="realname-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'realname')">
+        <div id="realname-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+        <div id="realname-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">📊 MRP</span><span id="mrp-status" class="dot off"></span></div>
+      <div style="padding:16px">
+        <div class="upload-zone" id="mrp-zone" onclick="document.getElementById('mrp-file').click()" ondragover="dragOver(event,'mrp-zone')" ondragleave="dragLeave('mrp-zone')" ondrop="dropFile(event,'mrp')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="mrp-fname">Klik atau drag file MRP</div>
+          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
+        </div>
+        <input type="file" id="mrp-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'mrp')">
+        <div id="mrp-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+        <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
+      <div style="padding:16px">
+        <div class="upload-zone" id="matcom-zone" onclick="document.getElementById('matcom-file').click()" ondragover="dragOver(event,'matcom-zone')" ondragleave="dragLeave('matcom-zone')" ondrop="dropFile(event,'matcom')">
+          <div class="upload-ico">📂</div>
+          <div class="upload-title" id="matcom-fname">Klik atau drag file Matcom</div>
+          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
+        </div>
+        <input type="file" id="matcom-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'matcom')">
+        <div id="matcom-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+        <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+
+  </div>
+  <div style="margin-top:16px;max-width:900px" id="upload-preview"></div>
+</div>
+</div>
+
+<!-- HISTORY PROJECTION -->
+
+<!-- HISTORY PROJECTION -->
+<div class="page" id="pg-proj-history">
+<div class="page-inner">
+  <div class="ph">
+    <div class="ph-l"><h2>History Projection Stock</h2><p>Snapshot projection yang disimpan per tanggal</p></div>
+    <div class="ph-r">
+      <button class="btn btn-red btn-sm" onclick="clearAllSnapshots()" style="font-size:11px">🗑 Hapus Semua</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 160px)">
+    <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
+      <div class="card-hdr"><span class="card-title">📅 Daftar Snapshot</span></div>
+      <div id="snapshot-list" style="overflow-y:auto;flex:1;padding:8px"></div>
+    </div>
+    <div>
+      <div id="snapshot-view"><div class="empty"><div class="empty-ico">📸</div><h3>Pilih snapshot dari daftar</h3><p>Klik tanggal di sebelah kiri untuk melihat data historis</p></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- OSPR -->
 
 <!-- OSPR -->
 <div class="page" id="pg-ospr">
@@ -2557,29 +2717,191 @@ function filterUrgent() {
 }
 
 // ─── RENDER DASH URGENT ──────────────────────────────────────────────────────
-function renderDashUrgent() {
-  var cutoff = getCutoff();
-  var items = STATE.projectionData.filter(function(p){
-    return p.isUrgent && (p.actualMRP > 0 || p.max3MRP > 0);
-  }).slice(0,8);
-  if(!items.length){
-    document.getElementById('dash-urgent-table').innerHTML = STATE.projectionData.length ?
-      '<div class="empty" style="padding:32px"><div class="empty-ico">✅</div><h3>Semua item aman</h3></div>' :
-      '<div class="loading"><div class="spin"></div>Sync & Build projection untuk melihat data...</div>';
-    return;
+// ─── NOTIFICATION SYSTEM ─────────────────────────────────────────────────────
+var _notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+var _prevUrgentSet = JSON.parse(localStorage.getItem('prev_urgent_set') || '[]');
+
+function checkNotifications() {
+  if(!STATE.projectionData.length) return;
+  var now = new Date();
+  var todayISO = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var currentUrgent = STATE.projectionData.filter(function(p){ return p.isUrgent && p.max3MRP > 0; }).map(function(p){ return p.productCode; });
+  var prevSet = _prevUrgentSet;
+
+  currentUrgent.forEach(function(code) {
+    if(prevSet.indexOf(code) >= 0) return;
+    var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
+    if(!p) return;
+    var already = _notifications.find(function(n){ return n.type==='new_urgent' && n.code===code && n.date===todayISO; });
+    if(!already) _notifications.unshift({ type:'new_urgent', code:code, name:p.description||code, coverage:p.coverageDateStr||'', doi:p.doiFC||0, itemType:p.itemType||'', date:todayISO, read:false });
+  });
+
+  if(STATE.grpoData.length) {
+    var grpoTodayCodes = STATE.grpoData.filter(function(g){ return g.grpoDate && g.grpoDate.split('/').reverse().join('-') === todayISO; }).map(function(g){ return g.itemCode; });
+    grpoTodayCodes.forEach(function(code) {
+      var isUrg = prevSet.indexOf(code) >= 0 || currentUrgent.indexOf(code) >= 0;
+      if(!isUrg) return;
+      var already = _notifications.find(function(n){ return n.type==='gr_received' && n.code===code && n.date===todayISO; });
+      if(!already) {
+        var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
+        var g = STATE.grpoData.find(function(x){ return x.itemCode === code; });
+        _notifications.unshift({ type:'gr_received', code:code, name:(p&&p.description)||code, qty:(g&&g.qty)||0, uom:(g&&g.uom)||'', date:todayISO, read:false });
+      }
+    });
   }
-  document.getElementById('dash-urgent-table').innerHTML = '<div class="tbl-wrap"><table>' +
-    '<thead><tr><th>Kode</th><th>Deskripsi</th><th>Real Name</th><th>Supplier</th><th>Est. Coverage</th><th>DOI</th><th>Kategori</th><th>Comment</th></tr></thead>' +
-    '<tbody>' + items.map(function(p){return '<tr>' +
-      '<td class="mono" style="font-size:10.5px">' + p.productCode + '</td>' +
-      '<td>' + (p.description||'') + '</td>' +
-      '<td style="color:var(--teal);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis">' + (p.realName||'—') + '</td>' +
-      '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">' + (p.supplier||'—') + '</td>' +
-      '<td class="mono cov-critical">' + p.coverageDateStr + '</td>' +
-      '<td class="mono">' + p.doiFC + '</td>' +
-      '<td>' + catBadge(p.category) + '</td>' +
-      '<td style="font-size:10.5px;color:var(--teal)">' + (p.comment||'—') + '</td>' +
-    '</tr>'}).join('') + '</tbody></table></div>';
+
+  _prevUrgentSet = currentUrgent;
+  if(_notifications.length > 50) _notifications = _notifications.slice(0,50);
+  localStorage.setItem('notifications', JSON.stringify(_notifications));
+  localStorage.setItem('prev_urgent_set', JSON.stringify(_prevUrgentSet));
+  updateNotifBadge();
+}
+
+function updateNotifBadge() {
+  var unread = _notifications.filter(function(n){ return !n.read; }).length;
+  var badge = document.getElementById('notif-badge');
+  if(badge) { badge.textContent = unread; badge.style.display = unread > 0 ? '' : 'none'; }
+}
+
+function toggleNotifPanel() {
+  var panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  var isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) { renderNotifList(); _notifications.forEach(function(n){ n.read=true; }); localStorage.setItem('notifications', JSON.stringify(_notifications)); updateNotifBadge(); }
+}
+
+function renderNotifList() {
+  var el = document.getElementById('notif-list');
+  if(!el) return;
+  if(!_notifications.length) { el.innerHTML='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Tidak ada notifikasi</div>'; return; }
+  el.innerHTML = _notifications.map(function(n){
+    var icon = n.type==='new_urgent' ? '⚠' : '✓';
+    var color = n.type==='new_urgent' ? 'var(--red)' : 'var(--green)';
+    var title = n.type==='new_urgent' ? 'Baru urgent · coverage '+n.coverage+' · DOI '+n.doi : 'GR diterima · qty '+n_id(n.qty)+' '+n.uom;
+    var tb = n.itemType ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:4px">'+n.itemType+'</span>' : '';
+    return '<div style="padding:10px 12px;border-bottom:0.5px solid var(--border);display:flex;gap:10px">'+
+      '<span style="color:'+color+';font-size:14px;flex-shrink:0;margin-top:1px">'+icon+'</span>'+
+      '<div style="min-width:0"><div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+n.name+tb+'</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:1px">'+title+'</div>'+
+      '<div style="font-size:10px;color:var(--hint);margin-top:1px">'+n.code+' · '+n.date+'</div></div></div>';
+  }).join('');
+}
+
+function clearNotifications() { _notifications=[]; localStorage.setItem('notifications','[]'); updateNotifBadge(); renderNotifList(); }
+
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('notif-panel');
+  var btn = document.getElementById('notif-btn');
+  if(panel && panel.style.display!=='none' && !panel.contains(e.target) && btn && !btn.contains(e.target)) panel.style.display='none';
+});
+
+// ─── DASHBOARD TYPE FILTER ────────────────────────────────────────────────────
+var _dashType = 'ALL';
+
+function switchDashType(type, el) {
+  _dashType = type;
+  document.querySelectorAll('[id^="dtab-"]').forEach(function(t){ t.classList.remove('on'); });
+  if(el) el.classList.add('on');
+  var labels = {ALL:'Semua tipe — RM + PM + FG', RM:'Raw Material (kode 3xxx)', PM:'Packaging Material (kode 4xxx)', FG:'Finished Goods (kode 1xxx)'};
+  var lbl = document.getElementById('dash-type-label');
+  if(lbl) lbl.textContent = labels[type];
+  renderDashboard();
+}
+
+function renderDashboard() {
+  var proj = STATE.projectionData;
+  var filtProj = _dashType==='ALL' ? proj : proj.filter(function(p){ return p.itemType===_dashType; });
+  var filtPO = _dashType==='ALL' ? STATE.poData : STATE.poData.filter(function(p){ var t=/^3/.test(p.itemCode||'')?'RM':(/^4/.test(p.itemCode||'')?'PM':'FG'); return t===_dashType; });
+  var urgentItems = filtProj.filter(function(p){ return p.isUrgent; });
+
+  var urgEl=document.getElementById('s-urgent'), totEl=document.getElementById('s-total'), poEl=document.getElementById('s-po');
+  if(urgEl){ urgEl.textContent=urgentItems.length||'—'; urgEl.className='stat-val '+(urgentItems.length>10?'red':urgentItems.length>0?'amber':'green'); }
+  if(totEl) totEl.textContent=filtProj.length||'—';
+  if(poEl)  poEl.textContent=filtPO.length||'—';
+
+  var unconf = STATE.scheduleData.filter(function(s){
+    if(s.status==='confirmed') return false;
+    if(_dashType==='ALL') return true;
+    return (s.entries||[]).some(function(e){ return e.item && e.item.itemType===_dashType; });
+  }).length;
+  var unconfEl=document.getElementById('s-unconfirmed'); if(unconfEl) unconfEl.textContent=unconf||'—';
+
+  var subUrg=document.getElementById('dash-sub-urgent'); if(subUrg) subUrg.textContent=_dashType==='ALL'?'semua tipe':_dashType+' only';
+  var subTot=document.getElementById('dash-sub-total'); if(subTot) subTot.textContent=_dashType==='ALL'?'RM + PM + FG':_dashType+' items';
+
+  var types = _dashType==='ALL' ? ['RM','PM','FG'] : [_dashType];
+  var barsEl = document.getElementById('dash-stock-bars');
+  if(barsEl) {
+    barsEl.style.gridTemplateColumns = 'repeat('+types.length+',minmax(0,1fr))';
+    barsEl.innerHTML = types.map(function(t){
+      var items=proj.filter(function(p){ return p.itemType===t; });
+      var under=items.filter(function(p){ return p.category==='UNDER'; }).length;
+      var good=items.filter(function(p){ return p.category==='GOOD'; }).length;
+      var over=items.filter(function(p){ return p.category==='OVER'; }).length;
+      var total=items.length||1;
+      function bar(lbl,n,col){ var pct=Math.round(n/total*100); return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="font-size:10px;color:var(--muted);width:40px">'+lbl+'</span><div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div><span style="font-size:11px;color:var(--muted);width:22px;text-align:right">'+n+'</span></div>'; }
+      return '<div class="card" style="padding:14px 16px">'+
+        '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Status Stock · '+t+'</div>'+
+        '<div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap"><span class="badge b-red">UNDER '+under+'</span><span class="badge b-green">GOOD '+good+'</span><span class="badge b-blue">OVER '+over+'</span></div>'+
+        bar('UNDER',under,'var(--red)')+bar('GOOD',good,'var(--green)')+bar('OVER',over,'var(--accent)')+
+        '<div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:10px;color:var(--muted)">Total '+items.length+' item</span><span style="font-size:10px;color:var(--muted)">'+Math.round(good/total*100)+'% aman</span></div>'+
+      '</div>';
+    }).join('');
+  }
+
+  renderDashUrgent(urgentItems);
+  renderDashSchedule();
+
+  var sapDot=document.getElementById('status-sap'); if(sapDot) sapDot.className='dot'+(Object.keys(STATE.stockData||{}).length?'':' off');
+  var fbDot=document.getElementById('status-fb'); if(fbDot) fbDot.className='dot'+(_fbReady?'':' off');
+  var mrpTxt=document.getElementById('status-mrp'); if(mrpTxt) mrpTxt.textContent=STATE.mrpData?Object.keys(STATE.mrpData).length+' item':'Belum dimuat';
+  var grpoSups={}; STATE.grpoData.forEach(function(g){ if(g.supplierName) grpoSups[g.supplierName]=true; });
+  var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'—';
+}
+
+function renderDashSchedule() {
+  var el = document.getElementById('dash-schedule-week'); if(!el) return;
+  var now=new Date(); var dow=now.getDay(); var daysToMon=dow===0?1:(8-dow);
+  var monDate=new Date(now); monDate.setDate(now.getDate()+daysToMon);
+  var weekISOs=[]; for(var i=0;i<5;i++){ var d=new Date(monDate); d.setDate(monDate.getDate()+i); weekISOs.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+  var dayNames=['Sen','Sel','Rab','Kam','Jum'];
+  var dayColors=['var(--accent)','var(--accent)','var(--green)','var(--amber)','var(--teal)'];
+  var byDay={};
+  STATE.scheduleData.forEach(function(s){
+    var iso=s.date&&s.date.includes('/')?s.date.split('/').reverse().join('-'):s.date;
+    if(weekISOs.indexOf(iso)<0) return;
+    if(_dashType!=='ALL'&&!(s.entries||[]).some(function(e){ return e.item&&e.item.itemType===_dashType; })) return;
+    if(!byDay[iso]) byDay[iso]=[]; byDay[iso].push(s);
+  });
+  var rows = weekISOs.map(function(iso,idx){
+    var list=byDay[iso]; if(!list||!list.length) return '';
+    var types={}; list.forEach(function(s){ (s.entries||[]).forEach(function(e){ if(e.item) types[e.item.itemType]=true; }); });
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:'+dayColors[idx]+';display:inline-block;flex-shrink:0"></span><span style="font-size:12px">'+dayNames[idx]+' '+iso.split('-').slice(1).reverse().join('/')+'</span></div>'+
+      '<div style="display:flex;gap:4px"><span class="badge b-gray" style="font-size:10px">'+list.length+' sup</span><span class="badge b-gray" style="font-size:10px">'+Object.keys(types).join('+')+'</span></div></div>';
+  }).filter(Boolean).join('');
+  el.innerHTML = rows || '<div style="font-size:12px;color:var(--muted);padding:4px 0">Tidak ada jadwal minggu ini</div>';
+}
+
+function renderDashUrgent(urgentItems) {
+  var el = document.getElementById('dash-urgent-table'); if(!el) return;
+  var items = (urgentItems||STATE.projectionData.filter(function(p){ return p.isUrgent; })).slice(0,6);
+  if(!items.length){ el.innerHTML=STATE.projectionData.length?'<div class="empty" style="padding:24px"><div class="empty-ico">✅</div><h3>Semua item aman</h3></div>':'<div class="loading"><div class="spin"></div>Sync & Build projection...</div>'; return; }
+  var extra = (urgentItems||[]).length > 6 ? '<div style="padding:6px 0;font-size:11px;color:var(--muted);text-align:center">+ '+((urgentItems.length)-6)+' item lainnya</div>' : '';
+  el.innerHTML = items.map(function(p){
+    var isRed=p.doiFCNum<5; var dotColor=isRed?'var(--red)':'var(--amber)';
+    var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">'+
+          '<span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.description+'</span>'+
+          '<span class="mono cov-critical" style="font-size:11px;flex-shrink:0">'+p.coverageDateStr+'</span>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
+      '</div></div>';
+  }).join('') + extra;
 }
 
 function updateDashStats() {
@@ -2589,8 +2911,13 @@ function updateDashStats() {
   document.getElementById('s-unconfirmed').textContent = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'}).length || '—';
   var urgent = STATE.projectionData.filter(function(p){return p.isUrgent}).length;
   document.getElementById('s-urgent').textContent = urgent || '—';
-  if(STATE.projectionData.length) renderDashUrgent();
+  var nb = document.getElementById('nb-urgent');
+  if(nb){ nb.style.display=urgent>0?'':'none'; if(urgent>0) nb.textContent=urgent; }
+  renderDashboard();
+  checkNotifications();
+  updateNotifBadge();
 }
+
 
 // ─── SCHEDULE ────────────────────────────────────────────────────────────────
 function getWorkdays(from, n) {
