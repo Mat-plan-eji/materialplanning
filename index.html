@@ -284,7 +284,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
       <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v5.16b</span></p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -2492,10 +2492,11 @@ function _doBuildProjection() {
   if(nb) { nb.style.display = urgentCount > 0 ? '' : 'none'; if(urgentCount > 0) nb.textContent = urgentCount; }
 
   renderProjection();
-  renderDashUrgent();
   populateSKUFilter();
   // Restore sync timestamp setelah build selesai
   if(_lastSyncMsg) document.getElementById('dash-sub').textContent = _lastSyncMsg;
+  // Update seluruh dashboard (stat cards, stock bars, jadwal, item kritis)
+  updateDashStats();
   toast('Projection: ' + projection.length + ' item, ' + urgentCount + ' urgent \u2713', 'ok');
 }
 function getCutoff() {
@@ -2791,7 +2792,7 @@ function checkNotifications() {
     var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
     if(!p) return;
     var already = _notifications.find(function(n){ return n.type==='new_urgent' && n.code===code && n.date===todayISO; });
-    if(!already) _notifications.unshift({ type:'new_urgent', code:code, name:p.description||code, coverage:p.coverageDateStr||'', doi:p.doiFC||0, itemType:p.itemType||'', date:todayISO, read:false });
+    if(!already) _notifications.unshift({ type:'new_urgent', code:code, name:_dispName(p)||code, coverage:p.coverageDateStr||'', doi:p.doiFC||0, itemType:p.itemType||'', date:todayISO, read:false });
   });
 
   if(STATE.grpoData.length) {
@@ -2803,7 +2804,7 @@ function checkNotifications() {
       if(!already) {
         var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
         var g = STATE.grpoData.find(function(x){ return x.itemCode === code; });
-        _notifications.unshift({ type:'gr_received', code:code, name:(p&&p.description)||code, qty:(g&&g.qty)||0, uom:(g&&g.uom)||'', date:todayISO, read:false });
+        _notifications.unshift({ type:'gr_received', code:code, name:(p?_dispName(p):'')||code, qty:(g&&g.qty)||0, uom:(g&&g.uom)||'', date:todayISO, read:false });
       }
     });
   }
@@ -3312,7 +3313,11 @@ function renderSchedule() {
     var dailyQty = 0;
     entries.forEach(function(e){
       (e.entries||[]).forEach(function(en){
-        (en.pos||[]).forEach(function(po){ dailyQty += (po.openQty||0); });
+        (en.pos||[]).forEach(function(po){
+          var _pk = po.docNum + '_' + po.itemCode;
+          var _ov = STATE.poOverrides[_pk] || {};
+          dailyQty += (_ov.reqQtyOverride !== undefined ? _ov.reqQtyOverride : (po.openQty||0));
+        });
       });
     });
     totalAll += entries.length;
@@ -3469,7 +3474,13 @@ function buildWAMsg(entry) {
   var itemList = '';
   if(entry.entries) {
     entry.entries.forEach(function(e){
-      (e.pos||[]).forEach(function(p){ itemList += '• PO ' + p.docNum + ' - ' + p.itemName + ' (' + n_id(p.openQty||0) + ' ' + p.uom + ')\n'; });
+      (e.pos||[]).forEach(function(p){
+        var _pk = p.docNum + '_' + p.itemCode;
+        var _ov = STATE.poOverrides[_pk] || {};
+        var _qty = _ov.reqQtyOverride !== undefined ? _ov.reqQtyOverride : (p.openQty||0);
+        var _nm = (STATE.realNameData && STATE.realNameData[p.itemCode] && /^3/.test(p.itemCode||'')) ? STATE.realNameData[p.itemCode] : (p.itemName||'');
+        itemList += '• PO ' + p.docNum + ' - ' + _nm + ' (' + n_id(_qty) + ' ' + p.uom + ')\n';
+      });
       if(!(e.pos||[]).length) itemList += '• ' + _dispName(e.item) + '\n';
     });
   } else itemList = entry.items + '\n';
@@ -3556,13 +3567,15 @@ function openFbModal(idx) {
       var itemCode = po.itemCode || '';
       var poKey = po.docNum && po.docNum !== '—' ? (po.docNum + '_' + itemCode) : null;
       var ovr = poKey && STATE.poOverrides[poKey] ? STATE.poOverrides[poKey] : {};
-      var reqQty = po.openQty || 0;
+      var origQty = po.openQty || 0;
+      var reqQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : origQty;
       var confQty = ovr.confQty !== undefined ? ovr.confQty : reqQty;
       var isConf = ovr.confDate ? true : false;
       html += '<tr style="border-bottom:1px solid rgba(36,45,64,.4)">';
+      var _rmName = (STATE.realNameData && STATE.realNameData[itemCode] && /^3/.test(itemCode)) ? STATE.realNameData[itemCode] : (po.itemName||'');
       html += '<td style="padding:7px 10px">'
             + '<div style="font-size:10px;font-family:var(--mono);color:var(--muted)">' + itemCode + '</div>'
-            + '<div style="font-size:11.5px">' + (po.itemName||'') + '</div>'
+            + '<div style="font-size:11.5px">' + _rmName + '</div>'
             + '</td>';
       html += '<td style="padding:7px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + (po.docNum||'—') + '</td>';
       html += '<td style="padding:7px 10px;text-align:right;font-family:var(--mono)">' + n_id(reqQty) + '</td>';
@@ -4556,7 +4569,16 @@ function _appInit() {
   PROJ_HIGHLIGHTED  = JSON.parse(localStorage.getItem('proj_highlighted')  || '{}');
 
   var ls = localStorage.getItem('last_sync');
-  if(ls) { _lastSyncMsg = 'Sync: ' + ls; document.getElementById('dash-sub').textContent = _lastSyncMsg; }
+  if(ls) {
+    // Jika format lama tanpa jam, tambahkan jam saat ini
+    if(ls && !ls.includes(':')) {
+      var _n = new Date();
+      ls = ls + ' ' + String(_n.getHours()).padStart(2,'0')+':'+String(_n.getMinutes()).padStart(2,'0')+':'+String(_n.getSeconds()).padStart(2,'0');
+      localStorage.setItem('last_sync', ls);
+    }
+    _lastSyncMsg = 'Sync: ' + ls;
+    document.getElementById('dash-sub').textContent = _lastSyncMsg;
+  }
 
   if(STATE.masterData) {
     var mEl = document.getElementById('master-status'); if(mEl) mEl.className='dot';
