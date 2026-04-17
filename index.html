@@ -284,7 +284,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
       <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v5.16b</span></p>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v6</span></p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -544,69 +544,49 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <!-- DATA SOURCE -->
 <div class="page" id="pg-upload">
 <div class="page-inner">
-  <div class="ph"><div class="ph-l"><h2>Upload Data</h2><p>Upload Master Data, MRP, Material Consumption, dan Real Name</p></div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px">
+  <div class="ph">
+    <div class="ph-l"><h2>Data Source (Sheets)</h2><p>Koneksi ke Google Sheets — Master Data, MRP, Real Name</p></div>
+    <div class="ph-r"><button class="btn btn-primary" onclick="loadAllSheets()">↺ Muat Semua</button></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;max-width:1100px">
 
     <div class="card" style="border-color:rgba(59,127,255,.4)">
-      <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">⭐ Master Data Item</span><span id="master-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Minimum Order Qty | Inventory Uom | Supplier</span></div>
-        <div class="upload-zone" id="master-zone" onclick="document.getElementById('master-file').click()" ondragover="dragOver(event,'master-zone')" ondragleave="dragLeave('master-zone')" ondrop="dropFile(event,'master')">
-          <div class="upload-ico">📋</div>
-          <div class="upload-title" id="master-fname">Klik atau drag file Master Data</div>
-          <div class="upload-sub">Projection Stock akan menggunakan item dari file ini</div>
-        </div>
-        <input type="file" id="master-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'master')">
-        <div id="master-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+      <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">⭐ Master Data</span><span id="master-status" class="dot off"></span></div>
+      <div style="padding:14px">
+        <div class="fg"><label style="font-size:11px">Google Sheets URL</label><input id="master-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11px"></div>
+        <div class="fg"><label style="font-size:11px">Nama Tab (opsional)</label><input id="master-sheet" placeholder="Sheet1" style="width:100%;font-size:11px"></div>
+        <button class="btn btn-sm btn-primary" onclick="loadSheetData('master')" style="width:100%;margin-top:6px">Muat Master Data</button>
+        <div id="master-info" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
         <div id="master-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-hdr"><span class="card-title">🏷️ Real Name Item</span><span id="realname-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Format kolom: <span style="font-family:var(--mono);color:var(--teal)">Item No. | Item Description | Real Name</span></div>
-        <div class="upload-zone" id="realname-zone" onclick="document.getElementById('realname-file').click()" ondragover="dragOver(event,'realname-zone')" ondragleave="dragLeave('realname-zone')" ondrop="dropFile(event,'realname')">
-          <div class="upload-ico">📂</div>
-          <div class="upload-title" id="realname-fname">Klik atau drag file Real Name</div>
-          <div class="upload-sub">Kolom: Item No. + Real Name</div>
-        </div>
-        <input type="file" id="realname-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'realname')">
-        <div id="realname-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="realname-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="card-hdr"><span class="card-title">📊 MRP</span><span id="mrp-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div class="upload-zone" id="mrp-zone" onclick="document.getElementById('mrp-file').click()" ondragover="dragOver(event,'mrp-zone')" ondragleave="dragLeave('mrp-zone')" ondrop="dropFile(event,'mrp')">
-          <div class="upload-ico">📂</div>
-          <div class="upload-title" id="mrp-fname">Klik atau drag file MRP</div>
-          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
-        </div>
-        <input type="file" id="mrp-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'mrp')">
-        <div id="mrp-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
+      <div style="padding:14px">
+        <div class="fg"><label style="font-size:11px">Google Sheets URL</label><input id="mrp-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11px"></div>
+        <div class="fg"><label style="font-size:11px">Nama Tab (opsional)</label><input id="mrp-sheet" placeholder="Sheet1" style="width:100%;font-size:11px"></div>
+        <button class="btn btn-sm btn-primary" onclick="loadSheetData('mrp')" style="width:100%;margin-top:6px">Muat MRP</button>
+        <div id="mrp-info" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
         <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-hdr"><span class="card-title">📈 Material Consumption</span><span id="matcom-status" class="dot off"></span></div>
-      <div style="padding:16px">
-        <div class="upload-zone" id="matcom-zone" onclick="document.getElementById('matcom-file').click()" ondragover="dragOver(event,'matcom-zone')" ondragleave="dragLeave('matcom-zone')" ondrop="dropFile(event,'matcom')">
-          <div class="upload-ico">📂</div>
-          <div class="upload-title" id="matcom-fname">Klik atau drag file Matcom</div>
-          <div class="upload-sub">Format: Excel (.xlsx / .xls) atau CSV</div>
-        </div>
-        <input type="file" id="matcom-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this,'matcom')">
-        <div id="matcom-info" style="margin-top:10px;font-size:11.5px;color:var(--muted)"></div>
-        <div id="matcom-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+      <div class="card-hdr"><span class="card-title">🏷️ Real Name</span><span id="realname-status" class="dot off"></span></div>
+      <div style="padding:14px">
+        <div class="fg"><label style="font-size:11px">Google Sheets URL</label><input id="realname-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11px"></div>
+        <div class="fg"><label style="font-size:11px">Nama Tab (opsional)</label><input id="realname-sheet" placeholder="Sheet1" style="width:100%;font-size:11px"></div>
+        <button class="btn btn-sm btn-primary" onclick="loadSheetData('realname')" style="width:100%;margin-top:6px">Muat Real Name</button>
+        <div id="realname-info" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
+        <div id="realname-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
     </div>
 
   </div>
-  <div style="margin-top:16px;max-width:900px" id="upload-preview"></div>
+  <div style="margin-top:14px;padding:10px 14px;background:var(--bg3);border-radius:var(--r);max-width:1100px;font-size:11px;color:var(--muted)">
+    <strong style="color:var(--text)">Catatan:</strong> Pastikan Google Sheets sudah di-share sebagai <strong>"Anyone with the link"</strong> agar bisa dibaca. URL dan tab tersimpan di cloud (Firebase), tidak perlu input ulang di laptop lain.
+  </div>
 </div>
 </div>
 
