@@ -293,11 +293,19 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           🔔 Notifikasi<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:99px;font-weight:600">0</span>
         </button>
         <div id="notif-panel" style="display:none;position:absolute;right:0;top:calc(100%+6px);width:360px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.2)">
-          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <span style="font-size:13px;font-weight:500">Notifikasi</span>
-            <button class="btn btn-xs btn-red" onclick="clearNotifications()">Hapus Semua</button>
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:13px;font-weight:500">Notifikasi</span>
+              <button class="btn btn-xs btn-red" onclick="clearNotifications()">Hapus Semua</button>
+            </div>
+            <div style="display:flex;gap:3px">
+              <div class="tab on" id="ntab-ALL" onclick="switchNotifType('ALL',this)" style="padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;color:var(--muted)">Semua</div>
+              <div class="tab" id="ntab-RM" onclick="switchNotifType('RM',this)" style="padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;color:var(--muted)">RM</div>
+              <div class="tab" id="ntab-PM" onclick="switchNotifType('PM',this)" style="padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;color:var(--muted)">PM</div>
+              <div class="tab" id="ntab-FG" onclick="switchNotifType('FG',this)" style="padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;color:var(--muted)">FG</div>
+            </div>
           </div>
-          <div id="notif-list" style="max-height:380px;overflow-y:auto;padding:8px"></div>
+          <div id="notif-list" style="max-height:380px;overflow-y:auto;padding:4px 0"></div>
         </div>
       </div>
       <!-- Sync progress inline -->
@@ -342,7 +350,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
         <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
       </div>
-      <div id="dash-urgent-table"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
+      <div id="dash-urgent-table" style="max-height:360px;overflow-y:auto"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <!-- Schedule this week -->
@@ -1550,6 +1558,19 @@ function renderPO() {
     return;
   }
 
+  // Sort: supplier ASC → itemCode ASC → poReqDate ASC
+  filtered = filtered.slice().sort(function(a, b) {
+    var sa = (a.supplierName||'').toLowerCase();
+    var sb = (b.supplierName||'').toLowerCase();
+    if(sa !== sb) return sa < sb ? -1 : 1;
+    var ca = (a.itemCode||'').toLowerCase();
+    var cb = (b.itemCode||'').toLowerCase();
+    if(ca !== cb) return ca < cb ? -1 : 1;
+    // poReqDate as DD/MM/YYYY → compare as ISO
+    function toISO(d){ if(!d) return '9999'; var p=String(d).split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d; }
+    return toISO(a.poReqDate).localeCompare(toISO(b.poReqDate));
+  });
+
   var rows = filtered.map(function(p){
     var key = p.docNum + '_' + p.itemCode;
     var ovr = STATE.poOverrides[key] || {};
@@ -2720,6 +2741,7 @@ function filterUrgent() {
 // ─── NOTIFICATION SYSTEM ─────────────────────────────────────────────────────
 var _notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
 var _prevUrgentSet = JSON.parse(localStorage.getItem('prev_urgent_set') || '[]');
+var _notifType = 'ALL';
 
 function checkNotifications() {
   if(!STATE.projectionData.length) return;
@@ -2771,16 +2793,29 @@ function toggleNotifPanel() {
   if(!isOpen) { renderNotifList(); _notifications.forEach(function(n){ n.read=true; }); localStorage.setItem('notifications', JSON.stringify(_notifications)); updateNotifBadge(); }
 }
 
+function switchNotifType(type, el) {
+  _notifType = type;
+  document.querySelectorAll('[id^="ntab-"]').forEach(function(t){ t.classList.remove('on'); });
+  if(el) el.classList.add('on');
+  renderNotifList();
+}
+
 function renderNotifList() {
   var el = document.getElementById('notif-list');
   if(!el) return;
-  if(!_notifications.length) { el.innerHTML='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Tidak ada notifikasi</div>'; return; }
-  el.innerHTML = _notifications.map(function(n){
+  var list = _notifType === 'ALL' ? _notifications
+    : _notifications.filter(function(n){ return n.itemType === _notifType; });
+  if(!list.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Tidak ada notifikasi' + (_notifType !== 'ALL' ? ' untuk ' + _notifType : '') + '</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(n){
     var icon = n.type==='new_urgent' ? '⚠' : '✓';
     var color = n.type==='new_urgent' ? 'var(--red)' : 'var(--green)';
     var title = n.type==='new_urgent' ? 'Baru urgent · coverage '+n.coverage+' · DOI '+n.doi : 'GR diterima · qty '+n_id(n.qty)+' '+n.uom;
     var tb = n.itemType ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:4px">'+n.itemType+'</span>' : '';
-    return '<div style="padding:10px 12px;border-bottom:0.5px solid var(--border);display:flex;gap:10px">'+
+    var bg = !n.read ? 'background:var(--bg3)' : '';
+    return '<div style="padding:10px 12px;border-bottom:0.5px solid var(--border);display:flex;gap:10px;'+bg+'">'+
       '<span style="color:'+color+';font-size:14px;flex-shrink:0;margin-top:1px">'+icon+'</span>'+
       '<div style="min-width:0"><div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+n.name+tb+'</div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:1px">'+title+'</div>'+
@@ -2886,11 +2921,16 @@ function renderDashSchedule() {
 
 function renderDashUrgent(urgentItems) {
   var el = document.getElementById('dash-urgent-table'); if(!el) return;
-  var items = (urgentItems||STATE.projectionData.filter(function(p){ return p.isUrgent; })).slice(0,6);
+  var items = (urgentItems || STATE.projectionData.filter(function(p){ return p.isUrgent; }));
+  // Sort by coverage date ASC (paling urgent = paling atas)
+  items = items.slice().sort(function(a,b){
+    var ai = a.coverageDateISO || (a.coverageDateStr&&a.coverageDateStr.includes('/')?a.coverageDateStr.split('/').reverse().join('-'):'9999');
+    var bi = b.coverageDateISO || (b.coverageDateStr&&b.coverageDateStr.includes('/')?b.coverageDateStr.split('/').reverse().join('-'):'9999');
+    return ai.localeCompare(bi);
+  });
   if(!items.length){ el.innerHTML=STATE.projectionData.length?'<div class="empty" style="padding:24px"><div class="empty-ico">✅</div><h3>Semua item aman</h3></div>':'<div class="loading"><div class="spin"></div>Sync & Build projection...</div>'; return; }
-  var extra = (urgentItems||[]).length > 6 ? '<div style="padding:6px 0;font-size:11px;color:var(--muted);text-align:center">+ '+((urgentItems.length)-6)+' item lainnya</div>' : '';
   el.innerHTML = items.map(function(p){
-    var isRed=p.doiFCNum<5; var dotColor=isRed?'var(--red)':'var(--amber)';
+    var isRed=(p.doiFC||0)<5; var dotColor=isRed?'var(--red)':'var(--amber)';
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
@@ -2901,7 +2941,7 @@ function renderDashUrgent(urgentItems) {
         '</div>'+
         '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
       '</div></div>';
-  }).join('') + extra;
+  }).join('');
 }
 
 function updateDashStats() {
