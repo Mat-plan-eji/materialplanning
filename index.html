@@ -347,6 +347,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('coverage',this)"> Est. Coverage</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('kategori',this)"> Kategori</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('endstock',this)"> End Stock vs MRP</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('mrpnext',this)"> MRP Next Month</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('endstocknext',this)"> End Stock Next</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('ospo',this)"> OSPO Months</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('ospr',this)"> OSPR</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('pctusage',this)"> % Usg vs Forecast</label>
@@ -2098,9 +2100,10 @@ function processMasterData(rows) {
     if(!code || !code.match(/^\d/)) return;
     var desc = String(row['Item Description'] || row['Description'] || '').trim();
     var moq = parseIDNum(row['Minimum Order Qty'] || row['MOQ'] || '0');
+    var multiple = parseIDNum(row['Multiple'] || row['Multipel'] || row['Order Multiple'] || row['multiple'] || '0');
     var uom = String(row['Inventory Uom'] || row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim();
     var supplier = String(row['Supplier'] || row['Supplier Name'] || row['Vendor'] || '').trim();
-    result[code] = { desc: desc, moq: moq, uom: uom, supplier: supplier };
+    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier };
   });
   return result;
 }
@@ -2149,6 +2152,7 @@ function _doBuildProjection() {
   var now = new Date();
   var todayISO = now.toISOString().split('T')[0];
   var daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  var nextMonthName = monthNamesID[(now.getMonth() + 1) % 12];
   var projection = [];
 
   // Build supplier map: Master Data > OSPO > PO > Matcom
@@ -2224,6 +2228,9 @@ function _doBuildProjection() {
 
     var actualMRP = mrp.actualMRP || 0;
     var max3MRP = mrp.max3MRP || 0;
+
+    // MRP bulan depan dari data months
+    var mrpNextMonth = (mrp.months && mrp.months[nextMonthName]) ? mrp.months[nextMonthName] : 0;
     var avgUsg = matcom.avgUsg || 0;
 
     var stockBTG = stockData[code] ? Math.round(stockData[code].btg * 100) / 100 : 0;
@@ -2352,6 +2359,8 @@ function _doBuildProjection() {
       ospoJuni: Math.round(ospoJuni), ospoJulDst: Math.round(ospoJulDst),
       comment: comment,
       pctUsageVsForecast: pctUsageVsForecast,
+      mrpNextMonth: mrpNextMonth,
+      endStockNext: Math.round(endStock - mrpNextMonth),
       itemType: itemType, isUrgent: isUrgent
     });
   });
@@ -2365,7 +2374,7 @@ function _doBuildProjection() {
       doiMatcom:p.doiMatcom,actualMRP:p.actualMRP,max3MRP:p.max3MRP,
       actualUsageDaily:p.actualUsageDaily,totalIncoming:p.totalIncoming,totalOSPR:p.totalOSPR,
       coverageDateStr:p.coverageDateStr,category:p.category,endStock:p.endStock,
-      comment:p.comment,itemType:p.itemType};
+      mrpNextMonth:p.mrpNextMonth,endStockNext:p.endStockNext,comment:p.comment,itemType:p.itemType};
   });
   try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {
     var keys = Object.keys(STATE.projectionHistory).sort();
@@ -2517,6 +2526,8 @@ function renderProjection() {
       td('<span class="mono ' + covClass + '">' + (p.coverageDateStr||'') + '</span>','coverage') +
       td(catBadge(p.category),'kategori') +
       td('<span class="mono" style="color:' + ((p.endStock||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + n_id(p.endStock||0) + '</span>','endstock','text-align:right') +
+      td('<span class="mono">' + n_id(p.mrpNextMonth||0) + '</span>','mrpnext','text-align:right') +
+      td('<span class="mono" style="color:' + ((p.endStockNext||0) < 0 ? 'var(--red)' : 'var(--text)') + '">' + n_id(p.endStockNext||0) + '</span>','endstocknext','text-align:right') +
       ospoStr +
       td('<span class="mono">' + n_id(p.totalOSPR||0) + '</span>','ospr','text-align:right') +
       pctStr +
@@ -2546,7 +2557,7 @@ function renderProjection() {
     '<th><input class="th-filter" oninput="projColFilters.realname=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.realname||'') + '"></th>' +
     '<th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.supplier=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.supplier||'') + '"></th>' +
-    '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
+    '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.cat=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.cat||'') + '"></th>' +
     '<th></th>' +
     (colHidden('ospo') ? '' : '<th></th>') +
@@ -2578,6 +2589,8 @@ function renderProjection() {
     th('Est. Coverage','coverage') +
     th('Kategori','kategori') +
     th('End Stock vs MRP','endstock') +
+    th('MRP Next Month','mrpnext') +
+    th('End Stock Next','endstocknext') +
     ospoHeaders +
     th('OSPR','ospr') +
     th('% Usg vs FC','pctusage') +
@@ -2883,14 +2896,23 @@ function generateSchedule() {
       var item = e.item;
       var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return String(a.docNum).localeCompare(String(b.docNum)); });
       var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0));
+      // Ambil multiple dari master data — PO dengan openQty < multiple dilewati
+      var masterItem = STATE.masterData && STATE.masterData[item.productCode];
+      var multipleQty = masterItem ? (masterItem.multiple || 0) : 0;
+      // Filter: hanya PO yang openQty >= multiple (kalau multiple > 0)
+      var eligiblePOs = multipleQty > 0
+        ? sortedPOs.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
+        : sortedPOs;
+      // Fallback: kalau semua difilter, pakai PO pertama (agar tidak kosong total)
+      if(!eligiblePOs.length && sortedPOs.length) eligiblePOs = [sortedPOs[0]];
       var accumulated = 0, pickedPOs = [];
-      for(var pi = 0; pi < sortedPOs.length; pi++) {
-        pickedPOs.push(sortedPOs[pi]);
-        accumulated += (sortedPOs[pi].openQty || 0);
+      for(var pi = 0; pi < eligiblePOs.length; pi++) {
+        pickedPOs.push(eligiblePOs[pi]);
+        accumulated += (eligiblePOs[pi].openQty || 0);
         if(accumulated >= needed && needed > 0) break;
         if(needed === 0 && pi === 0) break;
       }
-      if(!pickedPOs.length && sortedPOs.length) pickedPOs = [sortedPOs[0]];
+      if(!pickedPOs.length && eligiblePOs.length) pickedPOs = [eligiblePOs[0]];
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
       var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
@@ -2988,12 +3010,35 @@ function renderSchedule() {
       var types = {};
       (e.entries||[]).forEach(function(en){ if(en.item && en.item.itemType) types[en.item.itemType]=true; });
       var typeTags = Object.keys(types).map(function(t){ return t==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>': t==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>': '<span class="badge b-green" style="font-size:9px">FG</span>'; }).join('');
+      // Editable date: convert DD/MM/YYYY → ISO for input[type=date]
+      var dateISO = e.date ? (e.date.includes('/') ? e.date.split('/').reverse().join('-') : e.date) : '';
+      // Build per-item editable qty rows
+      var itemEditRows = (e.entries||[]).map(function(en){
+        if(!en.item) return '';
+        var po = en.pos && en.pos[0];
+        var poKey = po ? (po.docNum + '_' + po.itemCode) : '';
+        var ovr = poKey ? (STATE.poOverrides[poKey] || {}) : {};
+        var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
+        var dispQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
+        return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">' +
+          '<span style="font-size:10.5px;color:var(--muted);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (en.item.description||en.item.productCode) + '</span>' +
+          '<input type="number" value="' + dispQty + '" min="0" style="width:80px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono)" ' +
+          'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" ' +
+          'onchange="saveSchedQty(this)" title="Qty request kirim">' +
+          '<span style="font-size:10px;color:var(--muted)">' + (en.item.uom||'') + '</span>' +
+          '</div>';
+      }).join('');
       html += '<div class="scard ' + e.status + '">' +
         '<div class="chk ' + (isOn?'on':'') + '" onclick="toggleApprove(' + idx + ')">' + (isOn?'✓':'') + '</div>' +
-        '<div class="sinfo">' +
+        '<div class="sinfo" style="min-width:0">' +
           '<div class="sinfo-name">' + e.supName + ' ' + sb + typeTags + (e.isManual?'<span class="badge b-amber" style="margin-left:5px">Manual</span>':'') + '</div>' +
-          '<div class="sinfo-items">' + (e.items||'') + '</div>' +
-          (e.feedback ? '<div class="sinfo-fb">✓ ' + e.feedback + '</div>' : '') +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">' +
+            '<span style="font-size:10.5px;color:var(--muted)">Tgl kirim:</span>' +
+            '<input type="date" value="' + dateISO + '" data-sched-idx="' + idx + '" onchange="saveSchedDate(this)" ' +
+            'style="background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 6px;font-size:11px;font-family:var(--mono)">' +
+          '</div>' +
+          itemEditRows +
+          (e.feedback ? '<div class="sinfo-fb" style="margin-top:3px">✓ ' + e.feedback + '</div>' : '') +
           (e.coverageDate ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">Coverage tercepat: ' + e.coverageDate + '</div>' : '') +
         '</div>' +
         '<div class="sacts">' +
@@ -3011,6 +3056,67 @@ function renderSchedule() {
 function switchSchedTab(tab, el) {
   document.querySelectorAll('.tab-bar .tab').forEach(function(t){t.classList.remove('on')});
   el.classList.add('on'); schedTab = tab; renderSchedule();
+}
+
+// ── Edit tanggal jadwal kirim ─────────────────────────────────────────────────
+function saveSchedDate(input) {
+  var idx = parseInt(input.getAttribute('data-sched-idx'));
+  var e = STATE.scheduleData[idx];
+  if(!e) return;
+  var iso = input.value; // YYYY-MM-DD
+  var ddmmyyyy = iso ? iso.split('-').reverse().join('/') : '';
+  e.date = ddmmyyyy;
+  e.isManual = true;
+
+  // Sync ke poOverrides.date untuk semua PO di jadwal ini
+  (e.entries||[]).forEach(function(en){
+    (en.pos||[]).forEach(function(po){
+      var key = po.docNum + '_' + po.itemCode;
+      if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
+      STATE.poOverrides[key].date = iso;
+      STATE.poOverrides[key].isManual = true;
+      STATE.poOverrides[key].isAuto = false;
+    });
+  });
+
+  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  // Re-render tanpa rebuild full — hanya update header hari
+  renderSchedule();
+}
+
+// ── Edit qty request kirim per item ──────────────────────────────────────────
+function saveSchedQty(input) {
+  var idx = parseInt(input.getAttribute('data-sched-idx'));
+  var poKey = input.getAttribute('data-po-key');
+  var newQty = parseFloat(input.value) || 0;
+  var e = STATE.scheduleData[idx];
+  if(!e || !poKey) return;
+
+  // Simpan override qty di poOverrides
+  if(!STATE.poOverrides[poKey]) STATE.poOverrides[poKey] = {};
+  STATE.poOverrides[poKey].reqQtyOverride = newQty;
+
+  // Update items summary string di schedule entry
+  var summaryParts = [];
+  (e.entries||[]).forEach(function(en){
+    if(!en.item) return;
+    var po = en.pos && en.pos[0];
+    var pk = po ? (po.docNum + '_' + po.itemCode) : '';
+    var ovr = pk ? (STATE.poOverrides[pk] || {}) : {};
+    var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
+    var qty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
+    summaryParts.push((en.item.description||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||''));
+  });
+  e.items = summaryParts.join(', ');
+
+  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  toast('Qty disimpan ✓', 'ok');
 }
 function toggleApprove(idx) {
   var e = STATE.scheduleData[idx];
@@ -3812,7 +3918,7 @@ function renderDailyList() {
       itemName: p.itemName||'',
       realName: (STATE.realNameData && STATE.realNameData[p.itemCode]) || '',
       site: (p.site||'').toUpperCase(),
-      openQty: p.openQty||0,
+      openQty: ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : (p.openQty||0),
       uom: p.uom||'',
       confQty: ovr.confQty||'',
       confDate: ovr.confDate||'',
