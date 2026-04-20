@@ -284,7 +284,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
       <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v8</span></p>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v9</span></p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -843,7 +843,8 @@ var CLOUD_KEYS = [
   'suppliers','proj_hidden_cols','proj_snapshots',
   'sheet_url_master','sheet_url_mrp','sheet_url_realname',
   'sheet_tab_master','sheet_tab_mrp','sheet_tab_realname',
-  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync','proj_highlighted'
+  'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync','proj_highlighted',
+  'sap_cache_stock','sap_cache_po','sap_cache_grpo','sap_cache_ospr'
 ];
 
 // ── Sync indicator di header ──────────────────────────────────────────────────
@@ -1030,6 +1031,22 @@ function _applyRealtimeChanges(keys) {
         case 'last_sync':
           if(val) { _lastSyncMsg = 'Sync: ' + val; var el = document.getElementById('dash-sub'); if(el) el.textContent = _lastSyncMsg; }
           break;
+        case 'sap_cache_stock':
+          STATE.stockData = JSON.parse(val || '{}');
+          renderFlags.dash = true;
+          break;
+        case 'sap_cache_po':
+          STATE.poData = JSON.parse(val || '[]');
+          loadOSPO();
+          renderFlags.po = true; renderFlags.dash = true;
+          break;
+        case 'sap_cache_grpo':
+          STATE.grpoData = JSON.parse(val || '[]');
+          renderFlags.dash = true;
+          break;
+        case 'sap_cache_ospr':
+          STATE.osprData = JSON.parse(val || '[]');
+          break;
       }
     } catch(e) { console.warn('Realtime apply error for', k, e.message); }
   });
@@ -1038,7 +1055,13 @@ function _applyRealtimeChanges(keys) {
   if(renderFlags.proj) renderProjection();
   if(renderFlags.sched) renderSchedule();
   if(renderFlags.po) renderPO();
-  if(renderFlags.dash) updateDashStats();
+  if(renderFlags.dash) {
+    // Rebuild projection jika SAP data berubah dari laptop lain
+    if(keys.indexOf('sap_cache_stock') >= 0 || keys.indexOf('sap_cache_po') >= 0) {
+      if(STATE.mrpData) buildProjection();
+    }
+    updateDashStats();
+  }
 
   // Notify user
   _setSyncStatus('saved');
@@ -1575,9 +1598,17 @@ async function syncAll() {
     String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0')+':'+String(_tsd.getSeconds()).padStart(2,'0');
   localStorage.setItem('last_sync', ts);
   _lastSyncMsg = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
-
-  // Set langsung — tidak pakai setTimeout
   document.getElementById('dash-sub').textContent = _lastSyncMsg;
+
+  // ── Simpan SAP data ke Firebase cache agar boot instan ─────────────────────
+  if(!failed.length || results[0].status==='fulfilled') {
+    try {
+      localStorage.setItem('sap_cache_stock', JSON.stringify(STATE.stockData));
+      localStorage.setItem('sap_cache_po',    JSON.stringify(STATE.poData));
+      localStorage.setItem('sap_cache_grpo',  JSON.stringify(STATE.grpoData));
+      localStorage.setItem('sap_cache_ospr',  JSON.stringify(STATE.osprData || []));
+    } catch(e) { console.warn('SAP cache save error:', e.message); }
+  }
 
   if(STATE.mrpData) buildProjection();
   updateDashStats();
@@ -4595,6 +4626,19 @@ function _appInit() {
   STATE.projectionSnapshots = JSON.parse(localStorage.getItem('proj_snapshots')|| '{}');
   STATE.projComments     = JSON.parse(localStorage.getItem('proj_comments')   || '{}');
 
+  // ── Restore SAP data dari cache (Firebase) — boot instan tanpa SAP API ─────
+  try {
+    var cachedStock = localStorage.getItem('sap_cache_stock');
+    var cachedPO    = localStorage.getItem('sap_cache_po');
+    var cachedGRPO  = localStorage.getItem('sap_cache_grpo');
+    var cachedOSPR  = localStorage.getItem('sap_cache_ospr');
+    if(cachedStock) STATE.stockData = JSON.parse(cachedStock);
+    if(cachedPO)    STATE.poData    = JSON.parse(cachedPO);
+    if(cachedGRPO)  STATE.grpoData  = JSON.parse(cachedGRPO);
+    if(cachedOSPR)  STATE.osprData  = JSON.parse(cachedOSPR);
+    if(STATE.poData.length) loadOSPO(); // rebuild ospoData dari poData cache
+  } catch(e) { console.warn('SAP cache restore error:', e.message); }
+
   CFG.url      = localStorage.getItem('sap_url')   || CFG.url;
   CFG.user     = localStorage.getItem('sap_user')  || CFG.user;
   CFG.pass     = localStorage.getItem('sap_pass')  || CFG.pass;
@@ -4664,48 +4708,6 @@ function _appInit() {
   });
 
   scheduleAutoRefresh();
-
-  // ── Auto-sync SAP + auto-build saat boot ──────────────────────────────────────
-  var lastSync = localStorage.getItem('last_sync');
-  var needSync = !STATE.stockData || !Object.keys(STATE.stockData).length;
-  if(!needSync && lastSync) {
-    try {
-      var parts = lastSync.split(' ');
-      var dp = parts[0].split('/');
-      var tp = (parts[1]||'00:00:00').split(':');
-      var lastSyncDate = new Date(parseInt(dp[2]), parseInt(dp[1])-1, parseInt(dp[0]),
-        parseInt(tp[0]||0), parseInt(tp[1]||0), parseInt(tp[2]||0));
-      needSync = (Date.now() - lastSyncDate.getTime()) > 3600000;
-    } catch(e) { needSync = true; }
-  }
-  if(needSync && CFG.url) {
-    setTimeout(function(){
-      toast('Auto-sync SAP...', 'inf');
-      syncAll().then(function(){
-        // Auto-freeze stock hari ini jika belum
-        if(Object.keys(STATE.stockData).length) {
-          var _today = new Date().toISOString().split('T')[0];
-          if(!STATE.stockHistory[_today]) {
-            STATE.stockHistory[_today] = {};
-            Object.keys(STATE.stockData).forEach(function(ic){
-              STATE.stockHistory[_today][ic] = { btg: STATE.stockData[ic].btg, sng: STATE.stockData[ic].sng };
-            });
-            localStorage.setItem('stock_history', JSON.stringify(STATE.stockHistory));
-            cloudSave('stock_history', JSON.stringify(STATE.stockHistory));
-            toast('Stock di-freeze otomatis ✓', 'ok');
-          }
-        }
-        // Setelah sync selesai, pastikan sheets dimuat dan projection di-build
-        if(!STATE.mrpData) {
-          var hasSheetUrl = localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp');
-          if(hasSheetUrl) {
-            toast('Memuat Sheets & Build Projection...', 'inf');
-            loadAllSheets(true);
-          }
-        }
-      });
-    }, 800);
-  }
 }
 
 // Kick off — tries Firebase first, falls back to localStorage
