@@ -427,7 +427,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div class="card" style="padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <span style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📦 GRPO Hari Ini <span id="s-grpo-today" style="font-size:10px;background:var(--teal);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">0</span></span>
-          <span style="font-size:10px;color:var(--muted)" id="grpo-poll-status"></span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--muted)" id="grpo-poll-status"></span><span onclick="_pollGRPONow()" style="cursor:pointer;font-size:10px;color:var(--accent)" title="Refresh GRPO sekarang">↺</span></span>
         </div>
         <div id="dash-grpo-today-list" style="max-height:320px;overflow-y:auto;font-size:11px"></div>
       </div>
@@ -3302,12 +3302,18 @@ function renderDashboard() {
   var mrpTxt=document.getElementById('status-mrp'); if(mrpTxt) mrpTxt.textContent=STATE.mrpData?Object.keys(STATE.mrpData).length+' item':'Belum dimuat';
   var grpoSups={}; var grpoToday=[];
   var todayStr = (function(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); })();
+  if(STATE.grpoData.length && !grpoToday.length) {
+    // Debug: log sample dates to check format
+    var sampleDates = STATE.grpoData.slice(0,3).map(function(g){ return g.grpoDate; });
+    console.log('[GRPO] today:', todayStr, '| total:', STATE.grpoData.length, '| sample dates:', sampleDates.join(', '));
+  }
   STATE.grpoData.forEach(function(g){
     if(g.grpoDate === todayStr) {
       grpoToday.push(g);
       if(g.supplierName) grpoSups[g.supplierName]=true;
     }
   });
+  if(STATE.grpoData.length) console.log('[GRPO] matched today:', grpoToday.length);
   var grpoTodayEl=document.getElementById('s-grpo-today'); if(grpoTodayEl) grpoTodayEl.textContent=grpoToday.length;
   // Render today's GRPO list — grouped by supplier
   var grpoListEl=document.getElementById('dash-grpo-today-list');
@@ -5008,8 +5014,19 @@ var _GRPO_POLL_MS = 15 * 60 * 1000; // 15 menit
 function _startGRPOPoll(initialDelay) {
   if(!CFG.url) return;
   if(_grpoPollTimer) clearTimeout(_grpoPollTimer);
-  var firstDelay = initialDelay || (2 * 60 * 1000); // default 2 menit pertama
+  var firstDelay = initialDelay || (5 * 1000); // default 5 detik pertama
   _grpoPollTimer = setTimeout(function _poll(){
+    _doGRPOPoll();
+    _grpoPollTimer = setTimeout(_poll, _GRPO_POLL_MS);
+  }, firstDelay);
+}
+
+function _pollGRPONow() {
+  toast('Refreshing GRPO...', 'inf');
+  _doGRPOPoll();
+}
+
+function _doGRPOPoll() {
     var statusEl = document.getElementById('grpo-poll-status');
     if(statusEl) statusEl.textContent = '⏳ checking...';
     console.log('[GRPO poll] Fetching...');
@@ -5055,9 +5072,6 @@ function _startGRPOPoll(initialDelay) {
       console.warn('[GRPO poll] Error:', e.message);
       if(statusEl) statusEl.textContent = '⚠ gagal';
     });
-
-    _grpoPollTimer = setTimeout(_poll, _GRPO_POLL_MS);
-  }, firstDelay);
 }
 
 // ─── PROJECTION COLUMN VISIBILITY ───────────────────────────────────────────
