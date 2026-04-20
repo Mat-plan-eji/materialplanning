@@ -364,14 +364,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <!-- GRPO -->
       <div class="card" style="padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">GRPO Hari Ini</span>
+          <span style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📦 GRPO Hari Ini <span id="s-grpo-today" style="font-size:10px;background:var(--teal);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">0</span></span>
           <span style="font-size:10px;color:var(--muted)" id="grpo-poll-status"></span>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--teal)" id="s-grpo-today">0</div><div style="font-size:10px;color:var(--muted)">transaksi</div></div>
-          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--accent)" id="dash-grpo-sup">0</div><div style="font-size:10px;color:var(--muted)">supplier</div></div>
-        </div>
-        <div id="dash-grpo-today-list" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
+        <div id="dash-grpo-today-list" style="max-height:320px;overflow-y:auto;font-size:11px"></div>
       </div>
       <!-- System status -->
       <div class="card" style="padding:14px 16px">
@@ -3245,24 +3241,32 @@ function renderDashboard() {
     }
   });
   var grpoTodayEl=document.getElementById('s-grpo-today'); if(grpoTodayEl) grpoTodayEl.textContent=grpoToday.length;
-  var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'0';
-  // Render today's GRPO list
+  // Render today's GRPO list — grouped by supplier
   var grpoListEl=document.getElementById('dash-grpo-today-list');
   if(grpoListEl) {
     if(!grpoToday.length) {
-      grpoListEl.innerHTML='<div style="color:var(--muted);padding:8px 0;text-align:center">Belum ada GRPO hari ini</div>';
+      grpoListEl.innerHTML='<div style="color:var(--muted);padding:12px 0;text-align:center">Belum ada GRPO hari ini</div>';
     } else {
-      grpoListEl.innerHTML=grpoToday.map(function(g){
-        var name = _poName(g.itemCode, g.itemName);
-        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border)">'+
-          '<div style="flex:1;min-width:0">'+
-            '<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
-            '<div style="font-size:10px;color:var(--muted)">'+(g.supplierName||'—')+' · '+(g.itemCode||'')+'</div>'+
-          '</div>'+
-          '<div style="flex-shrink:0;text-align:right;font-family:var(--mono)">'+
-            '<div style="color:var(--teal);font-weight:500">'+n_id(g.qty||0)+'</div>'+
-            '<div style="font-size:9px;color:var(--muted)">'+(g.uom||'')+'</div>'+
-          '</div>'+
+      // Group by supplier
+      var bySup = {};
+      grpoToday.forEach(function(g){
+        var s = g.supplierName || '—';
+        if(!bySup[s]) bySup[s] = [];
+        bySup[s].push(g);
+      });
+      grpoListEl.innerHTML = Object.keys(bySup).sort().map(function(sup){
+        var items = bySup[sup];
+        return '<div style="margin-bottom:8px">' +
+          '<div style="font-size:10.5px;font-weight:600;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">' + sup + ' <span style="color:var(--muted);font-weight:400">(' + items.length + ')</span></div>' +
+          items.map(function(g){
+            var name = _poName(g.itemCode, g.itemName);
+            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 4px 8px;border-bottom:0.5px solid var(--border)">' +
+              '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">' + (g.itemCode||'') + '</span> ' + name +
+              '</div>' +
+              '<div style="flex-shrink:0;font-family:var(--mono);color:var(--teal);font-weight:500">' + n_id(g.qty||0) + ' <span style="font-weight:400;color:var(--muted);font-size:9px">' + (g.uom||'') + '</span></div>' +
+            '</div>';
+          }).join('') +
         '</div>';
       }).join('');
     }
