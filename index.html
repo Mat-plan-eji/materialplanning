@@ -3385,13 +3385,20 @@ function _matchDashColumns() {
   var left = document.getElementById('dash-left-col');
   var right = document.getElementById('dash-right-col');
   if(!left || !right) return;
-  // Reset left height to let right column determine grid row height
-  left.style.height = 'auto';
-  // Use right column's actual rendered height
+  // Collapse left to 0 so right column determines its own natural height
+  left.style.height = '0px';
+  left.style.overflow = 'hidden';
+  // Force reflow
+  void right.offsetHeight;
+  // Measure right column's natural height
   var rh = right.offsetHeight;
+  // Set left to match right
   if(rh > 100) {
     left.style.height = rh + 'px';
+  } else {
+    left.style.height = 'auto';
   }
+  left.style.overflow = 'hidden';
 }
 window.addEventListener('resize', function(){ setTimeout(_matchDashColumns, 100); });
 
