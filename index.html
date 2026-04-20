@@ -423,8 +423,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   </div>
 
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
-  <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px;align-items:stretch">
-    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;min-height:0">
+  <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
         <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
@@ -3373,6 +3373,17 @@ function renderDashboard() {
       }).join('');
     }
   }
+  // Match left column height to right column
+  setTimeout(_matchDashColumns, 50);
+}
+
+function _matchDashColumns() {
+  var grid = document.getElementById('dash-main-grid');
+  if(!grid) return;
+  var cols = grid.children;
+  if(cols.length < 2) return;
+  var rightH = cols[1].offsetHeight;
+  if(rightH > 200) cols[0].style.maxHeight = rightH + 'px';
 }
 
 // Helper: display name — RM pakai Real Name, PM/FG pakai Description
