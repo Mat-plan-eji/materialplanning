@@ -284,7 +284,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
       <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v6</span></p>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v7</span></p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -382,7 +382,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="card" style="padding:14px 16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📌 Highlighted Issues</span>
-      <span style="font-size:11px;color:var(--muted)">Item yang kamu tandai dari Projection Stock</span>
     </div>
     <div id="dash-highlighted"><div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom Projection Stock untuk menambahkan.</div></div>
   </div>
@@ -689,43 +688,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <span id="fb-dot" class="dot off"></span>
       </div>
       <div style="padding:16px">
-        <div id="fb-status-msg" style="margin-bottom:12px;font-size:12px;color:var(--muted)">Belum dikonfigurasi</div>
-
-        <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.7">
-          Masukkan config Firebase di bawah → klik Simpan → copy snippet yang muncul → paste ke file HTML kamu (ganti baris FIREBASE_CONFIG) → push ke GitHub.<br>
-          <strong style="color:var(--text)">Setelah itu semua laptop langsung konek otomatis tanpa setting apapun.</strong><br>
-          <a onclick="window.open('https://console.firebase.google.com','_blank')" style="color:var(--accent);cursor:pointer">→ Buka Firebase Console</a>
-          &nbsp;·&nbsp;
-          <a onclick="showFirebaseGuide()" style="color:var(--teal);cursor:pointer">Panduan lengkap</a>
-        </div>
-
-        <div class="fg"><label>API Key</label><input id="fb-apikey" placeholder="AIzaSy..." style="width:100%"></div>
-        <div class="fg"><label>Project ID</label><input id="fb-projectid" placeholder="material-planner-xxxxx" style="width:100%"></div>
-        <div class="fg"><label>App ID</label><input id="fb-appid" placeholder="1:123456789:web:abc..." style="width:100%"></div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="btn btn-amber" onclick="saveFirebaseConfig()">💾 Simpan & Hubungkan</button>
-          <button class="btn btn-sm" onclick="testFirebase()">Test Koneksi</button>
-          <button class="btn btn-sm btn-red" onclick="clearFirebaseConfig()">Hapus Config</button>
-        </div>
-
-        <!-- Snippet untuk di-embed ke HTML -->
-        <div id="fb-snippet-wrap" style="display:none">
-          <div style="background:var(--green-bg);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:12px;margin-bottom:8px">
-            <div style="font-size:11.5px;font-weight:600;color:var(--green);margin-bottom:8px">
-              ✓ Config Firebase tersimpan di browser ini
-            </div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
-              Klik tombol di bawah untuk download file HTML baru yang sudah include semua config (Firebase, SAP, Sheet URLs). File ini bisa langsung dibuka di laptop manapun tanpa perlu setting ulang.
-            </div>
-            <button class="btn btn-green" style="width:100%;margin-bottom:6px" onclick="exportConfigHTML()">⬇ Download HTML dengan Semua Config</button>
-            <div style="font-size:10px;color:var(--muted)">Config yang disertakan: Firebase, SAP API, Sheet URLs, W+N, Workdays</div>
-          </div>
-        </div>
-
-        <div style="margin-top:8px;padding:10px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;color:var(--muted)">
-          <strong style="color:var(--text)">Tersimpan di cloud:</strong> Schedule, PO overrides, Comments, History, URL Sheets, Settings.<br>
-          <strong style="color:var(--amber)">Tidak di cloud:</strong> MRP, Master Data, Matcom, Real Name — ditarik ulang otomatis dari Sheets.
+        <div id="fb-status-msg" style="margin-bottom:8px;font-size:12px;color:var(--muted)">Memeriksa...</div>
+        <div style="padding:10px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;color:var(--muted)">
+          <strong style="color:var(--text)">Tersimpan di cloud:</strong> Schedule, PO overrides, Comments, History, URL Sheets, Settings, Highlighted items.<br>
+          <strong style="color:var(--amber)">Ditarik ulang otomatis:</strong> Data SAP (Stock, PO, GRPO, OSPR) dan Google Sheets (Master, MRP, Real Name).
         </div>
       </div>
     </div>
@@ -858,7 +824,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 // ═══════════════════════════════════════════════════════════════════════════════
 // ☁️  FIREBASE CLOUD SYNC — per-key Firestore documents (no 1MB limit issue)
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⚠️  GANTI 3 BARIS INI DENGAN CONFIG FIREBASE KAMU → PUSH KE GITHUB
 var FIREBASE_CONFIG = {
   apiKey:    "AIzaSyDfUvdnJC9e-lWN_Mioy-niLs9kZcwNYu8",
   projectId: "material-planner-eji",
@@ -3774,25 +3739,9 @@ function loadSettingsForm() {
   document.getElementById('cfg-wn').value     = CFG.wn;
   document.getElementById('cfg-workdays').value = CFG.workdays;
 
-  var apiKey    = window.localStorage.getItem('fb_apikey')||'';
-  var projectId = window.localStorage.getItem('fb_projectid')||'';
-  var appId     = window.localStorage.getItem('fb_appid')||'';
-  if(document.getElementById('fb-apikey'))    document.getElementById('fb-apikey').value    = apiKey;
-  if(document.getElementById('fb-projectid')) document.getElementById('fb-projectid').value = projectId;
-  if(document.getElementById('fb-appid'))     document.getElementById('fb-appid').value     = appId;
-
   var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
-  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif — data tersync ke cloud' : (apiKey ? 'Config ada di browser ini — simpan snippet ke HTML agar laptop lain konek otomatis' : 'Belum dikonfigurasi');
-
-  // Show snippet if config already exists
-  if(apiKey && projectId && appId) {
-    var snippet = 'apiKey: "'+apiKey+'",\n  projectId: "'+projectId+'",\n  appId: "'+appId+'"';
-    var box = document.getElementById('fb-embed-snippet');
-    var wrap = document.getElementById('fb-snippet-wrap');
-    if(box) box.value = snippet;
-    if(wrap) wrap.style.display = 'block';
-  }
+  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif — data tersync ke cloud' : 'Menghubungkan...';
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
@@ -4421,12 +4370,15 @@ function scheduleAutoRefresh() {
         // Auto freeze stock after sync
         if(Object.keys(STATE.stockData).length) {
           var today = new Date().toISOString().split('T')[0];
-          STATE.stockHistory[today] = {};
-          Object.keys(STATE.stockData).forEach(function(ic){
-            STATE.stockHistory[today][ic] = { btg: STATE.stockData[ic].btg, sng: STATE.stockData[ic].sng };
-          });
-          localStorage.setItem('stock_history', JSON.stringify(STATE.stockHistory));
-          toast('Stock di-freeze otomatis (' + Object.keys(STATE.stockData).length + ' item) ✓', 'ok');
+          if(!STATE.stockHistory[today]) {
+            STATE.stockHistory[today] = {};
+            Object.keys(STATE.stockData).forEach(function(ic){
+              STATE.stockHistory[today][ic] = { btg: STATE.stockData[ic].btg, sng: STATE.stockData[ic].sng };
+            });
+            localStorage.setItem('stock_history', JSON.stringify(STATE.stockHistory));
+            cloudSave('stock_history', JSON.stringify(STATE.stockHistory));
+            toast('Stock di-freeze otomatis (' + Object.keys(STATE.stockData).length + ' item) ✓', 'ok');
+          }
         }
       }).catch(function(){});
     }
@@ -4625,6 +4577,19 @@ function _appInit() {
     setTimeout(function(){
       toast('Auto-sync SAP...', 'inf');
       syncAll().then(function(){
+        // Auto-freeze stock hari ini jika belum
+        if(Object.keys(STATE.stockData).length) {
+          var _today = new Date().toISOString().split('T')[0];
+          if(!STATE.stockHistory[_today]) {
+            STATE.stockHistory[_today] = {};
+            Object.keys(STATE.stockData).forEach(function(ic){
+              STATE.stockHistory[_today][ic] = { btg: STATE.stockData[ic].btg, sng: STATE.stockData[ic].sng };
+            });
+            localStorage.setItem('stock_history', JSON.stringify(STATE.stockHistory));
+            cloudSave('stock_history', JSON.stringify(STATE.stockHistory));
+            toast('Stock di-freeze otomatis ✓', 'ok');
+          }
+        }
         // Setelah sync selesai, pastikan sheets dimuat dan projection di-build
         if(!STATE.mrpData) {
           var hasSheetUrl = localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp');
