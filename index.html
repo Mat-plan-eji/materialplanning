@@ -2792,12 +2792,12 @@ function _doBuildProjection() {
   var nb = document.getElementById('nb-urgent');
   if(nb) { nb.style.display = urgentCount > 0 ? '' : 'none'; if(urgentCount > 0) nb.textContent = urgentCount; }
 
-  renderProjection();
-  populateSKUFilter();
+  try { renderProjection(); } catch(e) { console.error('[build] renderProjection CRASH:', e.message, e.stack); }
+  try { populateSKUFilter(); } catch(e) { console.warn('[build] populateSKUFilter fail:', e.message); }
   // Restore sync timestamp setelah build selesai
   if(_lastSyncMsg) document.getElementById('dash-sub').textContent = _lastSyncMsg;
   // Update seluruh dashboard (stat cards, stock bars, jadwal, item kritis)
-  updateDashStats();
+  try { updateDashStats(); } catch(e) { console.error('[build] updateDashStats CRASH:', e.message, e.stack); }
   toast('Projection: ' + projection.length + ' item, ' + urgentCount + ' urgent \u2713', 'ok');
 }
 function getCutoff() {
