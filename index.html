@@ -256,6 +256,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   #dash-stock-bars{grid-template-columns:1fr!important;gap:8px!important}
   /* Dashboard main grid */
   #dash-main-grid{grid-template-columns:1fr!important}
+  #dash-left-col{height:auto!important;max-height:350px}
   /* Data source cards */
   #pg-upload .page-inner>div:nth-child(2){grid-template-columns:1fr!important}
 
@@ -424,14 +425,16 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
   <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
-    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
-        <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
-        <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
+    <div id="dash-left-col" style="overflow:hidden;min-height:0">
+      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;height:100%">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
+          <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
+          <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
+        </div>
+        <div id="dash-urgent-table" style="flex:1;overflow-y:auto;min-height:0"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
       </div>
-      <div id="dash-urgent-table" style="flex:1;overflow-y:auto;min-height:0"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
+    <div id="dash-right-col" style="display:flex;flex-direction:column;gap:10px">
       <!-- Schedule this week -->
       <div class="card" style="padding:14px 16px">
         <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Jadwal Pengiriman Minggu Ini</div>
@@ -1612,7 +1615,7 @@ function showPage(name, el) {
   document.getElementById('pg-'+name).classList.add('active');
   if(el) el.classList.add('active');
   var handlers = {
-    dashboard: function(){updateDashStats()},
+    dashboard: function(){updateDashStats();setTimeout(_matchDashColumns,100)},
     projection: function(){setUrgentCutoff();renderProjection();},
     po: function(){if(!STATE.poData.length)loadPO();else renderPO()},
     schedule: renderSchedule,
@@ -3375,16 +3378,22 @@ function renderDashboard() {
   }
   // Match left column height to right column
   setTimeout(_matchDashColumns, 50);
+  setTimeout(_matchDashColumns, 300);
 }
 
 function _matchDashColumns() {
-  var grid = document.getElementById('dash-main-grid');
-  if(!grid) return;
-  var cols = grid.children;
-  if(cols.length < 2) return;
-  var rightH = cols[1].offsetHeight;
-  if(rightH > 200) cols[0].style.maxHeight = rightH + 'px';
+  var left = document.getElementById('dash-left-col');
+  var right = document.getElementById('dash-right-col');
+  if(!left || !right) return;
+  // Reset left height to let right column determine grid row height
+  left.style.height = 'auto';
+  // Use right column's actual rendered height
+  var rh = right.offsetHeight;
+  if(rh > 100) {
+    left.style.height = rh + 'px';
+  }
 }
+window.addEventListener('resize', function(){ setTimeout(_matchDashColumns, 100); });
 
 // Helper: display name — RM pakai Real Name, PM/FG pakai Description
 // RM display mode: 'realname' or 'description'
