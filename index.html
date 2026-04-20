@@ -262,7 +262,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ni" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
     <div class="ni" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
   <div class="ni" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
-  <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets)</div>
+  <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets) <span id="lock-upload" style="font-size:10px">🔒</span></div>
   <div class="nav-divider"></div>
   <div style="padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:10.5px;color:var(--muted)" id="theme-label">🌙 Dark</span>
@@ -270,7 +270,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div class="theme-toggle-knob" id="theme-knob">🌙</div>
     </div>
   </div>
-  <div class="ni" onclick="showPage('settings',this)"><span class="ni-ico">◈</span>Settings</div>
+  <div class="ni" onclick="showPage('settings',this)"><span class="ni-ico">◈</span>Settings <span id="lock-settings" style="font-size:10px">🔒</span></div>
+  <div class="ni" id="nav-login" onclick="_isAdmin?doLogout():showLoginModal()" style="border-top:0.5px solid var(--border);margin-top:4px">
+    <span class="ni-ico" id="login-ico">🔒</span><span id="login-label">Login</span>
+  </div>
 </nav>
 
 <!-- MAIN -->
@@ -283,7 +286,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v10</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v11</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -682,6 +685,35 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph"><div class="ph-l"><h2>Settings</h2><p>Konfigurasi koneksi SAP, WA, dan Firebase (cloud sync)</p></div></div>
   <div style="max-width:560px;display:flex;flex-direction:column;gap:14px">
 
+    <!-- RM Display Mode -->
+    <div class="card" style="border-color:rgba(59,127,255,.4)">
+      <div class="card-hdr" style="background:var(--accent-bg)"><span class="card-title">🏷️ Tampilan Nama RM</span></div>
+      <div style="padding:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Pilih nama yang ditampilkan untuk item RM (kode 3xxx) di semua menu:</div>
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;padding:8px 14px;background:var(--bg4);border-radius:var(--r);border:1.5px solid var(--border)" id="rm-opt-desc">
+            <input type="radio" name="rm-display" value="description" onchange="_setRMDisplay('description')"> Deskripsi SAP
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;padding:8px 14px;background:var(--bg4);border-radius:var(--r);border:1.5px solid var(--border)" id="rm-opt-real">
+            <input type="radio" name="rm-display" value="realname" onchange="_setRMDisplay('realname')"> Real Name 🔒
+          </label>
+        </div>
+        <div style="font-size:10.5px;color:var(--muted)">Real Name bersifat <strong>rahasia</strong> — hanya admin yang sudah login yang bisa mengaktifkannya.</div>
+      </div>
+    </div>
+
+    <!-- Ubah Password Admin -->
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">🔑 Ubah Kredensial Admin</span></div>
+      <div style="padding:16px">
+        <div class="frow">
+          <div class="fg"><label>Username Baru</label><input id="cfg-admin-user" style="width:100%"></div>
+          <div class="fg"><label>Password Baru</label><input id="cfg-admin-pass" type="password" style="width:100%"></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveAdminCreds()">Simpan Kredensial</button>
+      </div>
+    </div>
+
     <!-- FIREBASE CLOUD SYNC -->
     <div class="card" style="border-color:rgba(245,158,11,.35)">
       <div class="card-hdr" style="background:var(--amber-bg)">
@@ -753,6 +785,20 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeModal('modal-fb-guide')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Login -->
+<div class="modal-bg" id="modal-login">
+  <div class="modal" style="width:360px;max-width:90vw">
+    <h3 style="text-align:center;margin-bottom:16px">🔐 Login Admin</h3>
+    <div class="fg"><label>Username</label><input id="login-user" style="width:100%" placeholder="Username" autocomplete="off"></div>
+    <div class="fg"><label>Password</label><input id="login-pass" type="password" style="width:100%" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="login-err" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none"></div>
+    <div class="modal-footer" style="justify-content:center;gap:8px">
+      <button class="btn" onclick="closeModal('modal-login')">Batal</button>
+      <button class="btn btn-primary" onclick="doLogin()">Login</button>
     </div>
   </div>
 </div>
@@ -834,6 +880,107 @@ var FIREBASE_CONFIG = {
 
 var _db = null;
 var _fbReady = false;
+
+// ── Login system ─────────────────────────────────────────────────────────────
+var _isAdmin = false;
+// Restore login state from session
+if(sessionStorage.getItem('_isAdmin') === '1') _isAdmin = true;
+
+// Default credentials — simpan hash di sini (btoa encoded)
+var _adminCreds = {
+  user: localStorage.getItem('admin_user') || 'admin',
+  pass: localStorage.getItem('admin_pass') || 'admin123'
+};
+
+// Helper: cek admin, tampilkan login modal jika belum login
+function _requireAdmin(action) {
+  if(_isAdmin) return true;
+  toast('Login dulu untuk ' + (action||'mengedit'), 'err');
+  showLoginModal();
+  return false;
+}
+
+function showLoginModal() {
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').style.display = 'none';
+  document.getElementById('modal-login').classList.add('open');
+  setTimeout(function(){ document.getElementById('login-user').focus(); }, 100);
+}
+
+function doLogin() {
+  var u = document.getElementById('login-user').value.trim();
+  var p = document.getElementById('login-pass').value;
+  if(u === _adminCreds.user && p === _adminCreds.pass) {
+    _isAdmin = true;
+    sessionStorage.setItem('_isAdmin', '1');
+    closeModal('modal-login');
+    _updateLoginUI();
+    toast('Login berhasil ✓', 'ok');
+  } else {
+    var err = document.getElementById('login-err');
+    err.textContent = 'Username atau password salah';
+    err.style.display = 'block';
+  }
+}
+
+function doLogout() {
+  _isAdmin = false;
+  sessionStorage.removeItem('_isAdmin');
+  // Reset RM display to description on logout
+  _setRMDisplay('description');
+  _updateLoginUI();
+  showPage('dashboard', document.querySelectorAll('.ni')[0]);
+  toast('Logout berhasil', 'ok');
+}
+
+function _updateLoginUI() {
+  var ico = document.getElementById('login-ico');
+  var lbl = document.getElementById('login-label');
+  var lockS = document.getElementById('lock-settings');
+  var lockU = document.getElementById('lock-upload');
+  if(_isAdmin) {
+    if(ico) ico.textContent = '🔓';
+    if(lbl) lbl.textContent = 'Logout';
+    if(lockS) lockS.textContent = '';
+    if(lockU) lockU.textContent = '';
+  } else {
+    if(ico) ico.textContent = '🔒';
+    if(lbl) lbl.textContent = 'Login';
+    if(lockS) lockS.textContent = '🔒';
+    if(lockU) lockU.textContent = '🔒';
+  }
+}
+
+function _setRMDisplay(mode) {
+  if(mode === 'realname' && !_isAdmin) {
+    toast('Login dulu untuk melihat Real Name', 'err');
+    // Reset radio
+    var descRadio = document.querySelector('input[name="rm-display"][value="description"]');
+    if(descRadio) descRadio.checked = true;
+    return;
+  }
+  _rmDisplayMode = mode;
+  localStorage.setItem('rm_display_mode', mode);
+  // Re-render semua yg pakai _dispName
+  if(STATE.projectionData && STATE.projectionData.length) {
+    renderProjection();
+    updateDashStats();
+    renderSchedule();
+  }
+  toast('Tampilan RM: ' + (mode === 'realname' ? 'Real Name' : 'Deskripsi SAP'), 'ok');
+}
+
+function saveAdminCreds() {
+  var u = document.getElementById('cfg-admin-user').value.trim();
+  var p = document.getElementById('cfg-admin-pass').value.trim();
+  if(!u || !p) { toast('Isi username dan password', 'err'); return; }
+  _adminCreds.user = u;
+  _adminCreds.pass = p;
+  localStorage.setItem('admin_user', u);
+  localStorage.setItem('admin_pass', p);
+  toast('Kredensial admin disimpan ✓', 'ok');
+}
 var _lastSyncMsg = '';
 
 // Keys yang disync ke cloud — tiap key = 1 dokumen di Firestore koleksi 'kv'
@@ -844,7 +991,8 @@ var CLOUD_KEYS = [
   'sheet_url_master','sheet_url_mrp','sheet_url_realname',
   'sheet_tab_master','sheet_tab_mrp','sheet_tab_realname',
   'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync','proj_highlighted',
-  'sap_cache_stock','sap_cache_po','sap_cache_grpo','sap_cache_ospr'
+  'sap_cache_stock','sap_cache_po','sap_cache_grpo','sap_cache_ospr',
+  'admin_user','admin_pass'
 ];
 
 // ── Sync indicator di header ──────────────────────────────────────────────────
@@ -1369,6 +1517,12 @@ var STOCK_AWAL_APR = {"1101000005": {"btg": 7064.0, "sng": 0}, "1101000006": {"b
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(name, el) {
+  // Gate protected pages
+  if((name === 'settings' || name === 'upload') && !_isAdmin) {
+    toast('Login dulu untuk akses halaman ini', 'err');
+    showLoginModal();
+    return;
+  }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active')});
   document.getElementById('pg-'+name).classList.add('active');
@@ -1856,6 +2010,7 @@ function updateProjComment(key) {
 
 
 function setPOField(el, field) {
+  if(!_requireAdmin('edit PO')) return;
   var key = el.getAttribute('data-key');
   if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
   STATE.poOverrides[key][field] = el.value;
@@ -1879,6 +2034,7 @@ function setPOField(el, field) {
 }
 
 function setPODate(el, isManual) {
+  if(!_requireAdmin('edit tanggal')) return;
   var key = el.getAttribute('data-key');
   if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
   STATE.poOverrides[key].date = el.value;
@@ -1888,11 +2044,13 @@ function setPODate(el, isManual) {
 }
 
 function savePOChanges() {
+  if(!_requireAdmin('simpan perubahan')) return;
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
   toast('Perubahan PO disimpan ✓', 'ok');
 }
 
 function resetPOOverrides() {
+  if(!_requireAdmin('reset PO')) return;
   if(!confirm('Reset semua tanggal request kirim dan konfirmasi? Data tidak bisa dikembalikan.')) return;
   // Clear all date/confirm fields but keep notes
   Object.keys(STATE.poOverrides).forEach(function(key) {
@@ -3066,9 +3224,12 @@ function renderDashboard() {
 }
 
 // Helper: display name — RM pakai Real Name, PM/FG pakai Description
+// RM display mode: 'realname' or 'description'
+var _rmDisplayMode = localStorage.getItem('rm_display_mode') || 'description';
+
 function _dispName(p) {
   if(!p) return '';
-  if(p.itemType === 'RM' && p.realName) return p.realName;
+  if(p.itemType === 'RM' && _rmDisplayMode === 'realname' && p.realName) return p.realName;
   return p.description || p.productCode || '';
 }
 
@@ -3154,6 +3315,7 @@ function getWorkdays(from, n) {
 }
 
 function generateSchedule() {
+  if(!_requireAdmin('generate jadwal')) return;
   // ── Helper: format tanggal lokal sebagai YYYY-MM-DD (bukan UTC) ──────────────
   function localISO(d) {
     return d.getFullYear() + '-' +
@@ -3514,6 +3676,7 @@ function switchSchedTab(tab, el) {
 
 // ── Edit tanggal jadwal kirim ─────────────────────────────────────────────────
 function saveSchedDate(input) {
+  if(!_requireAdmin('edit jadwal')) return;
   var idx = parseInt(input.getAttribute('data-sched-idx'));
   var e = STATE.scheduleData[idx];
   if(!e) return;
@@ -3543,6 +3706,7 @@ function saveSchedDate(input) {
 
 // ── Edit qty request kirim per item ──────────────────────────────────────────
 function saveSchedQty(input) {
+  if(!_requireAdmin('edit jadwal')) return;
   var idx = parseInt(input.getAttribute('data-sched-idx'));
   var poKey = input.getAttribute('data-po-key');
   var newQty = parseFloat(input.value) || 0;
@@ -3578,6 +3742,7 @@ function toggleApprove(idx) {
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule();
 }
 function approveAll() {
+  if(!_requireAdmin('approve jadwal')) return;
   STATE.scheduleData.forEach(function(s){ if(s.status==='pending') s.status='approved'; });
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule(); toast('Semua di-approve ✓','ok');
 }
@@ -3587,6 +3752,7 @@ function removeSchedule(idx) {
 }
 
 function resetSchedule() {
+  if(!_requireAdmin('hapus jadwal')) return;
   if(!confirm('Hapus SEMUA jadwal pengiriman? Tindakan ini tidak bisa dibatalkan.')) return;
   STATE.scheduleData = [];
   localStorage.setItem('schedule', '[]');
@@ -3673,6 +3839,7 @@ async function blastAll() {
 
 // ─── FEEDBACK ────────────────────────────────────────────────────────────────
 function openFbModal(idx) {
+  if(!_requireAdmin('konfirmasi supplier')) return;
   activeFbIdx = idx;
   var e = STATE.scheduleData[idx];
   document.getElementById('fb-sup').textContent = e.supName || '';
@@ -3839,6 +4006,7 @@ function saveFeedback() {
   toast('Konfirmasi: ' + doneChks + '/' + totalChks + ' item' + (anyConfirmed ? ' ✓' : ''), anyConfirmed ? 'ok' : 'inf');
 }
 function saveProjComment(el) {
+  if(!_requireAdmin('edit comment')) return;
   var code = el.getAttribute('data-code');
   var val = el.value;
   // Update in-memory
@@ -3854,6 +4022,7 @@ function saveProjComment(el) {
 }
 
 function clearManualComment(code) {
+  if(!_requireAdmin('hapus comment')) return;
   if(!STATE.projComments) STATE.projComments = {};
   // Remove manual flag so auto-comment can take over
   var existing = STATE.projComments[code];
@@ -3927,6 +4096,14 @@ function loadSettingsForm() {
   document.getElementById('cfg-fonnte').value = CFG.fonnte;
   document.getElementById('cfg-wn').value     = CFG.wn;
   document.getElementById('cfg-workdays').value = CFG.workdays;
+
+  // RM display toggle
+  var rmRadio = document.querySelector('input[name="rm-display"][value="' + _rmDisplayMode + '"]');
+  if(rmRadio) rmRadio.checked = true;
+
+  // Admin credentials
+  document.getElementById('cfg-admin-user').value = _adminCreds.user;
+  document.getElementById('cfg-admin-pass').value = '';
 
   var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
@@ -4213,6 +4390,7 @@ function deleteStockSnapshot(date) {
 }
 
 function clearAllStockHistory() {
+  if(!_requireAdmin('hapus history')) return;
   if(!confirm('Hapus SEMUA stock history? Tidak bisa dibatalkan.')) return;
   STATE.stockHistory = {};
   localStorage.setItem('stock_history', '{}');
@@ -4300,6 +4478,7 @@ function deleteSnapshot(key) {
 }
 
 function clearAllSnapshots() {
+  if(!_requireAdmin('hapus snapshots')) return;
   if(!confirm('Hapus SEMUA snapshot? Tindakan ini tidak bisa dibatalkan.')) return;
   STATE.projectionSnapshots = {};
   localStorage.setItem('proj_snapshots', '{}');
@@ -4580,6 +4759,7 @@ var PROJ_HIDDEN_COLS = JSON.parse(localStorage.getItem('proj_hidden_cols') || '[
 var PROJ_HIGHLIGHTED = JSON.parse(localStorage.getItem('proj_highlighted') || '{}');
 
 function toggleHighlight(code, checked) {
+  if(!_requireAdmin('highlight item')) return;
   if(checked) PROJ_HIGHLIGHTED[code] = true;
   else delete PROJ_HIGHLIGHTED[code];
   localStorage.setItem('proj_highlighted', JSON.stringify(PROJ_HIGHLIGHTED));
@@ -4782,6 +4962,16 @@ function _appInit() {
   });
 
   scheduleAutoRefresh();
+  _updateLoginUI();
+  // Reset RM display mode jika tidak admin
+  if(!_isAdmin && _rmDisplayMode === 'realname') {
+    _rmDisplayMode = 'description';
+    var descRadio = document.querySelector('input[name="rm-display"][value="description"]');
+    if(descRadio) descRadio.checked = true;
+  } else {
+    var activeRadio = document.querySelector('input[name="rm-display"][value="'+_rmDisplayMode+'"]');
+    if(activeRadio) activeRadio.checked = true;
+  }
 }
 
 // Kick off — tries Firebase first, falls back to localStorage
