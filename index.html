@@ -970,9 +970,8 @@ function cloudStartRealtime() {
         // Skip own write (dalam 5 detik terakhir)
         if(_myLastWrite[key] && (Date.now() - _myLastWrite[key]) < 5000) return;
         // Skip jika value identik
-        if(_lsMem[key] === val) return;
-        _lsMem[key] = val;
-        try { _origLS.setItem(key, val); } catch(e) {}
+        if(localStorage.getItem(key) === val) return;
+        _origSetItem.call(localStorage, key, val); // bypass cloudSave for incoming data
         changed.push(key);
       }
     });
@@ -994,7 +993,7 @@ function _applyRealtimeChanges(keys) {
   var renderFlags = { proj:false, sched:false, po:false, dash:false };
 
   keys.forEach(function(k) {
-    var val = _lsMem[k];
+    var val = localStorage.getItem(k);
     try {
       switch(k) {
         case 'schedule':
@@ -1097,16 +1096,11 @@ function _applyRealtimeChanges(keys) {
   toast('☁ Sync: ' + keyNames, 'ok');
 }
 
-// ── localStorage shim ─────────────────────────────────────────────────────────
-var _origLS = window.localStorage;
-var _lsMem = {};
-for(var _i=0; _i<_origLS.length; _i++){ var _lk=_origLS.key(_i); if(_lk) _lsMem[_lk]=_origLS.getItem(_lk); }
-var localStorage = {
-  getItem:    function(k){ return _lsMem.hasOwnProperty(k) ? _lsMem[k] : null; },
-  setItem:    function(k,v){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} if(CLOUD_KEYS.indexOf(k)>=0) cloudSave(k,v); },
-  removeItem: function(k){ delete _lsMem[k]; try{_origLS.removeItem(k);}catch(e){}},
-  key:        function(i){ return Object.keys(_lsMem)[i]||null; },
-  get length(){ return Object.keys(_lsMem).length; }
+// ── localStorage cloud sync — patch native setItem to auto-sync to Firebase ──
+var _origSetItem = Storage.prototype.setItem;
+Storage.prototype.setItem = function(k, v) {
+  _origSetItem.call(this, k, v);
+  if(CLOUD_KEYS.indexOf(k) >= 0) cloudSave(k, v);
 };
 
 // ── Boot sequence — CEPAT: tampil dari cache dulu, SAP di background ──────────
@@ -1134,7 +1128,7 @@ function appStart() {
 
   function afterLoad(cloudData) {
     Object.keys(cloudData||{}).forEach(function(k){
-      var v=cloudData[k]; if(v!=null){ _lsMem[k]=v; try{_origLS.setItem(k,v);}catch(e){} }
+      var v=cloudData[k]; if(v!=null){ _origSetItem.call(localStorage, k, v); }
     });
     setMsg('Menyiapkan tampilan...');
     _appInit();
@@ -1629,6 +1623,7 @@ async function syncAll() {
     String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0')+':'+String(_tsd.getSeconds()).padStart(2,'0');
   console.log('[syncAll] timestamp:', ts);
   localStorage.setItem('last_sync', ts);
+  cloudSave('last_sync', ts);
   _lastSyncMsg = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
   document.getElementById('dash-sub').textContent = _lastSyncMsg;
 
@@ -1655,7 +1650,12 @@ async function syncAll() {
       localStorage.setItem('sap_cache_po',    sPO);
       localStorage.setItem('sap_cache_grpo',  sGRPO);
       localStorage.setItem('sap_cache_ospr',  sOSPR);
-      console.log('[syncAll] ✓ Cache saved');
+      // Explicit cloudSave — bypass shim
+      cloudSave('sap_cache_stock', sStock);
+      cloudSave('sap_cache_po',    sPO);
+      cloudSave('sap_cache_grpo',  sGRPO);
+      cloudSave('sap_cache_ospr',  sOSPR);
+      console.log('[syncAll] ✓ Cache saved + pushed to Firebase');
     } catch(e) { console.warn('[syncAll] Cache FAILED:', e.message); }
   }
 
@@ -3847,7 +3847,9 @@ function saveProjComment(el) {
   // Save as manual override — won't be overwritten by auto-confirm comment
   if(!STATE.projComments) STATE.projComments = {};
   STATE.projComments[code] = { text: val, _manual: true };
-  try { localStorage.setItem('proj_comments', JSON.stringify(STATE.projComments)); } catch(e) {}
+  var cmtJSON = JSON.stringify(STATE.projComments);
+  try { localStorage.setItem('proj_comments', cmtJSON); } catch(e) {}
+  cloudSave('proj_comments', cmtJSON);
   el.style.color = val ? 'var(--teal)' : 'var(--muted)';
 }
 
