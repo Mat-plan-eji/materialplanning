@@ -284,7 +284,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
       <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v7</span></p>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v8</span></p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -372,6 +372,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div style="display:flex;flex-direction:column;gap:6px">
           <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">SAP API</span><span class="dot" id="status-sap" title="SAP"></span></div>
           <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Firebase Cloud</span><span class="dot" id="status-fb" title="Firebase"></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Real-time Sync</span><span id="status-realtime" style="font-size:10px;color:var(--muted)">—</span></div>
           <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Data MRP</span><span id="status-mrp" style="font-size:10px;color:var(--muted)">—</span></div>
         </div>
       </div>
@@ -945,6 +946,105 @@ function cloudLoad(callback) {
     .catch(function(e){ console.warn('Cloud load failed:',e.message); callback({}); });
 }
 
+// ── Real-time sync: onSnapshot listener ──────────────────────────────────────
+var _realtimeActive = false;
+
+function cloudStartRealtime() {
+  if(!_fbReady || !_db || _realtimeActive) return;
+  _realtimeActive = true;
+
+  _db.collection('kv').onSnapshot(function(snapshot) {
+    var changed = [];
+    snapshot.docChanges().forEach(function(change) {
+      if(change.type === 'added' || change.type === 'modified') {
+        var key = change.doc.id;
+        var val = change.doc.data().v;
+        // Skip jika value sama (own write echo)
+        if(_lsMem[key] === val) return;
+        _lsMem[key] = val;
+        try { _origLS.setItem(key, val); } catch(e) {}
+        changed.push(key);
+      }
+    });
+    if(changed.length) _applyRealtimeChanges(changed);
+  }, function(err) {
+    console.warn('Realtime listener error:', err.message);
+    _realtimeActive = false;
+    // Retry setelah 10 detik
+    setTimeout(cloudStartRealtime, 10000);
+  });
+}
+
+function _applyRealtimeChanges(keys) {
+  var renderFlags = { proj:false, sched:false, po:false, dash:false };
+
+  keys.forEach(function(k) {
+    var val = _lsMem[k];
+    try {
+      switch(k) {
+        case 'schedule':
+          STATE.scheduleData = JSON.parse(val || '[]');
+          renderFlags.sched = true; renderFlags.dash = true;
+          break;
+        case 'po_overrides':
+          STATE.poOverrides = JSON.parse(val || '{}');
+          renderFlags.po = true; renderFlags.sched = true;
+          break;
+        case 'proj_comments':
+          STATE.projComments = JSON.parse(val || '{}');
+          // Re-apply comment ke projectionData
+          STATE.projectionData.forEach(function(p) {
+            var c = STATE.projComments[p.productCode];
+            p.comment = c ? (typeof c === 'object' ? (c.text||'') : String(c)) : '';
+          });
+          renderFlags.proj = true; renderFlags.dash = true;
+          break;
+        case 'proj_highlighted':
+          PROJ_HIGHLIGHTED = JSON.parse(val || '{}');
+          renderFlags.dash = true;
+          break;
+        case 'suppliers':
+          STATE.supplierData = JSON.parse(val || '[]');
+          break;
+        case 'stock_history':
+          STATE.stockHistory = JSON.parse(val || '{}');
+          break;
+        case 'proj_history':
+          STATE.projectionHistory = JSON.parse(val || '{}');
+          break;
+        case 'proj_hidden_cols':
+          PROJ_HIDDEN_COLS = JSON.parse(val || '[]');
+          // Update checkboxes
+          document.querySelectorAll('#col-menu input[type=checkbox]').forEach(function(cb){
+            var col = cb.getAttribute('onchange').match(/toggleProjCol\('([^']+)'/);
+            if(col) cb.checked = PROJ_HIDDEN_COLS.indexOf(col[1]) < 0;
+          });
+          renderFlags.proj = true;
+          break;
+        case 'sap_url':  CFG.url  = val || CFG.url; break;
+        case 'sap_user': CFG.user = val || CFG.user; break;
+        case 'sap_pass': CFG.pass = val || CFG.pass; break;
+        case 'fonnte':   CFG.fonnte = val || ''; break;
+        case 'wn':       CFG.wn = parseInt(val) || 14; break;
+        case 'workdays': CFG.workdays = parseInt(val) || 5; break;
+        case 'last_sync':
+          if(val) { _lastSyncMsg = 'Sync: ' + val; var el = document.getElementById('dash-sub'); if(el) el.textContent = _lastSyncMsg; }
+          break;
+      }
+    } catch(e) { console.warn('Realtime apply error for', k, e.message); }
+  });
+
+  // Re-render affected components
+  if(renderFlags.proj) renderProjection();
+  if(renderFlags.sched) renderSchedule();
+  if(renderFlags.po) renderPO();
+  if(renderFlags.dash) updateDashStats();
+
+  // Notify user
+  _setSyncStatus('saved');
+  toast('☁ Diperbarui dari laptop lain (' + keys.length + ' item)', 'ok');
+}
+
 // ── localStorage shim ─────────────────────────────────────────────────────────
 var _origLS = window.localStorage;
 var _lsMem = {};
@@ -997,7 +1097,11 @@ function appStart() {
     }, 500);
   }
 
-  if(_fbReady){ setMsg('Mengambil dari cloud...'); cloudLoad(afterLoad); }
+  if(_fbReady){ setMsg('Mengambil dari cloud...'); cloudLoad(function(data){
+    afterLoad(data);
+    // Start real-time sync setelah boot selesai
+    setTimeout(cloudStartRealtime, 1000);
+  }); }
   else { setTimeout(function(){ afterLoad({}); }, 50); }
 }
 
@@ -2873,6 +2977,7 @@ function renderDashboard() {
 
   var sapDot=document.getElementById('status-sap'); if(sapDot) sapDot.className='dot'+(Object.keys(STATE.stockData||{}).length?'':' off');
   var fbDot=document.getElementById('status-fb'); if(fbDot) fbDot.className='dot'+(_fbReady?'':' off');
+  var rtEl=document.getElementById('status-realtime'); if(rtEl) rtEl.innerHTML=_realtimeActive?'<span style="color:var(--green)">● Live</span>':'<span style="color:var(--muted)">Tidak aktif</span>';
   var mrpTxt=document.getElementById('status-mrp'); if(mrpTxt) mrpTxt.textContent=STATE.mrpData?Object.keys(STATE.mrpData).length+' item':'Belum dimuat';
   var grpoSups={}; STATE.grpoData.forEach(function(g){ if(g.supplierName) grpoSups[g.supplierName]=true; });
   var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'—';
@@ -3741,7 +3846,7 @@ function loadSettingsForm() {
 
   var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
-  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif — data tersync ke cloud' : 'Menghubungkan...';
+  if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif' + (_realtimeActive ? ' — Real-time sync ● Live' : '') : 'Menghubungkan...';
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
