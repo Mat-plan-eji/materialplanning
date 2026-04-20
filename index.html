@@ -1967,6 +1967,8 @@ function renderGRPO() {
 }
 
 function populateOSPOMonths() {
+  var sel = document.getElementById('f-ospo-month');
+  if(!sel) return;
   var months = {};
   STATE.ospoData.forEach(function(r){
     if(r.poReqDate){
@@ -1974,12 +1976,12 @@ function populateOSPOMonths() {
       if(parts.length === 3) { var k = parts[1]+'/'+parts[2]; months[k] = true; }
     }
   });
-  var sel = document.getElementById('f-ospo-month');
   sel.innerHTML = '<option value="">Semua Bulan</option>' +
     Object.keys(months).sort().map(function(m){return '<option value="'+m+'">'+m+'</option>'}).join('');
 }
 
 function renderOSPO() {
+  if(!document.getElementById('ospo-table')) return;
   var srch = (document.getElementById('srch-ospo')||{value:''}).value.toLowerCase();
   var month = (document.getElementById('f-ospo-month')||{value:''}).value;
   var f = STATE.ospoData.filter(function(r){
