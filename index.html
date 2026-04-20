@@ -283,8 +283,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard</h2>
-      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai <span style="opacity:.4;font-size:10px">v10</span></p>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v10</span></h2>
+      <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <!-- Notification Bell -->
@@ -953,13 +953,14 @@ function cloudLoad(callback) {
 var _realtimeActive = false;
 
 function cloudStartRealtime() {
-  if(!_fbReady || !_db || _realtimeActive) return;
+  if(!_fbReady || !_db || _realtimeActive) { console.log('[realtime] Skip — ready:', _fbReady, 'db:', !!_db, 'active:', _realtimeActive); return; }
   _realtimeActive = true;
-  var _rtFirstSnap = true; // skip initial snapshot (all docs fire as 'added')
+  var _rtFirstSnap = true;
+  console.log('[realtime] Starting onSnapshot listener...');
 
   _db.collection('kv').onSnapshot(function(snapshot) {
     // Skip initial snapshot — data sudah di-load via cloudLoad
-    if(_rtFirstSnap) { _rtFirstSnap = false; return; }
+    if(_rtFirstSnap) { _rtFirstSnap = false; console.log('[realtime] Initial snapshot skipped'); return; }
 
     var changed = [];
     snapshot.docChanges().forEach(function(change) {
@@ -975,7 +976,7 @@ function cloudStartRealtime() {
         changed.push(key);
       }
     });
-    if(changed.length) _applyRealtimeChanges(changed);
+    if(changed.length) { console.log('[realtime] Changes from other laptop:', changed); _applyRealtimeChanges(changed); }
   }, function(err) {
     console.warn('Realtime listener error:', err.message);
     _realtimeActive = false;
@@ -1136,7 +1137,8 @@ function appStart() {
     }, 500);
   }
 
-  if(_fbReady){ setMsg('Mengambil dari cloud...'); cloudLoad(function(data){
+  if(_fbReady){ setMsg('Mengambil dari cloud...'); console.log('[boot] cloudLoad START'); cloudLoad(function(data){
+    console.log('[boot] cloudLoad done. Keys:', Object.keys(data||{}).length, '| last_sync:', (data||{}).last_sync||'(none)');
     afterLoad(data);
     setTimeout(cloudStartRealtime, 500);
   }); }
@@ -1603,14 +1605,17 @@ async function syncAll() {
   _showSyncBar(true);
   ['stock','po','grpo','ospr'].forEach(function(k){ _setSyncItem(k,'loading'); });
   document.getElementById('dash-sub').textContent = 'Menyinkronkan semua data...';
+  console.log('[syncAll] START — _fbReady:', _fbReady);
 
   var results = await Promise.allSettled([loadStock(), loadPO(), loadOSPR(), loadGRPO()]);
   loadOSPO();
   var failed = results.filter(function(r){ return r.status === 'rejected'; });
+  console.log('[syncAll] API done. Failed:', failed.length, '| Stock:', Object.keys(STATE.stockData||{}).length, '| PO:', (STATE.poData||[]).length);
 
   var _tsd = new Date();
   var ts = _tsd.getDate()+'/'+(_tsd.getMonth()+1)+'/'+_tsd.getFullYear()+' '+
     String(_tsd.getHours()).padStart(2,'0')+':'+String(_tsd.getMinutes()).padStart(2,'0')+':'+String(_tsd.getSeconds()).padStart(2,'0');
+  console.log('[syncAll] timestamp:', ts);
   localStorage.setItem('last_sync', ts);
   _lastSyncMsg = (failed.length ? '⚠ ' + failed.length + ' gagal | ' : '') + 'Sync: ' + ts;
   document.getElementById('dash-sub').textContent = _lastSyncMsg;
@@ -1618,11 +1623,14 @@ async function syncAll() {
   // ── Simpan SAP data ke Firebase cache agar boot instan ─────────────────────
   if(!failed.length || results[0].status==='fulfilled') {
     try {
-      localStorage.setItem('sap_cache_stock', JSON.stringify(STATE.stockData));
-      localStorage.setItem('sap_cache_po',    JSON.stringify(STATE.poData));
+      var sStock = JSON.stringify(STATE.stockData), sPO = JSON.stringify(STATE.poData);
+      console.log('[syncAll] Saving cache — stock:', Math.round(sStock.length/1024)+'KB, po:', Math.round(sPO.length/1024)+'KB');
+      localStorage.setItem('sap_cache_stock', sStock);
+      localStorage.setItem('sap_cache_po',    sPO);
       localStorage.setItem('sap_cache_grpo',  JSON.stringify(STATE.grpoData));
       localStorage.setItem('sap_cache_ospr',  JSON.stringify(STATE.osprData || []));
-    } catch(e) { console.warn('SAP cache save error:', e.message); }
+      console.log('[syncAll] ✓ Cache saved');
+    } catch(e) { console.warn('[syncAll] Cache FAILED:', e.message); }
   }
 
   if(STATE.mrpData) buildProjection();
