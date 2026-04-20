@@ -485,7 +485,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   </div>
   <div class="fbar">
     <input type="text" id="srch-po" placeholder="Cari Doc Num / item / supplier..." oninput="renderPO()" style="width:220px">
-    <select id="f-po-type" onchange="renderPO()"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
     <select id="f-po-type" onchange="renderPO()" style="width:90px"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
     <select id="f-po-site" onchange="renderPO()"><option value="">Semua Site</option><option>BITUNG</option><option>SANGIANG</option></select>
     <select id="f-po-req" onchange="renderPO()"><option value="">Semua Status Request</option><option value="has">Sudah Dijadwal</option><option value="none">Belum Dijadwal</option><option value="manual">Edit Manual</option></select>
@@ -962,12 +961,13 @@ function _setRMDisplay(mode) {
   }
   _rmDisplayMode = mode;
   localStorage.setItem('rm_display_mode', mode);
-  // Re-render semua yg pakai _dispName
+  // Re-render semua yg pakai _dispName / _poName
   if(STATE.projectionData && STATE.projectionData.length) {
     renderProjection();
     updateDashStats();
     renderSchedule();
   }
+  if(STATE.poData && STATE.poData.length) renderPO();
   toast('Tampilan RM: ' + (mode === 'realname' ? 'Real Name' : 'Deskripsi SAP'), 'ok');
 }
 
@@ -1897,7 +1897,7 @@ function renderPO() {
     row += '<td class="mono">' + p.docNum + '</td>';
     row += '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">' + (p.supplierName||'') + '</td>';
     row += '<td class="mono">' + (p.itemCode||'') + '</td>';
-    row += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">' + (p.itemName||'') + '</td>';
+    row += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">' + _poName(p.itemCode, p.itemName) + '</td>';
     row += '<td>' + (p.site||'—') + '</td>';
     row += '<td class="mono td-right">' + n_id(p.openQty||0) + '</td>';
     row += '<td>' + (p.uom||'') + '</td>';
@@ -2145,7 +2145,7 @@ function renderGRPO() {
       if(gn && !(r.itemName||'').toLowerCase().includes(gn)) return false;
       if(gs && !(r.supplierName||'').toLowerCase().includes(gs)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+(r.itemName||'')+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+n_id(r.qty||0)+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
+    }).map(function(r){return '<tr><td class="mono">'+(r.grpoDate||'')+'</td><td class="mono">'+(r.itemCode||'')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+_poName(r.itemCode,r.itemName)+'</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(r.supplierName||'')+'</td><td class="mono td-right">'+n_id(r.qty||0)+'</td><td>'+(r.uom||'')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' GRPO</div>';
 }
@@ -2197,7 +2197,7 @@ function renderOSPO() {
       if(oc && !(r.itemCode||'').toLowerCase().includes(oc)) return false;
       if(on && !(r.itemName||'').toLowerCase().includes(on)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+r.itemName+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+r.uom+'</td><td class="mono">'+(r.poReqDate||'—')+'</td></tr>'}).join('') +
+    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+_poName(r.itemCode,r.itemName)+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+r.uom+'</td><td class="mono">'+(r.poReqDate||'—')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' OSPO</div>';
 }
@@ -3231,6 +3231,12 @@ function _dispName(p) {
   if(!p) return '';
   if(p.itemType === 'RM' && _rmDisplayMode === 'realname' && p.realName) return p.realName;
   return p.description || p.productCode || '';
+}
+// Helper: display name for PO/GRPO/OSPR items (no itemType, uses itemCode prefix)
+function _poName(itemCode, itemName) {
+  if(_rmDisplayMode === 'realname' && /^3/.test(itemCode||'') && STATE.realNameData && STATE.realNameData[itemCode])
+    return STATE.realNameData[itemCode];
+  return itemName || '';
 }
 
 function renderDashSchedule() {
@@ -4356,7 +4362,7 @@ function renderStockDaily() {
     return '<tr>' +
       '<td class="mono" style="font-size:10.5px">' + r.date + '</td>' +
       '<td class="mono" style="font-size:10.5px">' + r.ic + '</td>' +
-      '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">' + (r.itemName||'—') + '</td>' +
+      '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">' + _poName(r.ic, r.itemName) + '</td>' +
       '<td class="mono td-right">' + n_id(r.btg) + '</td>' +
       '<td class="mono td-right">' + n_id(r.sng) + '</td>' +
       '<td class="mono td-right" style="font-weight:500">' + n_id(r.btg+r.sng) + '</td>' +
@@ -4621,7 +4627,7 @@ function renderDailyList() {
       planBadges +
       '</div>' +
       '<div class="card"><div class="tbl-wrap"><table>' +
-      '<thead><tr><th>Supplier</th><th>Doc Num</th><th>Item Code</th><th>Item Name</th><th>Real Name</th><th>Tipe</th><th>Site</th><th>Open Qty</th><th>UOM</th><th>Qty Konfirm</th><th>Tgl Konfirm</th><th>Notes</th><th>Jenis</th></tr></thead><tbody>' +
+      '<thead><tr><th>Supplier</th><th>Doc Num</th><th>Item Code</th><th>Item Name</th>'+(_rmDisplayMode==='realname'?'<th>Real Name</th>':'')+'<th>Tipe</th><th>Site</th><th>Open Qty</th><th>UOM</th><th>Qty Konfirm</th><th>Tgl Konfirm</th><th>Notes</th><th>Jenis</th></tr></thead><tbody>' +
       list.map(function(e){
         var badge = e.isManual ? '<span class="badge b-amber">Manual</span>' : (e.isAuto ? '<span class="badge b-teal">Auto</span>' : '<span class="badge b-gray">—</span>');
         var typeCls = e.itemType==='RM'?'b-blue':e.itemType==='PM'?'b-purple':e.itemType==='FG'?'b-green':'b-gray';
@@ -4629,8 +4635,8 @@ function renderDailyList() {
           '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">'+e.supplierName+'</td>' +
           '<td class="mono">'+e.docNum+'</td>' +
           '<td class="mono" style="font-size:10.5px">'+e.itemCode+'</td>' +
-          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">'+e.itemName+'</td>' +
-          '<td style="color:var(--teal);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis">'+(e.realName||'—')+'</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">'+_poName(e.itemCode, e.itemName)+'</td>' +
+          (_rmDisplayMode==='realname'?'<td style="color:var(--teal);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis">'+(e.realName||'—')+'</td>':'') +
           '<td><span class="badge '+typeCls+'" style="font-size:9px">'+e.itemType+'</span></td>' +
           '<td>'+(e.site||'—')+'</td>' +
           '<td class="mono td-right">'+n_id(e.openQty)+'</td>' +
