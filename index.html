@@ -348,7 +348,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v16</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v17</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -399,10 +399,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
   <!-- Stat Cards -->
   <div id="dash-stat-cards" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px">
-    <div class="stat"><div class="stat-lbl">Item Urgent</div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub" id="dash-sub-urgent">coverage ≤ cutoff</div></div>
+    <div class="stat"><div class="stat-lbl">Item Urgent <span id="trend-urgent"></span></div><div class="stat-val red" id="s-urgent">—</div><div class="stat-sub" id="dash-sub-urgent">coverage ≤ cutoff</div></div>
     <div class="stat"><div class="stat-lbl">Total Item</div><div class="stat-val accent" id="s-total">—</div><div class="stat-sub" id="dash-sub-total">di projection stock</div></div>
     <div class="stat"><div class="stat-lbl">PO Open</div><div class="stat-val amber" id="s-po">—</div><div class="stat-sub">menunggu pengiriman</div></div>
-    <div class="stat"><div class="stat-lbl">Jadwal Belum Confirm</div><div class="stat-val purple" id="s-unconfirmed">—</div><div class="stat-sub">minggu ini</div></div>
+    <div class="stat"><div class="stat-lbl">Jadwal Belum Confirm</div><div class="stat-val purple" id="s-unconfirmed">—</div><div class="stat-sub" id="stat-sub-unconf">minggu ini</div></div>
   </div>
 
   <!-- Stock Status Bars -->
@@ -417,14 +417,19 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div id="dash-highlighted"><div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom Projection Stock untuk menambahkan.</div></div>
   </div>
 
+  <!-- Stale data warning -->
+  <div id="dash-stale-warning" style="display:none;padding:10px 14px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--amber);display:none">
+    ⚠ <span id="stale-msg"></span> <button class="btn btn-xs btn-amber" onclick="syncAll()" style="margin-left:8px">↺ Sync Sekarang</button>
+  </div>
+
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
-  <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
-    <div class="card" style="padding:14px 16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+  <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px;align-items:start">
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;max-height:520px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
         <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
       </div>
-      <div id="dash-urgent-table" style="overflow-y:auto"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
+      <div id="dash-urgent-table" style="flex:1;overflow-y:auto"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <!-- Schedule this week -->
@@ -449,6 +454,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Real-time Sync</span><span id="status-realtime" style="font-size:10px;color:var(--muted)">—</span></div>
           <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px">Data MRP</span><span id="status-mrp" style="font-size:10px;color:var(--muted)">—</span></div>
         </div>
+      </div>
+      <!-- Top Supplier -->
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Top Supplier — PO Terbanyak</div>
+        <div id="dash-top-supplier" style="font-size:11px"></div>
       </div>
     </div>
   </div>
@@ -3318,19 +3328,36 @@ function renderDashboard() {
     }
   });
   if(STATE.grpoData.length) console.log('[GRPO] matched today:', grpoToday.length);
-  var grpoTodayEl=document.getElementById('s-grpo-today'); if(grpoTodayEl) grpoTodayEl.textContent=grpoToday.length;
+  // Filter by dashboard type
+  var grpoFiltered = _dashType === 'ALL' ? grpoToday : grpoToday.filter(function(g){
+    var t = /^3/.test(g.itemCode||'') ? 'RM' : (/^4/.test(g.itemCode||'') ? 'PM' : 'FG');
+    return t === _dashType;
+  });
+  var grpoTodayEl=document.getElementById('s-grpo-today'); if(grpoTodayEl) grpoTodayEl.textContent=grpoFiltered.length;
   // Render today's GRPO list — grouped by supplier
   var grpoListEl=document.getElementById('dash-grpo-today-list');
   if(grpoListEl) {
-    if(!grpoToday.length) {
-      grpoListEl.innerHTML='<div style="color:var(--muted);padding:12px 0;text-align:center">Belum ada GRPO hari ini</div>';
+    if(!grpoFiltered.length) {
+      grpoListEl.innerHTML='<div style="color:var(--muted);padding:12px 0;text-align:center">Belum ada GRPO' + (_dashType!=='ALL'?' '+_dashType:'') + ' hari ini</div>';
     } else {
       // Group by supplier
       var bySup = {};
-      grpoToday.forEach(function(g){
+      grpoFiltered.forEach(function(g){
         var s = g.supplierName || '—';
         if(!bySup[s]) bySup[s] = [];
         bySup[s].push(g);
+      });
+      // Build set of scheduled items for today
+      var schedToday = {};
+      STATE.scheduleData.forEach(function(s){
+        if(!s.date) return;
+        var sISO = s.date.includes('/') ? s.date.split('/').reverse().join('-') : s.date;
+        var tISO = new Date().toISOString().split('T')[0];
+        if(sISO === tISO && ['approved','sent','confirmed'].indexOf(s.status) >= 0) {
+          (s.entries||[]).forEach(function(en){
+            if(en.item) schedToday[en.item.productCode] = true;
+          });
+        }
       });
       grpoListEl.innerHTML = Object.keys(bySup).sort().map(function(sup){
         var items = bySup[sup];
@@ -3338,13 +3365,39 @@ function renderDashboard() {
           '<div style="font-size:10.5px;font-weight:600;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">' + sup + ' <span style="color:var(--muted);font-weight:400">(' + items.length + ')</span></div>' +
           items.map(function(g){
             var name = _poName(g.itemCode, g.itemName);
+            var isScheduled = schedToday[g.itemCode];
+            var matchIcon = isScheduled ? '<span title="Sesuai jadwal" style="color:var(--green);font-size:9px;margin-left:3px">✓</span>' : '';
             return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 4px 8px;border-bottom:0.5px solid var(--border)">' +
               '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-                '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">' + (g.itemCode||'') + '</span> ' + name +
+                '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">' + (g.itemCode||'') + '</span> ' + name + matchIcon +
               '</div>' +
               '<div style="flex-shrink:0;font-family:var(--mono);color:var(--teal);font-weight:500">' + n_id(g.qty||0) + ' <span style="font-weight:400;color:var(--muted);font-size:9px">' + (g.uom||'') + '</span></div>' +
             '</div>';
           }).join('') +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // ── Top Supplier by PO count ────────────────────────────────────────────────
+  var topSupEl = document.getElementById('dash-top-supplier');
+  if(topSupEl) {
+    var supPO = {};
+    var filtPO = _dashType === 'ALL' ? STATE.poData : STATE.poData.filter(function(p){ var t=/^3/.test(p.itemCode||'')?'RM':(/^4/.test(p.itemCode||'')?'PM':'FG'); return t===_dashType; });
+    filtPO.forEach(function(p){ var s=p.supplierName||'—'; supPO[s]=(supPO[s]||0)+1; });
+    var sorted = Object.keys(supPO).sort(function(a,b){return supPO[b]-supPO[a]}).slice(0,5);
+    if(!sorted.length) {
+      topSupEl.innerHTML = '<div style="color:var(--muted)">Belum ada data PO</div>';
+    } else {
+      var maxPO = supPO[sorted[0]];
+      topSupEl.innerHTML = sorted.map(function(s){
+        var pct = Math.round((supPO[s]/maxPO)*100);
+        var hasUnconf = STATE.scheduleData.some(function(sc){ return sc.supName===s && sc.status==='pending'; });
+        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0">' +
+          '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px">' + s + '</div>' +
+          '<div style="width:60px;height:4px;background:var(--border);border-radius:2px;flex-shrink:0"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:2px"></div></div>' +
+          '<span style="font-family:var(--mono);font-size:10px;color:var(--text);width:24px;text-align:right">' + supPO[s] + '</span>' +
+          (hasUnconf ? '<span style="font-size:8px;color:var(--amber)" title="Ada jadwal pending">⏳</span>' : '') +
         '</div>';
       }).join('');
     }
@@ -3404,7 +3457,9 @@ function renderDashUrgent(urgentItems) {
     var isRed=(p.doiFC||0)<5; var dotColor=isRed?'var(--red)':'var(--amber)';
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
     var name = _dispName(p);
-    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
+    var covPct = Math.min(100, Math.max(0, ((p.doiFC||0)/30)*100));
+    var barColor = covPct < 23 ? 'var(--red)' : covPct < 47 ? 'var(--amber)' : 'var(--green)';
+    return '<div onclick="_jumpToItem(\''+p.productCode+'\')" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border);cursor:pointer" title="Klik untuk lihat detail">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
@@ -3412,20 +3467,74 @@ function renderDashUrgent(urgentItems) {
           '<span class="mono cov-critical" style="font-size:10px;flex-shrink:0">'+p.coverageDateStr+'</span>'+
         '</div>'+
         '<div style="font-size:10px;color:var(--muted);margin-top:1px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
+        '<div style="height:3px;background:var(--border);border-radius:2px;margin-top:3px"><div style="height:100%;width:'+covPct+'%;background:'+barColor+';border-radius:2px"></div></div>'+
         (p.comment ? '<div style="font-size:9.5px;color:var(--teal);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.comment+'</div>' : '') +
       '</div></div>';
   }).join('');
+}
+
+function _jumpToItem(code) {
+  showPage('projection', document.querySelectorAll('.ni')[1]);
+  setTimeout(function(){
+    var input = document.getElementById('srch-proj');
+    if(input) { input.value = code; renderProjection(); }
+  }, 200);
 }
 
 function updateDashStats() {
   var elTotal = document.getElementById('s-total'); if(elTotal) elTotal.textContent = STATE.projectionData.length || '—';
   var elPO = document.getElementById('s-po'); if(elPO) elPO.textContent = STATE.poData.length || '—';
   var elGrpo = document.getElementById('s-grpo'); if(elGrpo) elGrpo.textContent = STATE.grpoData.length || '—';
-  var elUnconf = document.getElementById('s-unconfirmed'); if(elUnconf) elUnconf.textContent = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'}).length || '—';
+
+  // Jadwal belum confirm — with sub-detail
+  var unconf = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'});
+  var elUnconf = document.getElementById('s-unconfirmed'); if(elUnconf) elUnconf.textContent = unconf.length || '—';
+  var elUnconfSub = document.getElementById('stat-sub-unconf');
+  if(elUnconfSub) {
+    var supCount = {}; unconf.forEach(function(s){ supCount[s.supName]=true; });
+    var itemCount = unconf.reduce(function(s,e){ return s + (e.entries||[]).length; }, 0);
+    elUnconfSub.textContent = Object.keys(supCount).length + ' supplier · ' + itemCount + ' item';
+  }
+
   var urgent = STATE.projectionData.filter(function(p){return p.isUrgent}).length;
   var elUrg = document.getElementById('s-urgent'); if(elUrg) elUrg.textContent = urgent || '—';
   var nb = document.getElementById('nb-urgent');
   if(nb){ nb.style.display=urgent>0?'':'none'; if(urgent>0) nb.textContent=urgent; }
+
+  // ── Trend indicators ──────────────────────────────────────────────────────
+  var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  var ydISO = yesterday.toISOString().split('T')[0];
+  var snapKeys = Object.keys(STATE.projectionSnapshots || {}).sort();
+  var lastSnap = snapKeys.length ? STATE.projectionSnapshots[snapKeys[snapKeys.length-1]] : null;
+  if(lastSnap && lastSnap.urgentCount !== undefined) {
+    var diff = urgent - lastSnap.urgentCount;
+    var trendEl = document.getElementById('trend-urgent');
+    if(trendEl) {
+      if(diff > 0) trendEl.innerHTML = '<span style="color:var(--red);font-size:10px">↑+'+diff+'</span>';
+      else if(diff < 0) trendEl.innerHTML = '<span style="color:var(--green);font-size:10px">↓'+diff+'</span>';
+      else trendEl.innerHTML = '<span style="color:var(--muted);font-size:10px">=</span>';
+    }
+  }
+
+  // ── Stale data warning ────────────────────────────────────────────────────
+  var staleEl = document.getElementById('dash-stale-warning');
+  var staleMsg = document.getElementById('stale-msg');
+  if(staleEl && staleMsg) {
+    var ls = localStorage.getItem('last_sync');
+    if(ls) {
+      try {
+        var parts = ls.split(' '); var dp = parts[0].split('/');
+        var tp = (parts[1]||'00:00:00').split(':');
+        var lastDate = new Date(parseInt(dp[2]),parseInt(dp[1])-1,parseInt(dp[0]),parseInt(tp[0]||0),parseInt(tp[1]||0));
+        var hoursAgo = Math.round((Date.now()-lastDate.getTime())/3600000);
+        if(hoursAgo >= 24) {
+          staleMsg.textContent = 'Data SAP terakhir sync ' + hoursAgo + ' jam lalu (' + ls + ')';
+          staleEl.style.display = 'block';
+        } else { staleEl.style.display = 'none'; }
+      } catch(e) { staleEl.style.display = 'none'; }
+    } else { staleEl.style.display = 'none'; }
+  }
+
   renderDashboard();
   checkNotifications();
   updateNotifBadge();
