@@ -348,7 +348,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v14</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v15</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3394,20 +3394,15 @@ function renderDashUrgent(urgentItems) {
     var isRed=(p.doiFC||0)<5; var dotColor=isRed?'var(--red)':'var(--amber)';
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
     var name = _dispName(p);
-    var cmtStr = p.comment ? '<div style="font-size:10px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;text-align:right">'+p.comment+'</div>' : '';
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
-          '<div style="min-width:0;flex:1">'+
-            '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
-            '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
-          '</div>'+
-          '<div style="flex-shrink:0;text-align:right">'+
-            '<div class="mono cov-critical" style="font-size:11px">'+p.coverageDateStr+'</div>'+
-            cmtStr+
-          '</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
+          '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">'+name+'</div>'+
+          '<span class="mono cov-critical" style="font-size:10px;flex-shrink:0">'+p.coverageDateStr+'</span>'+
         '</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:1px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+p.doiFC+'</div>'+
+        (p.comment ? '<div style="font-size:9.5px;color:var(--teal);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.comment+'</div>' : '') +
       '</div></div>';
   }).join('');
 }
@@ -3760,32 +3755,39 @@ function renderSchedule() {
         var ovr = poKey ? (STATE.poOverrides[poKey] || {}) : {};
         var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
         var dispQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
-        // DOI calculation
+        // DOI calculation: DOI max + (incoming / daily usage)
         var proj = STATE.projectionData.find(function(x){ return x.productCode === en.item.productCode; });
-        var doiNow = proj ? (proj.doiFC||0) : '—';
-        var doiAfter = '—';
-        if(proj && proj.max3MRP > 0) {
-          var dailyUsg = proj.max3MRP / (CFG.workdays >= 20 ? CFG.workdays : 22);
-          var totalNow = (proj.stockBTG||0) + (proj.stockSNG||0);
-          doiAfter = dailyUsg > 0 ? Math.round((totalNow + dispQty) / dailyUsg) : '∞';
-        }
-        var doiColor = doiNow !== '—' && doiNow < 7 ? 'var(--red)' : 'var(--muted)';
-        var doiAfterColor = doiAfter !== '—' && doiAfter > doiNow ? 'var(--green)' : 'var(--muted)';
+        var doiNow = proj ? Math.round(proj.doiFC||0) : 0;
+        var daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
+        var dailyUsg = (proj && proj.max3MRP > 0) ? proj.max3MRP / daysInMonth : 0;
+        var addDays = dailyUsg > 0 ? Math.round(dispQty / dailyUsg) : 0;
+        var doiAfter = doiNow + addDays;
+        var doiColor = doiNow < 7 ? 'var(--red)' : (doiNow < 14 ? 'var(--amber)' : 'var(--muted)');
+        var doiAfterColor = doiAfter > doiNow ? 'var(--green)' : 'var(--muted)';
+        // Multiple from master data
+        var master = STATE.masterData && STATE.masterData[en.item.productCode];
+        var multiple = master ? (master.multiple || 1) : 1;
+        if(multiple < 1) multiple = 1;
         var multiItem = (e.entries||[]).length > 1;
-        return '<div style="display:flex;align-items:center;gap:5px;margin-top:4px;padding:3px 0;border-bottom:0.5px solid var(--border)">' +
+        var uid = 'sq_' + idx + '_' + enIdx;
+        return '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;padding:3px 0;border-bottom:0.5px solid var(--border)">' +
           '<div style="flex:1;min-width:0;overflow:hidden">' +
             '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</div>' +
             '<div style="font-size:9px;color:var(--muted);display:flex;gap:6px;margin-top:1px">' +
               '<span>DOI: <span style="color:'+doiColor+';font-weight:500">'+doiNow+'</span></span>' +
-              '<span>→ <span style="color:'+doiAfterColor+';font-weight:500">'+doiAfter+'</span></span>' +
+              '<span>→ <span id="doi-after-'+uid+'" style="color:'+doiAfterColor+';font-weight:500">'+doiAfter+'</span></span>' +
             '</div>' +
           '</div>' +
-          '<input type="text" value="' + n_id(dispQty) + '" style="width:70px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono);text-align:right" ' +
-          'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" ' +
-          'onchange="saveSchedQty(this)" onfocus="this.value=this.value.replace(/\\./g,\'\')" onblur="this.value=this.value?n_id(parseFloat(this.value.replace(/\\./g,\'\'))||0):\'\'" title="Qty request kirim"' + (_isAdmin?'':' disabled') + '>' +
-          '<span style="font-size:9px;color:var(--muted);width:24px">' + (en.item.uom||'') + '</span>' +
-          (_isAdmin && multiItem ? '<span onclick="splitSchedItem('+idx+','+enIdx+')" title="Pisahkan ke jadwal terpisah" style="cursor:pointer;font-size:10px;color:var(--accent);padding:2px">↗</span>' : '') +
-          (_isAdmin ? '<span onclick="removeSchedItem('+idx+','+enIdx+')" title="Hapus item ini" style="cursor:pointer;font-size:10px;color:var(--red);padding:2px">✕</span>' : '') +
+          '<div style="display:flex;align-items:center;gap:1px">' +
+            (_isAdmin ? '<span onclick="_schedQtyStep(\''+uid+'\',-'+multiple+')" style="cursor:pointer;font-size:11px;color:var(--muted);padding:2px 3px;user-select:none" title="-'+n_id(multiple)+'">▼</span>' : '') +
+            '<input type="text" id="'+uid+'" value="' + n_id(dispQty) + '" style="width:70px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px;font-family:var(--mono);text-align:right" ' +
+            'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" data-doi-now="' + doiNow + '" data-daily-usg="' + dailyUsg.toFixed(4) + '" data-multiple="' + multiple + '" ' +
+            'onchange="saveSchedQty(this)" onfocus="this.value=this.value.replace(/\\./g,\'\')" onblur="_schedQtyBlur(this)" title="Qty · multiple: '+n_id(multiple)+'"' + (_isAdmin?'':' disabled') + '>' +
+            (_isAdmin ? '<span onclick="_schedQtyStep(\''+uid+'\','+multiple+')" style="cursor:pointer;font-size:11px;color:var(--muted);padding:2px 3px;user-select:none" title="+'+n_id(multiple)+'">▲</span>' : '') +
+          '</div>' +
+          '<span style="font-size:9px;color:var(--muted);width:22px">' + (en.item.uom||'') + '</span>' +
+          (_isAdmin && multiItem ? '<span onclick="splitSchedItem('+idx+','+enIdx+')" title="Pisahkan" style="cursor:pointer;font-size:10px;color:var(--accent);padding:1px 2px">↗</span>' : '') +
+          (_isAdmin ? '<span onclick="removeSchedItem('+idx+','+enIdx+')" title="Hapus item" style="cursor:pointer;font-size:10px;color:var(--red);padding:1px 2px">✕</span>' : '') +
         '</div>';
       }).join('');
       html += '<div class="scard ' + e.status + '">' +
@@ -3849,6 +3851,38 @@ function saveSchedDate(input) {
 }
 
 // ── Edit qty request kirim per item ──────────────────────────────────────────
+function _schedQtyBlur(el) {
+  var raw = parseFloat(String(el.value).replace(/\./g,'')) || 0;
+  el.value = raw ? n_id(raw) : '';
+  _updateSchedDOI(el);
+}
+
+function _schedQtyStep(uid, step) {
+  var el = document.getElementById(uid);
+  if(!el) return;
+  var raw = parseFloat(String(el.value).replace(/\./g,'')) || 0;
+  raw = Math.max(0, raw + step);
+  el.value = n_id(raw);
+  _updateSchedDOI(el);
+  // Auto-save
+  saveSchedQty(el);
+}
+
+function _updateSchedDOI(el) {
+  var doiNow = parseFloat(el.getAttribute('data-doi-now')) || 0;
+  var dailyUsg = parseFloat(el.getAttribute('data-daily-usg')) || 0;
+  var qty = parseFloat(String(el.value).replace(/\./g,'')) || 0;
+  var addDays = dailyUsg > 0 ? Math.round(qty / dailyUsg) : 0;
+  var doiAfter = doiNow + addDays;
+  // Find DOI after element
+  var uid = el.id;
+  var doiEl = document.getElementById('doi-after-' + uid);
+  if(doiEl) {
+    doiEl.textContent = doiAfter;
+    doiEl.style.color = doiAfter > doiNow ? 'var(--green)' : 'var(--muted)';
+  }
+}
+
 function saveSchedQty(input) {
   if(!_requireAdmin('edit jadwal')) return;
   var idx = parseInt(input.getAttribute('data-sched-idx'));
@@ -5060,20 +5094,15 @@ function renderHighlighted() {
     var dotColor = p.isUrgent ? 'var(--red)' : (p.category==='UNDER' ? 'var(--amber)' : 'var(--green)');
     var tb=p.itemType==='RM'?'<span class="badge b-blue" style="font-size:9px">RM</span>':p.itemType==='PM'?'<span class="badge b-purple" style="font-size:9px">PM</span>':'<span class="badge b-green" style="font-size:9px">FG</span>';
     var name = _dispName(p);
-    var cmtStr = p.comment ? '<div style="font-size:10px;color:var(--teal);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;text-align:right">'+p.comment+'</div>' : '';
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border)">'+
       '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;flex-shrink:0;margin-top:4px"></span>'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
-          '<div style="min-width:0;flex:1">'+
-            '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
-            '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+(p.doiFC||'—')+'</div>'+
-          '</div>'+
-          '<div style="flex-shrink:0;text-align:right">'+
-            '<div class="mono '+covClass+'" style="font-size:11px">'+(p.coverageDateStr||'—')+'</div>'+
-            cmtStr+
-          '</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
+          '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">'+name+'</div>'+
+          '<span class="mono '+covClass+'" style="font-size:10px;flex-shrink:0">'+(p.coverageDateStr||'—')+'</span>'+
         '</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:1px">'+p.productCode+' '+tb+' · '+(p.supplier||'—')+' · DOI: '+(p.doiFC||'—')+'</div>'+
+        (p.comment ? '<div style="font-size:9.5px;color:var(--teal);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.comment+'</div>' : '') +
       '</div>'+
       '<span onclick="toggleHighlight(\''+p.productCode+'\',false)" title="Unpin" style="cursor:pointer;color:var(--muted);font-size:11px;flex-shrink:0;padding-top:2px">✕</span>'+
     '</div>';
