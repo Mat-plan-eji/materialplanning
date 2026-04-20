@@ -1267,7 +1267,7 @@ function _applyRealtimeChanges(keys) {
         case 'sap_cache_po':
           var rawP = JSON.parse(val || '[]');
           STATE.poData = rawP.map(function(p){
-            if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:p.r,site:p.t};
+            if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:fmtSAPDate(p.r),site:p.t};
             return p;
           });
           loadOSPO();
@@ -1276,7 +1276,7 @@ function _applyRealtimeChanges(keys) {
         case 'sap_cache_grpo':
           var rawG2 = JSON.parse(val || '[]');
           STATE.grpoData = rawG2.map(function(g){
-            if(g.d !== undefined) return {grpoDate:g.d,itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
+            if(g.d !== undefined) return {grpoDate:fmtSAPDate(g.d),itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
             return g;
           });
           renderFlags.dash = true;
@@ -1284,7 +1284,7 @@ function _applyRealtimeChanges(keys) {
         case 'sap_cache_ospr':
           var rawO2 = JSON.parse(val || '[]');
           STATE.osprData = rawO2.map(function(o){
-            if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:o.r,site:o.t};
+            if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:fmtSAPDate(o.r),site:o.t};
             return o;
           });
           break;
@@ -4453,8 +4453,16 @@ function fmtDateID(d) {
 function fmtSAPDate(val) {
   if(!val) return '';
   if(typeof val === 'string' && val.includes('T')) val = val.split('T')[0];
-  var parts = val.split('-');
-  if(parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+  // Handle both - and / separators from SAP
+  var sep = val.includes('-') ? '-' : (val.includes('/') ? '/' : null);
+  if(!sep) return val;
+  var parts = val.split(sep);
+  if(parts.length === 3) {
+    // If first part is 4 digits = YYYY/MM/DD or YYYY-MM-DD → convert to DD/MM/YYYY
+    if(parts[0].length === 4) return parts[2] + '/' + parts[1] + '/' + parts[0];
+    // Already DD/MM/YYYY or DD-MM-YYYY
+    return parts[0] + '/' + parts[1] + '/' + parts[2];
+  }
   return val;
 }
 function dateToISO(ddmmyyyy) {
@@ -5200,21 +5208,21 @@ function _appInit() {
       var raw = JSON.parse(cachedPO);
       STATE.poData = raw.map(function(p){
         // Support both compressed {d,i,n,...} and full {docNum,itemCode,...}
-        if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:p.r,site:p.t};
+        if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:fmtSAPDate(p.r),site:p.t};
         return p;
       });
     }
     if(cachedGRPO) {
       var rawG = JSON.parse(cachedGRPO);
       STATE.grpoData = rawG.map(function(g){
-        if(g.d !== undefined) return {grpoDate:g.d,itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
+        if(g.d !== undefined) return {grpoDate:fmtSAPDate(g.d),itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
         return g;
       });
     }
     if(cachedOSPR) {
       var rawO = JSON.parse(cachedOSPR);
       STATE.osprData = rawO.map(function(o){
-        if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:o.r,site:o.t};
+        if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:fmtSAPDate(o.r),site:o.t};
         return o;
       });
     }
