@@ -348,7 +348,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v15</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v16</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -406,7 +406,16 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   </div>
 
   <!-- Stock Status Bars -->
-  <div id="dash-stock-bars" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+  <div id="dash-stock-bars" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:4px"></div>
+  <div style="font-size:9px;color:var(--muted);margin-bottom:14px;text-align:right">UNDER: coverage &lt;14 hari · GOOD: 14–30 hari · OVER: &gt;30 hari</div>
+
+  <!-- Highlighted Issues -->
+  <div class="card" style="padding:14px 16px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📌 Highlighted Issues</span>
+    </div>
+    <div id="dash-highlighted"><div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom Projection Stock untuk menambahkan.</div></div>
+  </div>
 
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
   <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
@@ -415,7 +424,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
         <button class="btn btn-xs" onclick="showPage('projection',document.querySelectorAll('.ni')[1])">Lihat semua →</button>
       </div>
-      <div id="dash-urgent-table" style="max-height:360px;overflow-y:auto"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
+      <div id="dash-urgent-table" style="overflow-y:auto"><div class="loading"><div class="spin"></div>Sync data untuk memuat...</div></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <!-- Schedule this week -->
@@ -442,14 +451,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- Highlighted Issues -->
-  <div class="card" style="padding:14px 16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📌 Highlighted Issues</span>
-    </div>
-    <div id="dash-highlighted"><div style="font-size:12px;color:var(--muted);padding:8px 0">Belum ada item yang di-highlight. Centang checkbox di kolom Projection Stock untuk menambahkan.</div></div>
   </div>
 
   <div id="dash-alert-area"></div>
@@ -3172,7 +3173,7 @@ function checkNotifications() {
       if(!already) {
         var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
         var g = STATE.grpoData.find(function(x){ return x.itemCode === code; });
-        _notifications.unshift({ type:'gr_received', code:code, name:(p?_dispName(p):'')||code, qty:(g&&g.qty)||0, uom:(g&&g.uom)||'', date:todayISO, read:false });
+        _notifications.unshift({ type:'gr_received', code:code, name:(p?_dispName(p):'')||code, qty:(g&&g.qty)||0, uom:(g&&g.uom)||'', itemType:(p?p.itemType:''), date:todayISO, read:false });
       }
     });
   }
@@ -3209,7 +3210,10 @@ function renderNotifList() {
   var el = document.getElementById('notif-list');
   if(!el) return;
   var list = _notifType === 'ALL' ? _notifications
-    : _notifications.filter(function(n){ return n.itemType === _notifType; });
+    : _notifications.filter(function(n){
+      var t = n.itemType || (/^3/.test(n.code||'')?'RM':(/^4/.test(n.code||'')?'PM':'FG'));
+      return t === _notifType;
+    });
   if(!list.length) {
     el.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Tidak ada notifikasi' + (_notifType !== 'ALL' ? ' untuk ' + _notifType : '') + '</div>';
     return;
