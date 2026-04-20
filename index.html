@@ -234,9 +234,71 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 .snap-row{cursor:pointer;transition:.1s}
 .snap-row:hover td{background:var(--accent-bg)!important}
 .snap-active td{background:rgba(59,127,255,.06)!important;font-weight:500}
+
+/* ═══ MOBILE RESPONSIVE ═══════════════════════════════════════════════════════ */
+.mob-hamburger{display:none;position:fixed;top:10px;left:10px;z-index:1001;background:var(--bg2);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999}
+
+@media(max-width:768px){
+  .mob-hamburger{display:flex}
+  .mob-overlay.open{display:block}
+  .sidebar{position:fixed;left:-260px;z-index:1000;transition:left .25s ease;width:240px;box-shadow:4px 0 20px rgba(0,0,0,.2)}
+  .sidebar.mob-open{left:0}
+  .main{width:100%}
+  .page-inner{padding:14px 12px 60px}
+  .ph{flex-direction:column;gap:8px;align-items:flex-start}
+  .ph-l h2{font-size:15px;padding-left:36px}
+  .ph-r{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+
+  /* Dashboard stat cards */
+  #dash-stat-cards{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  /* Dashboard stock bars */
+  #dash-stock-bars{grid-template-columns:1fr!important;gap:8px!important}
+  /* Dashboard main grid */
+  #dash-main-grid{grid-template-columns:1fr!important}
+  /* Data source cards */
+  #pg-upload .page-inner>div:nth-child(2){grid-template-columns:1fr!important}
+
+  /* Filter bars */
+  .fbar{gap:6px}
+  .fbar input,.fbar select{font-size:12px;min-width:0}
+  .fbar input[style*="width:220px"]{width:100%!important}
+
+  /* Tables */
+  .tbl-wrap{height:auto;max-height:70vh;contain:initial}
+  table{font-size:11px}
+  th,td{padding:5px 6px!important;white-space:nowrap}
+
+  /* Schedule cards */
+  .scard{flex-direction:column;gap:6px;padding:10px 12px}
+  .sacts{display:flex;flex-direction:row;gap:6px;width:100%;justify-content:flex-end}
+  .sinfo{width:100%}
+
+  /* Cards */
+  .card{border-radius:8px}
+
+  /* Notif panel */
+  #notif-panel{position:fixed!important;right:8px!important;left:8px!important;top:56px!important;width:auto!important;max-height:70vh!important}
+
+  /* Settings */
+  .frow,.frow3{grid-template-columns:1fr!important}
+
+  /* History stock grid */
+  #history-grid{grid-template-columns:1fr!important;height:auto!important}
+
+  /* Header bar */
+  .hdr{flex-wrap:wrap;gap:6px;padding:8px 12px 8px 48px}
+  .hdr h2{font-size:14px}
+
+  /* Modal */
+  .modal{width:95vw!important;max-width:95vw!important;max-height:85vh!important}
+  .modal table{font-size:11px}
+}
 </style>
 </head>
 <body onclick="closeColMenuIfOutside(event)">
+<div class="mob-hamburger" id="mob-ham" onclick="toggleMobSidebar()">☰</div>
+<div class="mob-overlay" id="mob-overlay" onclick="toggleMobSidebar()"></div>
 <div class="shell">
 
 <!-- SIDEBAR -->
@@ -286,7 +348,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v13</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v14</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -347,7 +409,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div id="dash-stock-bars" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
 
   <!-- Bottom: Critical Items + Schedule/GRPO/Status -->
-  <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
+  <div id="dash-main-grid" style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px">
     <div class="card" style="padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <span style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item Kritis — Coverage Terdekat</span>
@@ -603,7 +665,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <button class="btn btn-red btn-sm" onclick="clearAllSnapshots()" style="font-size:11px">🗑 Hapus Semua</button>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 160px)">
+  <div id="history-grid" style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 160px)">
     <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
       <div class="card-hdr"><span class="card-title">📅 Daftar Snapshot</span></div>
       <div id="snapshot-list" style="overflow-y:auto;flex:1;padding:8px"></div>
@@ -1534,6 +1596,11 @@ function showPage(name, el) {
     showLoginModal();
     return;
   }
+  // Close mobile sidebar
+  var sb = document.querySelector('.sidebar');
+  if(sb) sb.classList.remove('mob-open');
+  var ov = document.getElementById('mob-overlay');
+  if(ov) ov.classList.remove('open');
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active')});
   document.getElementById('pg-'+name).classList.add('active');
@@ -3686,20 +3753,40 @@ function renderSchedule() {
       // Editable date: convert DD/MM/YYYY → ISO for input[type=date]
       var dateISO = e.date ? (e.date.includes('/') ? e.date.split('/').reverse().join('-') : e.date) : '';
       // Build per-item editable qty rows
-      var itemEditRows = (e.entries||[]).map(function(en){
+      var itemEditRows = (e.entries||[]).map(function(en, enIdx){
         if(!en.item) return '';
         var po = en.pos && en.pos[0];
         var poKey = po ? (po.docNum + '_' + po.itemCode) : '';
         var ovr = poKey ? (STATE.poOverrides[poKey] || {}) : {};
         var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
         var dispQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
-        return '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">' +
-          '<span style="font-size:10.5px;color:var(--muted);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</span>' +
-          '<input type="text" value="' + n_id(dispQty) + '" style="width:80px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono);text-align:right" ' +
+        // DOI calculation
+        var proj = STATE.projectionData.find(function(x){ return x.productCode === en.item.productCode; });
+        var doiNow = proj ? (proj.doiFC||0) : '—';
+        var doiAfter = '—';
+        if(proj && proj.max3MRP > 0) {
+          var dailyUsg = proj.max3MRP / (CFG.workdays >= 20 ? CFG.workdays : 22);
+          var totalNow = (proj.stockBTG||0) + (proj.stockSNG||0);
+          doiAfter = dailyUsg > 0 ? Math.round((totalNow + dispQty) / dailyUsg) : '∞';
+        }
+        var doiColor = doiNow !== '—' && doiNow < 7 ? 'var(--red)' : 'var(--muted)';
+        var doiAfterColor = doiAfter !== '—' && doiAfter > doiNow ? 'var(--green)' : 'var(--muted)';
+        var multiItem = (e.entries||[]).length > 1;
+        return '<div style="display:flex;align-items:center;gap:5px;margin-top:4px;padding:3px 0;border-bottom:0.5px solid var(--border)">' +
+          '<div style="flex:1;min-width:0;overflow:hidden">' +
+            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</div>' +
+            '<div style="font-size:9px;color:var(--muted);display:flex;gap:6px;margin-top:1px">' +
+              '<span>DOI: <span style="color:'+doiColor+';font-weight:500">'+doiNow+'</span></span>' +
+              '<span>→ <span style="color:'+doiAfterColor+';font-weight:500">'+doiAfter+'</span></span>' +
+            '</div>' +
+          '</div>' +
+          '<input type="text" value="' + n_id(dispQty) + '" style="width:70px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono);text-align:right" ' +
           'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" ' +
           'onchange="saveSchedQty(this)" onfocus="this.value=this.value.replace(/\\./g,\'\')" onblur="this.value=this.value?n_id(parseFloat(this.value.replace(/\\./g,\'\'))||0):\'\'" title="Qty request kirim"' + (_isAdmin?'':' disabled') + '>' +
-          '<span style="font-size:10px;color:var(--muted)">' + (en.item.uom||'') + '</span>' +
-          '</div>';
+          '<span style="font-size:9px;color:var(--muted);width:24px">' + (en.item.uom||'') + '</span>' +
+          (_isAdmin && multiItem ? '<span onclick="splitSchedItem('+idx+','+enIdx+')" title="Pisahkan ke jadwal terpisah" style="cursor:pointer;font-size:10px;color:var(--accent);padding:2px">↗</span>' : '') +
+          (_isAdmin ? '<span onclick="removeSchedItem('+idx+','+enIdx+')" title="Hapus item ini" style="cursor:pointer;font-size:10px;color:var(--red);padding:2px">✕</span>' : '') +
+        '</div>';
       }).join('');
       html += '<div class="scard ' + e.status + '">' +
         '<div class="chk ' + (isOn?'on':'') + '" onclick="' + (_isAdmin?'toggleApprove('+idx+')':'_requireAdmin(\'approve\')') + '">' + (isOn?'✓':'') + '</div>' +
@@ -3797,6 +3884,73 @@ function toggleApprove(idx) {
   var e = STATE.scheduleData[idx];
   e.status = e.status === 'pending' ? 'approved' : (e.status === 'approved' ? 'pending' : e.status);
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule();
+}
+
+// ── Per-item: hapus item dari jadwal ─────────────────────────────────────────
+function removeSchedItem(schedIdx, entryIdx) {
+  if(!_requireAdmin('hapus item jadwal')) return;
+  var e = STATE.scheduleData[schedIdx];
+  if(!e || !e.entries) return;
+  var removed = e.entries[entryIdx];
+  if(!removed) return;
+  if(e.entries.length <= 1) {
+    // Item terakhir — hapus seluruh jadwal entry
+    if(!confirm('Hapus jadwal ' + e.supName + '?')) return;
+    STATE.scheduleData.splice(schedIdx, 1);
+  } else {
+    var itemName = removed.item ? _dispName(removed.item) : 'item';
+    if(!confirm('Hapus ' + itemName + ' dari jadwal ' + e.supName + '?')) return;
+    e.entries.splice(entryIdx, 1);
+    // Update summary
+    e.items = e.entries.map(function(en){
+      if(!en.item) return '';
+      var pk = en.pos && en.pos[0] ? (en.pos[0].docNum + '_' + en.pos[0].itemCode) : '';
+      var ovr = pk ? (STATE.poOverrides[pk]||{}) : {};
+      var qty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : (en.pos?en.pos.reduce(function(s,p){return s+(p.openQty||0)},0):0);
+      return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||'');
+    }).join(', ');
+  }
+  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
+  renderSchedule();
+  toast('Item dihapus dari jadwal ✓', 'ok');
+}
+
+// ── Per-item: pisahkan item ke jadwal terpisah ──────────────────────────────
+function splitSchedItem(schedIdx, entryIdx) {
+  if(!_requireAdmin('pisah jadwal')) return;
+  var e = STATE.scheduleData[schedIdx];
+  if(!e || !e.entries || e.entries.length <= 1) return;
+  var item = e.entries[entryIdx];
+  if(!item) return;
+  var itemName = item.item ? _dispName(item.item) : 'item';
+  if(!confirm('Pisahkan ' + itemName + ' ke jadwal terpisah?')) return;
+
+  // Remove from original
+  e.entries.splice(entryIdx, 1);
+  e.items = e.entries.map(function(en){
+    if(!en.item) return '';
+    var pk = en.pos && en.pos[0] ? (en.pos[0].docNum + '_' + en.pos[0].itemCode) : '';
+    var ovr = pk ? (STATE.poOverrides[pk]||{}) : {};
+    var qty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : (en.pos?en.pos.reduce(function(s,p){return s+(p.openQty||0)},0):0);
+    return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||'');
+  }).join(', ');
+
+  // Create new entry
+  var pk2 = item.pos && item.pos[0] ? (item.pos[0].docNum + '_' + item.pos[0].itemCode) : '';
+  var ovr2 = pk2 ? (STATE.poOverrides[pk2]||{}) : {};
+  var qty2 = ovr2.reqQtyOverride !== undefined ? ovr2.reqQtyOverride : (item.pos?item.pos.reduce(function(s,p){return s+(p.openQty||0)},0):0);
+  var newEntry = {
+    supName: e.supName, date: e.date, status: 'pending', isManual: true,
+    entries: [item],
+    items: (_dispName(item.item)||'') + ' · ' + n_id(qty2) + ' ' + (item.item.uom||''),
+    pos: item.pos ? item.pos.map(function(p){return p.docNum}).join(', ') : ''
+  };
+  STATE.scheduleData.push(newEntry);
+  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
+  renderSchedule();
+  toast('Item dipisah ke jadwal terpisah ✓', 'ok');
 }
 function approveAll() {
   if(!_requireAdmin('approve jadwal')) return;
@@ -4930,6 +5084,16 @@ function toggleColMenu() {
   var m = document.getElementById('col-menu');
   m.style.display = m.style.display === 'none' ? 'block' : 'none';
 }
+// ── Mobile sidebar toggle ────────────────────────────────────────────────────
+function toggleMobSidebar() {
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mob-overlay');
+  if(!sb) return;
+  var isOpen = sb.classList.contains('mob-open');
+  sb.classList.toggle('mob-open');
+  if(ov) ov.classList.toggle('open');
+}
+
 function closeColMenuIfOutside(e) {
   var btn = document.getElementById('btn-col-menu');
   var menu = document.getElementById('col-menu');
