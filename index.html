@@ -3346,12 +3346,12 @@ function renderDashUrgent(urgentItems) {
 }
 
 function updateDashStats() {
-  document.getElementById('s-total').textContent = STATE.projectionData.length || '—';
-  document.getElementById('s-po').textContent = STATE.poData.length || '—';
-  document.getElementById('s-grpo').textContent = STATE.grpoData.length || '—';
-  document.getElementById('s-unconfirmed').textContent = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'}).length || '—';
+  var elTotal = document.getElementById('s-total'); if(elTotal) elTotal.textContent = STATE.projectionData.length || '—';
+  var elPO = document.getElementById('s-po'); if(elPO) elPO.textContent = STATE.poData.length || '—';
+  var elGrpo = document.getElementById('s-grpo'); if(elGrpo) elGrpo.textContent = STATE.grpoData.length || '—';
+  var elUnconf = document.getElementById('s-unconfirmed'); if(elUnconf) elUnconf.textContent = STATE.scheduleData.filter(function(s){return s.status!=='confirmed'}).length || '—';
   var urgent = STATE.projectionData.filter(function(p){return p.isUrgent}).length;
-  document.getElementById('s-urgent').textContent = urgent || '—';
+  var elUrg = document.getElementById('s-urgent'); if(elUrg) elUrg.textContent = urgent || '—';
   var nb = document.getElementById('nb-urgent');
   if(nb){ nb.style.display=urgent>0?'':'none'; if(urgent>0) nb.textContent=urgent; }
   renderDashboard();
