@@ -1050,16 +1050,28 @@ function _applyRealtimeChanges(keys) {
           renderFlags.dash = true;
           break;
         case 'sap_cache_po':
-          STATE.poData = JSON.parse(val || '[]');
+          var rawP = JSON.parse(val || '[]');
+          STATE.poData = rawP.map(function(p){
+            if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:p.r,site:p.t};
+            return p;
+          });
           loadOSPO();
           renderFlags.po = true; renderFlags.dash = true;
           break;
         case 'sap_cache_grpo':
-          STATE.grpoData = JSON.parse(val || '[]');
+          var rawG2 = JSON.parse(val || '[]');
+          STATE.grpoData = rawG2.map(function(g){
+            if(g.d !== undefined) return {grpoDate:g.d,itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
+            return g;
+          });
           renderFlags.dash = true;
           break;
         case 'sap_cache_ospr':
-          STATE.osprData = JSON.parse(val || '[]');
+          var rawO2 = JSON.parse(val || '[]');
+          STATE.osprData = rawO2.map(function(o){
+            if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:o.r,site:o.t};
+            return o;
+          });
           break;
       }
     } catch(e) { console.warn('Realtime apply error for', k, e.message); }
@@ -1621,14 +1633,28 @@ async function syncAll() {
   document.getElementById('dash-sub').textContent = _lastSyncMsg;
 
   // ── Simpan SAP data ke Firebase cache agar boot instan ─────────────────────
+  // PO data dicompress (short keys, drop unused fields) karena bisa > 1MB
   if(!failed.length || results[0].status==='fulfilled') {
     try {
-      var sStock = JSON.stringify(STATE.stockData), sPO = JSON.stringify(STATE.poData);
-      console.log('[syncAll] Saving cache — stock:', Math.round(sStock.length/1024)+'KB, po:', Math.round(sPO.length/1024)+'KB');
+      var sStock = JSON.stringify(STATE.stockData);
+      // Compress PO: short keys, hanya field esensial
+      var compPO = (STATE.poData||[]).map(function(p){
+        return {d:p.docNum,i:p.itemCode,n:p.itemName,s:p.supplierName,q:p.openQty,u:p.uom,r:p.poReqDate,t:p.site};
+      });
+      var sPO = JSON.stringify(compPO);
+      // Compress GRPO
+      var compGRPO = (STATE.grpoData||[]).map(function(g){
+        return {d:g.grpoDate,i:g.itemCode,n:g.itemName,s:g.supplierName,q:g.qty,u:g.uom,t:g.site};
+      });
+      var sGRPO = JSON.stringify(compGRPO);
+      var sOSPR = JSON.stringify((STATE.osprData||[]).map(function(o){
+        return {d:o.docNum,i:o.itemCode,n:o.itemName,s:o.supplierName,q:o.openQty,u:o.uom,r:o.poReqDate,t:o.site};
+      }));
+      console.log('[syncAll] Cache sizes — stock:', Math.round(sStock.length/1024)+'KB, po:', Math.round(sPO.length/1024)+'KB, grpo:', Math.round(sGRPO.length/1024)+'KB');
       localStorage.setItem('sap_cache_stock', sStock);
       localStorage.setItem('sap_cache_po',    sPO);
-      localStorage.setItem('sap_cache_grpo',  JSON.stringify(STATE.grpoData));
-      localStorage.setItem('sap_cache_ospr',  JSON.stringify(STATE.osprData || []));
+      localStorage.setItem('sap_cache_grpo',  sGRPO);
+      localStorage.setItem('sap_cache_ospr',  sOSPR);
       console.log('[syncAll] ✓ Cache saved');
     } catch(e) { console.warn('[syncAll] Cache FAILED:', e.message); }
   }
@@ -4658,11 +4684,32 @@ function _appInit() {
     var cachedGRPO  = localStorage.getItem('sap_cache_grpo');
     var cachedOSPR  = localStorage.getItem('sap_cache_ospr');
     if(cachedStock) STATE.stockData = JSON.parse(cachedStock);
-    if(cachedPO)    STATE.poData    = JSON.parse(cachedPO);
-    if(cachedGRPO)  STATE.grpoData  = JSON.parse(cachedGRPO);
-    if(cachedOSPR)  STATE.osprData  = JSON.parse(cachedOSPR);
-    if(STATE.poData.length) loadOSPO(); // rebuild ospoData dari poData cache
-  } catch(e) { console.warn('SAP cache restore error:', e.message); }
+    // Decompress PO: short keys → full keys
+    if(cachedPO) {
+      var raw = JSON.parse(cachedPO);
+      STATE.poData = raw.map(function(p){
+        // Support both compressed {d,i,n,...} and full {docNum,itemCode,...}
+        if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:p.r,site:p.t};
+        return p;
+      });
+    }
+    if(cachedGRPO) {
+      var rawG = JSON.parse(cachedGRPO);
+      STATE.grpoData = rawG.map(function(g){
+        if(g.d !== undefined) return {grpoDate:g.d,itemCode:g.i,itemName:g.n,supplierName:g.s,qty:g.q,uom:g.u,site:g.t};
+        return g;
+      });
+    }
+    if(cachedOSPR) {
+      var rawO = JSON.parse(cachedOSPR);
+      STATE.osprData = rawO.map(function(o){
+        if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:o.r,site:o.t};
+        return o;
+      });
+    }
+    if(STATE.poData && STATE.poData.length) loadOSPO();
+    console.log('[boot] SAP cache restored — stock:', Object.keys(STATE.stockData||{}).length, 'po:', (STATE.poData||[]).length);
+  } catch(e) { console.warn('[boot] SAP cache restore error:', e.message); }
 
   CFG.url      = localStorage.getItem('sap_url')   || CFG.url;
   CFG.user     = localStorage.getItem('sap_user')  || CFG.user;
