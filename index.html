@@ -1285,10 +1285,15 @@ function appStart() {
 
   function afterLoad(cloudData) {
     Object.keys(cloudData||{}).forEach(function(k){
-      var v=cloudData[k]; if(v!=null){ _origSetItem.call(localStorage, k, v); }
+      var v=cloudData[k]; if(v!=null){ try{ _origSetItem.call(localStorage, k, v); }catch(e){console.warn('[boot] setItem fail:',k,e.message);} }
     });
     setMsg('Menyiapkan tampilan...');
-    _appInit();
+    try {
+      _appInit();
+    } catch(e) {
+      console.error('[boot] _appInit CRASH:', e.message, e.stack);
+      toast('Boot error: ' + e.message, 'err');
+    }
     removeSplash();
     // Auto-load Sheets jika data belum ada tapi URL sudah ada di cloud
     setTimeout(function(){
@@ -4952,7 +4957,9 @@ function td(content, col, extraStyle) {
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 function _appInit() {
+  console.log('[_appInit] START');
   // Re-read STATE from (possibly cloud-updated) localStorage
+  try {
   STATE.mrpData          = JSON.parse(localStorage.getItem('mrp_data')       || 'null');
   STATE.matcomData       = JSON.parse(localStorage.getItem('matcom_data')     || 'null');
   STATE.realNameData     = JSON.parse(localStorage.getItem('realname_data')   || '{}');
@@ -4964,6 +4971,8 @@ function _appInit() {
   STATE.poOverrides      = JSON.parse(localStorage.getItem('po_overrides')    || '{}');
   STATE.projectionSnapshots = JSON.parse(localStorage.getItem('proj_snapshots')|| '{}');
   STATE.projComments     = JSON.parse(localStorage.getItem('proj_comments')   || '{}');
+  console.log('[_appInit] STATE restored');
+  } catch(e) { console.error('[_appInit] STATE restore FAIL:', e.message); }
 
   // ── Restore SAP data dari cache (Firebase) — boot instan tanpa SAP API ─────
   try {
@@ -5046,17 +5055,19 @@ function _appInit() {
   }
 
   // Init dashboard
+  console.log('[_appInit] Building dashboard...');
   if(!STATE.masterData) {
     document.getElementById('dash-urgent-table').innerHTML='<div class="empty" style="padding:32px"><div class="empty-ico">📋</div><h3>Muat Master Data terlebih dahulu</h3><p>Buka <strong>Data Source (Sheets)</strong> → masukkan URL → klik Muat</p></div>';
   } else if(!STATE.mrpData) {
     document.getElementById('dash-urgent-table').innerHTML='<div class="empty" style="padding:32px"><div class="empty-ico">📂</div><h3>Belum ada data MRP</h3><p>Muat MRP &amp; Matcom dari Sheets lalu klik Build Projection</p></div>';
   } else {
-    buildProjection();
+    try { buildProjection(); } catch(e) { console.error('[_appInit] buildProjection CRASH:', e.message); }
   }
-  setUrgentCutoff();
-  renderSchedule();
-  updateDashStats();
+  try { setUrgentCutoff(); } catch(e) { console.warn('[_appInit] setUrgentCutoff fail:', e.message); }
+  try { renderSchedule(); } catch(e) { console.warn('[_appInit] renderSchedule fail:', e.message); }
+  try { updateDashStats(); } catch(e) { console.warn('[_appInit] updateDashStats fail:', e.message); }
   _restoreSheetUrls();
+  console.log('[_appInit] DONE');
 
   document.querySelectorAll('#col-menu input[type=checkbox]').forEach(function(cb){
     var col = cb.getAttribute('onchange').match(/toggleProjCol\('([^']+)'/);
