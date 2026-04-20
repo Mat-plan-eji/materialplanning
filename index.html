@@ -286,7 +286,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v11</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v12</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -363,11 +363,15 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       </div>
       <!-- GRPO -->
       <div class="card" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">GRPO Bulan Ini</div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--teal)" id="s-grpo">—</div><div style="font-size:10px;color:var(--muted)">transaksi</div></div>
-          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--accent)" id="dash-grpo-sup">—</div><div style="font-size:10px;color:var(--muted)">supplier</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">GRPO Hari Ini</span>
+          <span style="font-size:10px;color:var(--muted)" id="grpo-poll-status"></span>
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--teal)" id="s-grpo-today">0</div><div style="font-size:10px;color:var(--muted)">transaksi</div></div>
+          <div style="flex:1;padding:8px;background:var(--bg3);border-radius:var(--r)"><div style="font-size:18px;font-weight:500;color:var(--accent)" id="dash-grpo-sup">0</div><div style="font-size:10px;color:var(--muted)">supplier</div></div>
+        </div>
+        <div id="dash-grpo-today-list" style="max-height:280px;overflow-y:auto;font-size:11px"></div>
       </div>
       <!-- System status -->
       <div class="card" style="padding:14px 16px">
@@ -915,6 +919,9 @@ function doLogin() {
     sessionStorage.setItem('_isAdmin', '1');
     closeModal('modal-login');
     _updateLoginUI();
+    // Re-render tables supaya inputs jadi enabled
+    if(STATE.projectionData && STATE.projectionData.length) renderProjection();
+    if(STATE.poData && STATE.poData.length) renderPO();
     toast('Login berhasil ✓', 'ok');
   } else {
     var err = document.getElementById('login-err');
@@ -926,9 +933,11 @@ function doLogin() {
 function doLogout() {
   _isAdmin = false;
   sessionStorage.removeItem('_isAdmin');
-  // Reset RM display to description on logout
   _setRMDisplay('description');
   _updateLoginUI();
+  // Re-render tables supaya inputs jadi disabled
+  if(STATE.projectionData && STATE.projectionData.length) renderProjection();
+  if(STATE.poData && STATE.poData.length) renderPO();
   showPage('dashboard', document.querySelectorAll('.ni')[0]);
   toast('Logout berhasil', 'ok');
 }
@@ -1893,6 +1902,7 @@ function renderPO() {
     var confColor  = confSrc === 'schedule' ? 'var(--teal)' : 'var(--amber)';
     var confTitle  = confSrc === 'schedule' ? 'Dari Jadwal Pengiriman' : 'Edit manual';
 
+    var _dis = _isAdmin ? '' : ' disabled';
     var row = '<tr>';
     row += '<td class="mono">' + p.docNum + '</td>';
     row += '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">' + (p.supplierName||'') + '</td>';
@@ -1905,24 +1915,24 @@ function renderPO() {
     // Tgl Request Kirim — editable, color by source
     row += '<td title="' + reqTitle + '">'
          + '<input type="date" value="' + reqDate + '" data-key="' + key + '" onchange="setPODate(this,true)"'
-         + ' style="width:125px;' + reqStyle + '">'
+         + ' style="width:125px;' + reqStyle + '"' + _dis + '>'
          + '</td>';
     // Qty Konfirm — editable, color by source
     row += '<td title="' + confTitle + '">'
          + '<input type="number" value="' + confQty + '" data-key="' + key + '" onchange="setPOConfQty(this)" placeholder="—" min="0"'
-         + ' style="width:80px;background:transparent;border:none;font-family:var(--mono);font-size:11px;text-align:right;outline:none;color:' + (confQty ? confColor : 'var(--muted)') + '">'
+         + ' style="width:80px;background:transparent;border:none;font-family:var(--mono);font-size:11px;text-align:right;outline:none;color:' + (confQty ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
     // Tgl Konfirmasi — editable, color by source
     row += '<td title="' + confTitle + '">'
          + '<input type="date" value="' + confDate + '" data-key="' + key + '" onchange="setPOConfDate(this)"'
-         + ' style="width:120px;color:' + (confDate ? confColor : 'var(--muted)') + '">'
+         + ' style="width:120px;color:' + (confDate ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
     // Tgl Update — read-only
     row += '<td class="mono" style="font-size:10.5px;color:var(--muted)">' + (confUpd||'—') + '</td>';
     // Notes — editable
     row += '<td>'
-         + '<input type="text" value="' + notes + '" data-key="' + key + '" onchange="setPOField(this,&quot;notes&quot;)" placeholder="Notes..."'
-         + ' style="width:150px;background:transparent;border:none;color:var(--muted);font-size:11px;outline:none">'
+         + '<input type="text" value="' + notes + '" data-key="' + key + '" onchange="setPOField(this,&quot;notes&quot;)" placeholder="' + (_isAdmin?'Notes...':'🔒') + '"'
+         + ' style="width:150px;background:transparent;border:none;color:var(--muted);font-size:11px;outline:none"' + _dis + '>'
          + '</td>';
     row += '</tr>';
     return row;
@@ -2935,12 +2945,12 @@ function renderProjection() {
         return '<td style="min-width:180px;padding:6px 8px">' +
           '<div style="display:flex;align-items:center;gap:4px">' +
           (src ? '<span title="' + srcTitle + '" style="font-size:9px;opacity:.6;flex-shrink:0">' + src + '</span>' : '') +
-          '<input type="text" value="' + cmtVal.replace(/"/g,'&quot;') + '" data-code="' + p.productCode + '" onchange="saveProjComment(this)" placeholder="Comment..." style="flex:1;background:transparent;border:none;color:var(--teal);font-size:10.5px;outline:none;cursor:text" onfocus="this.style.background=\'rgba(6,182,212,.08)\';this.style.borderRadius=\'3px\'" onblur="this.style.background=\'transparent\'">' +
-          (isManual ? '<span onclick="clearManualComment(\'' + p.productCode + '\')" title="Reset ke auto" style="cursor:pointer;font-size:10px;color:var(--muted);flex-shrink:0;padding:0 2px">✕</span>' : '') +
+          '<input type="text" value="' + cmtVal.replace(/"/g,'&quot;') + '" data-code="' + p.productCode + '" onchange="saveProjComment(this)" placeholder="' + (_isAdmin?'Comment...':'🔒') + '" style="flex:1;background:transparent;border:none;color:var(--teal);font-size:10.5px;outline:none;cursor:text" onfocus="this.style.background=\'rgba(6,182,212,.08)\';this.style.borderRadius=\'3px\'" onblur="this.style.background=\'transparent\'" ' + (_isAdmin?'':'disabled') + '>' +
+          (isManual && _isAdmin ? '<span onclick="clearManualComment(\'' + p.productCode + '\')" title="Reset ke auto" style="cursor:pointer;font-size:10px;color:var(--muted);flex-shrink:0;padding:0 2px">✕</span>' : '') +
           '</div>' +
         '</td>';
       })()) +
-      '<td style="text-align:center;padding:4px 6px"><input type="checkbox" class="pin-cb" data-code="' + p.productCode + '" ' + (PROJ_HIGHLIGHTED[p.productCode] ? 'checked' : '') + ' style="cursor:pointer;width:14px;height:14px"></td>' +
+      '<td style="text-align:center;padding:4px 6px"><input type="checkbox" class="pin-cb" data-code="' + p.productCode + '" ' + (PROJ_HIGHLIGHTED[p.productCode] ? 'checked' : '') + ' style="cursor:pointer;width:14px;height:14px" ' + (_isAdmin?'':'disabled') + '></td>' +
     '</tr>';
   }).join('');
 
@@ -3136,9 +3146,11 @@ function renderNotifList() {
     return;
   }
   el.innerHTML = list.map(function(n){
-    var icon = n.type==='new_urgent' ? '⚠' : '✓';
+    var icon = n.type==='new_urgent' ? '⚠' : n.type==='grpo_today' ? '📦' : '✓';
     var color = n.type==='new_urgent' ? 'var(--red)' : 'var(--green)';
-    var title = n.type==='new_urgent' ? 'Baru urgent · coverage '+n.coverage+' · DOI '+n.doi : 'GR diterima · qty '+n_id(n.qty)+' '+n.uom;
+    var title = n.type==='new_urgent' ? 'Baru urgent · coverage '+n.coverage+' · DOI '+n.doi
+      : n.type==='grpo_today' ? (n.supplier||'—') + ' · qty ' + n_id(n.qty) + ' ' + n.uom
+      : 'GR diterima · qty '+n_id(n.qty)+' '+n.uom;
     var tb = n.itemType ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:4px">'+n.itemType+'</span>' : '';
     var bg = !n.read ? 'background:var(--bg3)' : '';
     return '<div style="padding:10px 12px;border-bottom:0.5px solid var(--border);display:flex;gap:10px;'+bg+'">'+
@@ -3219,8 +3231,37 @@ function renderDashboard() {
   var fbDot=document.getElementById('status-fb'); if(fbDot) fbDot.className='dot'+(_fbReady?'':' off');
   var rtEl=document.getElementById('status-realtime'); if(rtEl) rtEl.innerHTML=_realtimeActive?'<span style="color:var(--green)">● Live</span>':'<span style="color:var(--muted)">Tidak aktif</span>';
   var mrpTxt=document.getElementById('status-mrp'); if(mrpTxt) mrpTxt.textContent=STATE.mrpData?Object.keys(STATE.mrpData).length+' item':'Belum dimuat';
-  var grpoSups={}; STATE.grpoData.forEach(function(g){ if(g.supplierName) grpoSups[g.supplierName]=true; });
-  var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'—';
+  var grpoSups={}; var grpoToday=[];
+  var todayStr = (function(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); })();
+  STATE.grpoData.forEach(function(g){
+    if(g.grpoDate === todayStr) {
+      grpoToday.push(g);
+      if(g.supplierName) grpoSups[g.supplierName]=true;
+    }
+  });
+  var grpoTodayEl=document.getElementById('s-grpo-today'); if(grpoTodayEl) grpoTodayEl.textContent=grpoToday.length;
+  var grpoSupEl=document.getElementById('dash-grpo-sup'); if(grpoSupEl) grpoSupEl.textContent=Object.keys(grpoSups).length||'0';
+  // Render today's GRPO list
+  var grpoListEl=document.getElementById('dash-grpo-today-list');
+  if(grpoListEl) {
+    if(!grpoToday.length) {
+      grpoListEl.innerHTML='<div style="color:var(--muted);padding:8px 0;text-align:center">Belum ada GRPO hari ini</div>';
+    } else {
+      grpoListEl.innerHTML=grpoToday.map(function(g){
+        var name = _poName(g.itemCode, g.itemName);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border)">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'+
+            '<div style="font-size:10px;color:var(--muted)">'+(g.supplierName||'—')+' · '+(g.itemCode||'')+'</div>'+
+          '</div>'+
+          '<div style="flex-shrink:0;text-align:right;font-family:var(--mono)">'+
+            '<div style="color:var(--teal);font-weight:500">'+n_id(g.qty||0)+'</div>'+
+            '<div style="font-size:9px;color:var(--muted)">'+(g.uom||'')+'</div>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+    }
+  }
 }
 
 // Helper: display name — RM pakai Real Name, PM/FG pakai Description
@@ -3646,17 +3687,17 @@ function renderSchedule() {
           '<span style="font-size:10.5px;color:var(--muted);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</span>' +
           '<input type="number" value="' + dispQty + '" min="0" style="width:80px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 5px;font-size:11px;font-family:var(--mono)" ' +
           'data-sched-idx="' + idx + '" data-po-key="' + poKey + '" data-default-qty="' + reqQty + '" ' +
-          'onchange="saveSchedQty(this)" title="Qty request kirim">' +
+          'onchange="saveSchedQty(this)" title="Qty request kirim"' + (_isAdmin?'':' disabled') + '>' +
           '<span style="font-size:10px;color:var(--muted)">' + (en.item.uom||'') + '</span>' +
           '</div>';
       }).join('');
       html += '<div class="scard ' + e.status + '">' +
-        '<div class="chk ' + (isOn?'on':'') + '" onclick="toggleApprove(' + idx + ')">' + (isOn?'✓':'') + '</div>' +
+        '<div class="chk ' + (isOn?'on':'') + '" onclick="' + (_isAdmin?'toggleApprove('+idx+')':'_requireAdmin(\'approve\')') + '">' + (isOn?'✓':'') + '</div>' +
         '<div class="sinfo" style="min-width:0">' +
           '<div class="sinfo-name">' + e.supName + ' ' + sb + typeTags + (e.isManual?'<span class="badge b-amber" style="margin-left:5px">Manual</span>':'') + '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">' +
             '<span style="font-size:10.5px;color:var(--muted)">Tgl kirim:</span>' +
-            '<input type="date" value="' + dateISO + '" data-sched-idx="' + idx + '" onchange="saveSchedDate(this)" ' +
+            '<input type="date" value="' + dateISO + '" data-sched-idx="' + idx + '" onchange="saveSchedDate(this)" ' + (_isAdmin?'':' disabled ') +
             'style="background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:2px 6px;font-size:11px;font-family:var(--mono)">' +
           '</div>' +
           itemEditRows +
@@ -4760,6 +4801,65 @@ function scheduleAutoRefresh() {
   }, msUntil);
 }
 
+// ─── GRPO AUTO-POLL — cek GRPO baru setiap 15 menit ─────────────────────────
+var _grpoPollTimer = null;
+var _GRPO_POLL_MS = 15 * 60 * 1000; // 15 menit
+
+function _startGRPOPoll(initialDelay) {
+  if(!CFG.url) return;
+  if(_grpoPollTimer) clearTimeout(_grpoPollTimer);
+  var firstDelay = initialDelay || (2 * 60 * 1000); // default 2 menit pertama
+  _grpoPollTimer = setTimeout(function _poll(){
+    var statusEl = document.getElementById('grpo-poll-status');
+    if(statusEl) statusEl.textContent = '⏳ checking...';
+    console.log('[GRPO poll] Fetching...');
+    var oldKeys = {};
+    STATE.grpoData.forEach(function(g){ oldKeys[g.itemCode+'_'+g.grpoDate+'_'+g.qty] = true; });
+
+    loadGRPO().then(function(){
+      var todayStr = (function(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); })();
+      var newEntries = STATE.grpoData.filter(function(g){
+        return g.grpoDate === todayStr && !oldKeys[g.itemCode+'_'+g.grpoDate+'_'+g.qty];
+      });
+
+      if(newEntries.length) {
+        console.log('[GRPO poll] ' + newEntries.length + ' new GRPO today');
+        var todayISO = new Date().toISOString().split('T')[0];
+        newEntries.forEach(function(g){
+          var name = _poName(g.itemCode, g.itemName);
+          var already = _notifications.find(function(n){ return n.type==='grpo_today' && n.code===g.itemCode && n.qty===g.qty && n.date===todayISO; });
+          if(!already) {
+            var _it = /^3/.test(g.itemCode||'')?'RM':(/^4/.test(g.itemCode||'')?'PM':'FG');
+            _notifications.unshift({
+              type: 'grpo_today', code: g.itemCode, name: name,
+              supplier: g.supplierName||'', qty: g.qty||0, uom: g.uom||'',
+              itemType: _it, date: todayISO, read: false
+            });
+          }
+        });
+        if(_notifications.length > 80) _notifications = _notifications.slice(0,80);
+        localStorage.setItem('notifications', JSON.stringify(_notifications));
+        updateNotifBadge();
+        toast('📦 ' + newEntries.length + ' GRPO baru hari ini!', 'ok');
+      }
+
+      // Save GRPO cache to Firebase
+      var compGRPO = STATE.grpoData.map(function(g){ return {d:g.grpoDate,i:g.itemCode,n:g.itemName,s:g.supplierName,q:g.qty,u:g.uom,t:g.site}; });
+      var sGRPO = JSON.stringify(compGRPO);
+      localStorage.setItem('sap_cache_grpo', sGRPO);
+      cloudSave('sap_cache_grpo', sGRPO);
+
+      updateDashStats();
+      if(statusEl) statusEl.textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    }).catch(function(e){
+      console.warn('[GRPO poll] Error:', e.message);
+      if(statusEl) statusEl.textContent = '⚠ gagal';
+    });
+
+    _grpoPollTimer = setTimeout(_poll, _GRPO_POLL_MS);
+  }, firstDelay);
+}
+
 // ─── PROJECTION COLUMN VISIBILITY ───────────────────────────────────────────
 var PROJ_HIDDEN_COLS = JSON.parse(localStorage.getItem('proj_hidden_cols') || '[]');
 var PROJ_HIGHLIGHTED = JSON.parse(localStorage.getItem('proj_highlighted') || '{}');
@@ -4968,6 +5068,7 @@ function _appInit() {
   });
 
   scheduleAutoRefresh();
+  _startGRPOPoll();
   _updateLoginUI();
   // Reset RM display mode jika tidak admin
   if(!_isAdmin && _rmDisplayMode === 'realname') {
