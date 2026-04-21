@@ -92,6 +92,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 
 /* Table */
 .tbl-wrap{overflow-x:auto;max-height:520px;overflow-y:auto}
+/* Resizable columns */
+table th{position:relative}
+.col-resize{position:absolute;right:0;top:0;bottom:0;width:4px;cursor:col-resize;background:transparent;z-index:2}
+.col-resize:hover,.col-resize.active{background:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 thead{position:sticky;top:0;z-index:2}
 th{background:var(--bg3);padding:8px 12px;text-align:left;font-weight:500;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:1px solid var(--border)}
@@ -349,7 +353,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v17</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v18</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1959,7 +1963,7 @@ function renderPO() {
     var cb = (b.itemCode||'').toLowerCase();
     if(ca !== cb) return ca < cb ? -1 : 1;
     // poReqDate as DD/MM/YYYY → compare as ISO
-    function toISO(d){ if(!d) return '9999'; var p=String(d).split('/'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d; }
+    function toISO(d){ if(!d) return '9999'; var p=String(d).split('/'); if(p.length===3){ return p[0].length===4 ? p[0]+'-'+p[1]+'-'+p[2] : p[2]+'-'+p[1]+'-'+p[0]; } return d; }
     return toISO(a.poReqDate).localeCompare(toISO(b.poReqDate));
   });
 
@@ -2032,10 +2036,13 @@ function renderPO() {
     + '</tr>';
 
   document.getElementById('po-table').innerHTML =
-    '<div class="card"><div class="tbl-wrap"><table>'
+    '<div class="card"><div class="tbl-wrap"><table id="po-tbl" style="table-layout:fixed;width:100%">'
+    + '<colgroup><col style="width:90px"><col style="width:150px"><col style="width:100px"><col style="width:170px"><col style="width:75px">'
+    + '<col style="width:80px"><col style="width:50px"><col style="width:95px"><col style="width:125px">'
+    + '<col style="width:80px"><col style="width:120px"><col style="width:85px"><col style="width:150px"></colgroup>'
     + '<thead>'
-    + '<tr><th>Doc Num</th><th>Supplier</th><th>Item Code</th><th>Item Name</th><th>Site</th>'
-    + '<th>Open Qty</th><th>UOM</th><th>PO Req Date</th><th>Tgl Request Kirim</th>'
+    + '<tr><th>Doc Num<div class="col-resize" data-col="0"></div></th><th>Supplier<div class="col-resize" data-col="1"></div></th><th>Item Code<div class="col-resize" data-col="2"></div></th><th>Item Name<div class="col-resize" data-col="3"></div></th><th>Site<div class="col-resize" data-col="4"></div></th>'
+    + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM</th><th>PO Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim</th>'
     + '<th>Qty Konfirm</th><th>Tgl Konfirmasi</th><th>Tgl Update</th><th>Notes</th></tr>'
     + frow
     + '</thead>'
@@ -2045,7 +2052,37 @@ function renderPO() {
     + '<span style="color:var(--amber)">●</span> Manual &nbsp;|&nbsp; '
     + '<span style="color:var(--teal)">●</span> Dari Jadwal Pengiriman / Auto-generate'
     + '</div>';
+  _initColResize('po-tbl');
 }
+
+// ── Column resize for PO table ──────────────────────────────────────────────
+function _initColResize(tableId) {
+  var tbl = document.getElementById(tableId);
+  if(!tbl) return;
+  var cols = tbl.querySelectorAll('colgroup col');
+  tbl.querySelectorAll('.col-resize').forEach(function(handle){
+    handle.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      var colIdx = parseInt(handle.getAttribute('data-col'));
+      var col = cols[colIdx]; if(!col) return;
+      var startX = e.pageX;
+      var startW = parseInt(col.style.width) || 100;
+      handle.classList.add('active');
+      function onMove(ev){
+        var diff = ev.pageX - startX;
+        col.style.width = Math.max(40, startW + diff) + 'px';
+      }
+      function onUp(){
+        handle.classList.remove('active');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function setPOConfQty(el) {
   var key = el.getAttribute('data-key');
   if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
@@ -3882,6 +3919,11 @@ function renderSchedule() {
         var master = STATE.masterData && STATE.masterData[en.item.productCode];
         var multiple = master ? (master.multiple || 1) : 1;
         if(multiple < 1) multiple = 1;
+        // Max available from all POs for this item+supplier
+        var allItemPOs = STATE.poData.filter(function(x){
+          return x.itemCode === en.item.productCode && (x.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase();
+        });
+        var maxAvail = allItemPOs.reduce(function(s,x){ return s+(x.openQty||0); }, 0);
         var multiItem = (e.entries||[]).length > 1;
         var uid = 'sq_' + idx + '_' + enIdx;
         return '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;padding:3px 0;border-bottom:0.5px solid var(--border)">' +
@@ -3890,6 +3932,7 @@ function renderSchedule() {
             '<div style="font-size:9px;color:var(--muted);display:flex;gap:6px;margin-top:1px">' +
               '<span>DOI: <span style="color:'+doiColor+';font-weight:500">'+doiNow+'</span></span>' +
               '<span>→ <span id="doi-after-'+uid+'" style="color:'+doiAfterColor+';font-weight:500">'+doiAfter+'</span></span>' +
+              (maxAvail > 0 ? '<span>max: '+n_id(maxAvail)+'</span>' : '') +
             '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:1px">' +
@@ -3975,11 +4018,31 @@ function _schedQtyStep(uid, step) {
   var el = document.getElementById(uid);
   if(!el) return;
   var raw = parseFloat(String(el.value).replace(/\./g,'')) || 0;
+  // Get max available from PO
+  var schedIdx = parseInt(el.getAttribute('data-sched-idx'));
+  var maxQty = _getMaxSchedQty(schedIdx, el);
   raw = Math.max(0, raw + step);
+  if(maxQty > 0 && raw > maxQty) {
+    raw = maxQty;
+    toast('Qty dibatasi sesuai total PO: ' + n_id(maxQty), 'inf');
+  }
   el.value = n_id(raw);
   _updateSchedDOI(el);
-  // Auto-save
   saveSchedQty(el);
+}
+
+// Get max qty available from all POs for this item+supplier
+function _getMaxSchedQty(schedIdx, el) {
+  var e = STATE.scheduleData[schedIdx]; if(!e) return 0;
+  var poKey = el.getAttribute('data-po-key');
+  if(!poKey) return 0;
+  var itemCode = poKey.split('_')[1];
+  if(!itemCode) return 0;
+  // Find all POs for this item + supplier
+  var allPOs = STATE.poData.filter(function(p){
+    return p.itemCode === itemCode && (p.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase();
+  });
+  return allPOs.reduce(function(s,p){ return s + (p.openQty||0); }, 0);
 }
 
 function _updateSchedDOI(el) {
@@ -4004,6 +4067,42 @@ function saveSchedQty(input) {
   var newQty = parseFloat(String(input.value).replace(/\./g,'')) || 0;
   var e = STATE.scheduleData[idx];
   if(!e || !poKey) return;
+
+  // Find the entry for this PO
+  var itemCode = poKey.split('_')[1];
+  var entry = (e.entries||[]).find(function(en){
+    return en.pos && en.pos.some(function(p){ return (p.docNum+'_'+p.itemCode) === poKey; });
+  });
+
+  if(entry && itemCode) {
+    // Get total from currently linked POs
+    var currentTotal = entry.pos.reduce(function(s,p){ return s + (p.openQty||0); }, 0);
+
+    // If new qty exceeds current POs, try to add more POs
+    if(newQty > currentTotal) {
+      var existingDocNums = {};
+      entry.pos.forEach(function(p){ existingDocNums[p.docNum] = true; });
+      // Find more POs for same item + supplier
+      var morePOs = STATE.poData.filter(function(p){
+        return p.itemCode === itemCode
+          && (p.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase()
+          && !existingDocNums[p.docNum];
+      });
+      // Add POs until we have enough qty or run out
+      for(var i=0; i<morePOs.length && currentTotal < newQty; i++) {
+        entry.pos.push(morePOs[i]);
+        currentTotal += morePOs[i].openQty || 0;
+      }
+    }
+
+    // Cap at total available
+    var maxTotal = _getMaxSchedQty(idx, input);
+    if(maxTotal > 0 && newQty > maxTotal) {
+      newQty = maxTotal;
+      input.value = n_id(newQty);
+      toast('Qty dibatasi sesuai total PO: ' + n_id(maxTotal), 'inf');
+    }
+  }
 
   // Simpan override qty di poOverrides
   if(!STATE.poOverrides[poKey]) STATE.poOverrides[poKey] = {};
