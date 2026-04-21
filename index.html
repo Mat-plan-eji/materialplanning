@@ -2206,7 +2206,7 @@ function renderPO() {
     if(_isAdmin) {
       var sisa = (p.openQty||0) - _getAlreadyScheduledQty(p.docNum, p.itemCode);
       row += '<td style="text-align:center">'
-           + (sisa > 0 ? '<span onclick="openSplitPOModal(\'' + p.docNum + '\',\'' + p.itemCode + '\')" title="Split pengiriman" style="cursor:pointer;font-size:12px;color:var(--accent)">✂</span>' : '<span style="font-size:10px;color:var(--muted)">—</span>')
+           + (sisa > 0 ? '<span onclick="try{openSplitPOModal(\''+p.docNum+'\',\''+p.itemCode+'\')}catch(e){alert(e.message)}" title="Split pengiriman · sisa: '+n_id(sisa)+'" style="cursor:pointer;font-size:14px;color:var(--accent);padding:4px">✂</span>' : '<span style="font-size:10px;color:var(--muted)">—</span>')
            + '</td>';
     } else {
       row += '<td></td>';
@@ -4622,6 +4622,8 @@ var _spoPO = null;
 var _spoRows = [];
 
 function openSplitPOModal(docNum, itemCode) {
+  console.log('[SPLIT] Called with:', docNum, itemCode);
+  alert('Split PO: ' + docNum + ' / ' + itemCode);
   if(!_requireAdmin('split PO')) return;
   var po = STATE.poData.find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
   if(!po) { toast('PO tidak ditemukan', 'err'); return; }
