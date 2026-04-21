@@ -583,10 +583,9 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph">
     <div class="ph-l"><h2>Jadwal Pengiriman</h2><p>Review, approve, blast ke supplier via WA</p></div>
     <div class="ph-r">
-      <button class="btn btn-accent" onclick="openManualSchedModal()">+ Jadwal Manual</button>
       <button class="btn btn-amber" onclick="approveAll()">✓ Approve Semua</button>
       <button class="btn btn-green" onclick="blastAll()">📲 Blast WA Semua</button>
-      <button class="btn btn-sm btn-red" onclick="resetSchedule()">🗑 Hapus Semua</button>
+      <button class="btn btn-sm btn-red" onclick="resetSchedule()">🗑 Hapus Semua Jadwal</button>
     </div>
   </div>
   <div class="fbar">
@@ -797,31 +796,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       </div>
     </div>
 
-    <!-- Supplier Portal Users -->
-    <div class="card" style="border-color:rgba(6,182,212,.3)">
-      <div class="card-hdr" style="background:rgba(6,182,212,.06)">
-        <span class="card-title">🏢 Supplier Portal — User Management</span>
-        <button class="btn btn-xs" onclick="addSupplierUser()">+ Tambah User</button>
-      </div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
-          Kelola akses supplier ke portal konfirmasi: <strong>supplier-portal.html</strong>
-        </div>
-        <div id="sup-user-list" style="margin-bottom:10px"></div>
-        <div style="display:none" id="sup-user-form">
-          <div class="frow">
-            <div class="fg"><label>Username</label><input id="suf-user" style="width:100%" placeholder="mane_id"></div>
-            <div class="fg"><label>Password</label><input id="suf-pass" style="width:100%" placeholder="mane2026"></div>
-          </div>
-          <div class="fg" style="margin-bottom:10px"><label>Nama Supplier (harus sama persis dengan SAP)</label><input id="suf-supname" style="width:100%" placeholder="Mane Indonesia, PT"></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" onclick="saveSupplierUser()">Simpan</button>
-            <button class="btn" onclick="document.getElementById('sup-user-form').style.display='none'">Batal</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- FIREBASE CLOUD SYNC -->
     <div class="card" style="border-color:rgba(245,158,11,.35)">
       <div class="card-hdr" style="background:var(--amber-bg)">
@@ -969,54 +943,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
 <div id="toast"></div>
 
-<!-- MODAL: Tambah Jadwal Manual -->
-<div class="modal-bg" id="modal-manual-sched">
-
-<!-- MODAL: Split PO -->
-<div class="modal-bg" id="modal-split-po">
-<div class="modal" style="max-width:560px">
-  <div class="modal-hdr">
-    <span>✂ Split Pengiriman PO</span>
-    <span class="modal-close" onclick="closeModal('modal-split-po')">✕</span>
-  </div>
-  <div style="padding:20px">
-    <div id="spo-info" style="margin-bottom:14px"></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Atur jadwal pengiriman:</div>
-    <div id="spo-rows"></div>
-    <button class="btn btn-xs" onclick="_spoAddRow()" style="margin:8px 0">+ Tambah Pengiriman</button>
-    <div id="spo-summary" style="font-size:11px;margin:8px 0;padding:8px;background:var(--bg4);border-radius:var(--r)"></div>
-    <button class="btn btn-primary" onclick="saveSplitPO()" style="width:100%;margin-top:8px">💾 Simpan Semua Jadwal</button>
-  </div>
-</div>
-</div>
-
-<!-- MODAL: Tambah Jadwal Manual -->
-<div class="modal-bg" id="modal-manual-sched">
-<div class="modal" style="max-width:520px">
-  <div class="modal-hdr">
-    <span>+ Tambah Jadwal Manual</span>
-    <span class="modal-close" onclick="closeModal('modal-manual-sched')">✕</span>
-  </div>
-  <div style="padding:20px">
-    <div class="fg" style="margin-bottom:12px">
-      <label>Supplier</label>
-      <input type="text" id="ms-supplier" placeholder="Ketik nama supplier..." oninput="_msSearchSup()" style="width:100%">
-      <div id="ms-sup-list" style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);display:none;margin-top:4px"></div>
-    </div>
-    <div id="ms-items-area" style="display:none">
-      <label style="font-size:11px;color:var(--muted);margin-bottom:6px;display:block">PO tersedia untuk supplier ini:</label>
-      <div id="ms-items-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px"></div>
-      <div class="frow">
-        <div class="fg"><label>Qty Kirim</label><input type="text" id="ms-qty" placeholder="0" style="width:100%;font-family:var(--mono)" onfocus="this.value=this.value.replace(/\./g,'')" onblur="this.value=this.value?n_id(parseFloat(this.value.replace(/\./g,''))||0):''"></div>
-        <div class="fg"><label>Tanggal Kirim</label><input type="date" id="ms-date" style="width:100%"></div>
-      </div>
-      <div id="ms-avail-info" style="font-size:10.5px;color:var(--muted);margin:6px 0"></div>
-      <button class="btn btn-primary" onclick="saveManualSched()" style="margin-top:8px">Simpan Jadwal</button>
-    </div>
-  </div>
-</div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Firebase SDK v10 compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1142,68 +1068,6 @@ function saveAdminCreds() {
   localStorage.setItem('admin_user', u);
   localStorage.setItem('admin_pass', p);
   toast('Kredensial admin disimpan ✓', 'ok');
-}
-
-// ═══ Supplier Portal User Management ════════════════════════════════════════
-var _supplierUsers = {};
-
-function loadSupplierUsers() {
-  if(!_db) return;
-  _db.collection('kv').doc('supplier_users').get().then(function(doc) {
-    _supplierUsers = doc.exists ? JSON.parse(doc.data().v || '{}') : {};
-    renderSupplierUsers();
-  }).catch(function(e) { console.warn('loadSupplierUsers error:', e.message); });
-}
-
-function renderSupplierUsers() {
-  var el = document.getElementById('sup-user-list');
-  if(!el) return;
-  var keys = Object.keys(_supplierUsers);
-  if(!keys.length) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px 0">Belum ada supplier user. Klik "+ Tambah User" untuk membuat.</div>';
-    return;
-  }
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:11px">' +
-    '<thead><tr style="background:var(--bg4)"><th style="padding:6px 10px;text-align:left;color:var(--muted)">Username</th><th style="padding:6px 10px;text-align:left;color:var(--muted)">Supplier</th><th style="padding:6px 10px;text-align:left;color:var(--muted)">Password</th><th></th></tr></thead>' +
-    '<tbody>' + keys.map(function(u) {
-      var su = _supplierUsers[u];
-      return '<tr style="border-bottom:1px solid var(--border)">' +
-        '<td style="padding:6px 10px;font-family:var(--mono)">' + u + '</td>' +
-        '<td style="padding:6px 10px">' + (su.supplierName || '—') + '</td>' +
-        '<td style="padding:6px 10px;font-family:var(--mono);color:var(--muted)">' + (su.pass || '').replace(/./g, '•') + '</td>' +
-        '<td style="padding:6px 10px"><span onclick="deleteSupplierUser(\'' + u + '\')" style="cursor:pointer;color:var(--red);font-size:10px">✕ Hapus</span></td>' +
-        '</tr>';
-    }).join('') + '</tbody></table>';
-}
-
-function addSupplierUser() {
-  document.getElementById('sup-user-form').style.display = 'block';
-  document.getElementById('suf-user').value = '';
-  document.getElementById('suf-pass').value = '';
-  document.getElementById('suf-supname').value = '';
-  document.getElementById('suf-user').focus();
-}
-
-function saveSupplierUser() {
-  var u = document.getElementById('suf-user').value.trim();
-  var p = document.getElementById('suf-pass').value.trim();
-  var s = document.getElementById('suf-supname').value.trim();
-  if(!u || !p || !s) { toast('Isi semua field', 'err'); return; }
-  _supplierUsers[u] = { pass: p, supplierName: s };
-  _db.collection('kv').doc('supplier_users').set({ v: JSON.stringify(_supplierUsers) }).then(function() {
-    toast('Supplier user "' + u + '" disimpan ✓', 'ok');
-    renderSupplierUsers();
-    document.getElementById('sup-user-form').style.display = 'none';
-  }).catch(function(e) { toast('Gagal: ' + e.message, 'err'); });
-}
-
-function deleteSupplierUser(u) {
-  if(!confirm('Hapus user "' + u + '"?')) return;
-  delete _supplierUsers[u];
-  _db.collection('kv').doc('supplier_users').set({ v: JSON.stringify(_supplierUsers) }).then(function() {
-    toast('User "' + u + '" dihapus ✓', 'ok');
-    renderSupplierUsers();
-  }).catch(function(e) { toast('Gagal: ' + e.message, 'err'); });
 }
 var _lastSyncMsg = '';
 
@@ -1412,9 +1276,6 @@ function _applyRealtimeChanges(keys) {
           break;
         case 'proj_history':
           STATE.projectionHistory = JSON.parse(val || '{}');
-          // Auto-trim to 7 days
-          var _phKeys = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
-          while(_phKeys.length > 7) { delete STATE.projectionHistory[_phKeys.shift()]; }
           break;
         case 'proj_hidden_cols':
           PROJ_HIDDEN_COLS = JSON.parse(val || '[]');
@@ -2159,13 +2020,9 @@ function renderPO() {
     var confUpd    = ovr.confUpd  || '';
     var notes      = (ovr.notes  || '').replace(/"/g, '&quot;');
     var confSrc    = ovr.confSource || 'manual';
-    var confColor  = confSrc === 'schedule' ? 'var(--teal)' : confSrc === 'supplier' ? 'var(--green)' : 'var(--amber)';
-    var confTitle  = confSrc === 'schedule' ? 'Dari Jadwal Pengiriman' : confSrc === 'supplier' ? 'Dari Supplier Portal' : 'Edit manual';
-
-    // Shipment tracking
-    var scheds = _getSchedsForPO(p.docNum, p.itemCode);
-    var hasMultiShip = scheds.length > 1;
-    var totalSched = scheds.reduce(function(s,x){ return s + (x.qty||0); }, 0);
+    // teal = from jadwal, amber = manual edit
+    var confColor  = confSrc === 'schedule' ? 'var(--teal)' : 'var(--amber)';
+    var confTitle  = confSrc === 'schedule' ? 'Dari Jadwal Pengiriman' : 'Edit manual';
 
     var _dis = _isAdmin ? '' : ' disabled';
     var row = '<tr>';
@@ -2177,59 +2034,29 @@ function renderPO() {
     row += '<td class="mono td-right">' + n_id(p.openQty||0) + '</td>';
     row += '<td>' + (p.uom||'') + '</td>';
     row += '<td class="mono">' + (p.poReqDate||'—') + '</td>';
-    // Tgl Request Kirim — show expand if multiple shipments
-    if(hasMultiShip) {
-      row += '<td title="' + scheds.length + ' jadwal">'
-           + '<span onclick="this.parentElement.parentElement.nextElementSibling.style.display=this.parentElement.parentElement.nextElementSibling.style.display===\'none\'?\'table-row\':\'none\'" style="cursor:pointer;color:var(--accent);font-size:10.5px">'
-           + '📋 ' + scheds.length + ' jadwal <span style="font-size:9px">▼</span></span>'
-           + '</td>';
-    } else {
-      row += '<td title="' + reqTitle + '">'
-           + '<input type="date" value="' + reqDate + '" data-key="' + key + '" onchange="setPODate(this,true)"'
-           + ' style="width:125px;' + reqStyle + '"' + _dis + '>'
-           + '</td>';
-    }
+    // Tgl Request Kirim — editable, color by source
+    row += '<td title="' + reqTitle + '">'
+         + '<input type="date" value="' + reqDate + '" data-key="' + key + '" onchange="setPODate(this,true)"'
+         + ' style="width:125px;' + reqStyle + '"' + _dis + '>'
+         + '</td>';
+    // Qty Konfirm — editable, color by source
     row += '<td title="' + confTitle + '">'
          + '<input type="number" value="' + confQty + '" data-key="' + key + '" onchange="setPOConfQty(this)" placeholder="—" min="0"'
          + ' style="width:80px;background:transparent;border:none;font-family:var(--mono);font-size:11px;text-align:right;outline:none;color:' + (confQty ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
+    // Tgl Konfirmasi — editable, color by source
     row += '<td title="' + confTitle + '">'
          + '<input type="date" value="' + confDate + '" data-key="' + key + '" onchange="setPOConfDate(this)"'
          + ' style="width:120px;color:' + (confDate ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
+    // Tgl Update — read-only
     row += '<td class="mono" style="font-size:10.5px;color:var(--muted);text-align:center">' + (confUpd||'—') + '</td>';
+    // Notes — editable
     row += '<td>'
          + '<input type="text" value="' + notes + '" data-key="' + key + '" onchange="setPOField(this,&quot;notes&quot;)" placeholder="' + (_isAdmin?'Notes...':'🔒') + '"'
-         + ' style="width:120px;background:transparent;border:none;color:var(--muted);font-size:11px;outline:none"' + _dis + '>'
+         + ' style="width:150px;background:transparent;border:none;color:var(--muted);font-size:11px;outline:none"' + _dis + '>'
          + '</td>';
-    // Split button
-    if(_isAdmin) {
-      var sisa = (p.openQty||0) - _getAlreadyScheduledQty(p.docNum, p.itemCode);
-      row += '<td style="text-align:center">'
-           + (sisa > 0 ? '<span onclick="try{openSplitPOModal(\''+p.docNum+'\',\''+p.itemCode+'\')}catch(e){alert(e.message)}" title="Split pengiriman · sisa: '+n_id(sisa)+'" style="cursor:pointer;font-size:14px;color:var(--accent);padding:4px">✂</span>' : '<span style="font-size:10px;color:var(--muted)">—</span>')
-           + '</td>';
-    } else {
-      row += '<td></td>';
-    }
     row += '</tr>';
-    // Expand sub-row for multiple shipments
-    if(hasMultiShip) {
-      var statusBadge = function(st){ return st==='confirmed'?'<span class="badge b-teal">✓</span>':st==='approved'?'<span class="badge b-green">▶</span>':st==='sent'?'<span class="badge b-blue">✈</span>':'<span class="badge b-gray">⏳</span>'; };
-      row += '<tr style="display:none;background:var(--bg4)"><td colspan="14" style="padding:6px 10px 6px 30px">';
-      row += '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Jadwal pengiriman (' + scheds.length + ') — total: ' + n_id(totalSched) + ' ' + (p.uom||'') + ' / ' + n_id(p.openQty||0) + '</div>';
-      row += scheds.map(function(sc){
-        var dateDisp = sc.date || '—';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:3px 0;border-bottom:0.5px solid var(--border)">'
-          + statusBadge(sc.status)
-          + '<span class="mono" style="font-size:10.5px;color:var(--teal)">' + dateDisp + '</span>'
-          + '<span class="mono" style="font-size:10.5px">' + n_id(sc.qty) + ' ' + (p.uom||'') + '</span>'
-          + '<span style="font-size:9.5px;color:var(--muted)">' + (sc.status||'pending') + '</span>'
-          + '</div>';
-      }).join('');
-      var sisa = (p.openQty||0) - totalSched;
-      if(sisa > 0) row += '<div style="font-size:9.5px;color:var(--amber);margin-top:3px">Sisa belum dijadwal: ' + n_id(sisa) + ' ' + (p.uom||'') + '</div>';
-      row += '</td></tr>';
-    }
     return row;
   }).join('');
 
@@ -2248,18 +2075,17 @@ function renderPO() {
     + '<th><input class="th-filter" id="hf-conf"  oninput="_poDeb()" placeholder="tgl..." value="' + hfConf  + '"></th>'
     + '<th></th>'  // Tgl Update
     + '<th><input class="th-filter" id="hf-notes" oninput="_poDeb()" placeholder="filter..." value="' + hfNotes + '"></th>'
-    + '<th></th>'
     + '</tr>';
 
   document.getElementById('po-table').innerHTML =
     '<div class="card"><div class="tbl-wrap"><table id="po-tbl" style="table-layout:fixed;width:100%">'
-    + '<colgroup><col style="width:90px"><col style="width:150px"><col style="width:100px"><col style="width:160px"><col style="width:65px">'
-    + '<col style="width:75px"><col style="width:45px"><col style="width:90px"><col style="width:120px">'
-    + '<col style="width:75px"><col style="width:115px"><col style="width:80px"><col style="width:120px"><col style="width:35px"></colgroup>'
+    + '<colgroup><col style="width:90px"><col style="width:150px"><col style="width:100px"><col style="width:170px"><col style="width:75px">'
+    + '<col style="width:80px"><col style="width:50px"><col style="width:95px"><col style="width:125px">'
+    + '<col style="width:80px"><col style="width:120px"><col style="width:85px"><col style="width:150px"></colgroup>'
     + '<thead>'
     + '<tr><th>Doc Num<div class="col-resize" data-col="0"></div></th><th>Supplier<div class="col-resize" data-col="1"></div></th><th>Item Code<div class="col-resize" data-col="2"></div></th><th>Item Name<div class="col-resize" data-col="3"></div></th><th>Site<div class="col-resize" data-col="4"></div></th>'
     + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM<div class="col-resize" data-col="6"></div></th><th>PO Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim<div class="col-resize" data-col="8"></div></th>'
-    + '<th>Qty Konfirm<div class="col-resize" data-col="9"></div></th><th>Tgl Konfirmasi<div class="col-resize" data-col="10"></div></th><th>Tgl Update<div class="col-resize" data-col="11"></div></th><th>Notes<div class="col-resize" data-col="12"></div></th><th>✂</th></tr>'
+    + '<th>Qty Konfirm<div class="col-resize" data-col="9"></div></th><th>Tgl Konfirmasi<div class="col-resize" data-col="10"></div></th><th>Tgl Update<div class="col-resize" data-col="11"></div></th><th>Notes</th></tr>'
     + frow
     + '</thead>'
     + '<tbody>' + rows + '</tbody></table></div></div>'
@@ -2269,8 +2095,7 @@ function renderPO() {
       : totalFiltered + ' PO')
     + ' &nbsp;|&nbsp; '
     + '<span style="color:var(--amber)">●</span> Manual &nbsp;|&nbsp; '
-    + '<span style="color:var(--teal)">●</span> Dari Jadwal &nbsp;|&nbsp; '
-    + '<span style="color:var(--green)">●</span> Dari Supplier Portal'
+    + '<span style="color:var(--teal)">●</span> Dari Jadwal Pengiriman / Auto-generate'
     + '</div>';
   _initColResize('po-tbl');
 }
@@ -3109,17 +2934,18 @@ function _doBuildProjection() {
 
   STATE.projectionData = projection;
 
-  // Auto-save history for today — compressed (only essential fields)
+  // Auto-save history for today
   STATE.projectionHistory[todayISO] = projection.map(function(p){
-    return {c:p.productCode,d:p.doiFC,u:p.isUrgent?1:0,t:p.itemType,s:(p.stockBTG||0)+(p.stockSNG||0),m:p.max3MRP};
+    return {productCode:p.productCode,description:p.description,realName:p.realName,uom:p.uom,
+      supplier:p.supplier,site:p.site,stockBTG:p.stockBTG,stockSNG:p.stockSNG,doiFC:p.doiFC,
+      doiMatcom:p.doiMatcom,actualMRP:p.actualMRP,max3MRP:p.max3MRP,
+      actualUsageDaily:p.actualUsageDaily,totalIncoming:p.totalIncoming,totalOSPR:p.totalOSPR,
+      coverageDateStr:p.coverageDateStr,category:p.category,endStock:p.endStock,
+      mrpNextMonth:p.mrpNextMonth,endStockNext:p.endStockNext,comment:p.comment,itemType:p.itemType};
   });
-  STATE.projectionHistory.urgentCount = urgentCount; // for trend indicator
-  // Trim to 7 days max
-  var hKeys = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
-  while(hKeys.length > 7) { delete STATE.projectionHistory[hKeys.shift()]; }
   try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {
-    // If still too big, trim to 3 days
-    while(hKeys.length > 3) { delete STATE.projectionHistory[hKeys.shift()]; }
+    var keys = Object.keys(STATE.projectionHistory).sort();
+    while(keys.length > 30) { delete STATE.projectionHistory[keys.shift()]; }
     try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e2) {}
   }
 
@@ -3837,16 +3663,6 @@ function updateDashStats() {
   var ydISO = yesterday.toISOString().split('T')[0];
   var snapKeys = Object.keys(STATE.projectionSnapshots || {}).sort();
   var lastSnap = snapKeys.length ? STATE.projectionSnapshots[snapKeys[snapKeys.length-1]] : null;
-  // Fallback: use yesterday from projectionHistory
-  if(!lastSnap || lastSnap.urgentCount === undefined) {
-    var histKeys = Object.keys(STATE.projectionHistory || {}).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
-    if(histKeys.length > 1) {
-      var prevDay = STATE.projectionHistory[histKeys[histKeys.length-2]];
-      if(prevDay && Array.isArray(prevDay)) {
-        lastSnap = { urgentCount: prevDay.filter(function(p){ return p.u; }).length };
-      }
-    }
-  }
   if(lastSnap && lastSnap.urgentCount !== undefined) {
     var diff = urgent - lastSnap.urgentCount;
     var trendEl = document.getElementById('trend-urgent');
@@ -3972,8 +3788,7 @@ function generateSchedule() {
   // RM/PM/FG dipisah karena beda warehouse
   var bySupplier = {};
   urgentItems.forEach(function(item){
-    var matchedPOs = STATE.poData.filter(function(p){ return p.itemCode === item.productCode && p.openQty > 0; })
-      .sort(function(a,b){ return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate)); });
+    var matchedPOs = STATE.poData.filter(function(p){ return p.itemCode === item.productCode && p.openQty > 0; });
     var supName = item.supplier || (matchedPOs.length ? matchedPOs[0].supplierName : 'Unknown');
     var key = supName + '|||' + item.itemType; // pisah per type
     if(!bySupplier[key]) {
@@ -4086,42 +3901,27 @@ function generateSchedule() {
     var itemSummaryParts = [], selectedPOs = [], selectedEntries = [];
     sup.entries.forEach(function(e){
       var item = e.item;
-      var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate)); });
+      var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return String(a.docNum).localeCompare(String(b.docNum)); });
       var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0));
+      // Ambil multiple dari master data — PO dengan openQty < multiple dilewati
       var masterItem = STATE.masterData && STATE.masterData[item.productCode];
       var multipleQty = masterItem ? (masterItem.multiple || 0) : 0;
-      // Filter PO: openQty >= multiple, dan deduct already-scheduled
-      var eligiblePOs = sortedPOs.map(function(po){
-        var alreadySched = _getAlreadyScheduledQty(po.docNum, po.itemCode);
-        var available = (po.openQty||0) - alreadySched;
-        return { po: po, available: available };
-      }).filter(function(x){ return x.available > 0; });
-      if(multipleQty > 0) {
-        var filtered = eligiblePOs.filter(function(x){ return x.available >= multipleQty; });
-        if(filtered.length) eligiblePOs = filtered;
-      }
-      if(!eligiblePOs.length && sortedPOs.length) {
-        // Fallback: take first PO even if fully scheduled
-        eligiblePOs = [{ po: sortedPOs[0], available: sortedPOs[0].openQty||0 }];
-      }
+      // Filter: hanya PO yang openQty >= multiple (kalau multiple > 0)
+      var eligiblePOs = multipleQty > 0
+        ? sortedPOs.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
+        : sortedPOs;
+      // Fallback: kalau semua difilter, pakai PO pertama (agar tidak kosong total)
+      if(!eligiblePOs.length && sortedPOs.length) eligiblePOs = [sortedPOs[0]];
       var accumulated = 0, pickedPOs = [];
       for(var pi = 0; pi < eligiblePOs.length; pi++) {
-        var avail = eligiblePOs[pi].available;
-        var takeQty = needed > 0 ? Math.min(avail, needed - accumulated) : avail;
-        var poCopy = Object.assign({}, eligiblePOs[pi].po);
-        poCopy.schedReqQty = takeQty;
-        pickedPOs.push(poCopy);
-        accumulated += takeQty;
+        pickedPOs.push(eligiblePOs[pi]);
+        accumulated += (eligiblePOs[pi].openQty || 0);
         if(accumulated >= needed && needed > 0) break;
         if(needed === 0 && pi === 0) break;
       }
-      if(!pickedPOs.length && eligiblePOs.length) {
-        var poCopy = Object.assign({}, eligiblePOs[0].po);
-        poCopy.schedReqQty = eligiblePOs[0].available;
-        pickedPOs = [poCopy];
-      }
+      if(!pickedPOs.length && eligiblePOs.length) pickedPOs = [eligiblePOs[0]];
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
-      var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.schedReqQty||po.openQty||0); }, 0);
+      var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
       itemSummaryParts.push((_dispName(item)||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : ''));
       selectedEntries.push({ item: item, pos: pickedPOs });
@@ -4366,7 +4166,7 @@ function _getMaxSchedQty(schedIdx, el) {
   // Find all POs for this item + supplier
   var allPOs = STATE.poData.filter(function(p){
     return p.itemCode === itemCode && (p.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase();
-  }).sort(function(a,b){ return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate)); });
+  });
   return allPOs.reduce(function(s,p){ return s + (p.openQty||0); }, 0);
 }
 
@@ -4410,7 +4210,7 @@ function saveSchedQty(input) {
         return p.itemCode === itemCode
           && (p.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase()
           && !existingDocNums[p.docNum];
-      }).sort(function(a,b){ return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate)); });
+      });
       for(var i=0; i<morePOs.length && currentTotal < newQty; i++) {
         entry.pos.push(morePOs[i]);
         currentTotal += morePOs[i].openQty || 0;
@@ -4578,287 +4378,6 @@ function resetSchedule() {
   renderSchedule();
   updateDashStats();
   toast('Semua jadwal dihapus ✓', 'ok');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SHIPMENT TRACKING: 1 PO bisa muncul di banyak jadwal
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Get all schedule entries that reference a specific PO
-function _getSchedsForPO(docNum, itemCode) {
-  var result = [];
-  STATE.scheduleData.forEach(function(s, idx) {
-    (s.entries||[]).forEach(function(en) {
-      var found = (en.pos||[]).some(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
-      if(found) {
-        var po = (en.pos||[]).find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
-        var schedQty = po && po.schedReqQty !== undefined ? po.schedReqQty : (po ? po.openQty : 0);
-        result.push({ schedIdx: idx, date: s.date, status: s.status, qty: schedQty, supName: s.supName });
-      }
-    });
-  });
-  return result;
-}
-
-// Get total qty already scheduled for a PO across all schedules
-function _getAlreadyScheduledQty(docNum, itemCode) {
-  var total = 0;
-  STATE.scheduleData.forEach(function(s) {
-    (s.entries||[]).forEach(function(en) {
-      (en.pos||[]).forEach(function(p) {
-        if(String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode)) {
-          total += p.schedReqQty !== undefined ? p.schedReqQty : (p.openQty || 0);
-        }
-      });
-    });
-  });
-  return total;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SPLIT PO — from PO list
-// ═══════════════════════════════════════════════════════════════════════════════
-var _spoPO = null;
-var _spoRows = [];
-
-function openSplitPOModal(docNum, itemCode) {
-  console.log('[SPLIT] Called with:', docNum, itemCode);
-  alert('Split PO: ' + docNum + ' / ' + itemCode);
-  if(!_requireAdmin('split PO')) return;
-  var po = STATE.poData.find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
-  if(!po) { toast('PO tidak ditemukan', 'err'); return; }
-  _spoPO = po;
-  var already = _getAlreadyScheduledQty(docNum, itemCode);
-  var sisa = (po.openQty||0) - already;
-
-  document.getElementById('spo-info').innerHTML =
-    '<div style="font-size:13px;font-weight:600">' + _poName(po.itemCode, po.itemName) + '</div>' +
-    '<div style="font-size:11px;color:var(--muted);margin-top:2px">PO ' + docNum + ' · ' + (po.itemCode||'') + ' · ' + (po.supplierName||'') + ' · ' + (po.site||'') + '</div>' +
-    '<div style="display:flex;gap:14px;margin-top:8px;font-size:11px">' +
-      '<span>Open Qty: <b>' + n_id(po.openQty||0) + '</b> ' + (po.uom||'') + '</span>' +
-      (already > 0 ? '<span style="color:var(--teal)">Dijadwal: ' + n_id(already) + '</span>' : '') +
-      '<span style="color:' + (sisa > 0 ? 'var(--green)' : 'var(--red)') + ';font-weight:600">Sisa: ' + n_id(sisa) + '</span>' +
-    '</div>';
-
-  // Pre-fill with 2 rows splitting evenly
-  _spoRows = [];
-  if(sisa > 0) {
-    var half = Math.ceil(sisa / 2);
-    _spoRows.push({ qty: half, date: '' });
-    _spoRows.push({ qty: sisa - half, date: '' });
-  } else {
-    _spoRows.push({ qty: 0, date: '' });
-  }
-  _spoRenderRows();
-  document.getElementById('modal-split-po').classList.add('open');
-}
-
-function _spoRenderRows() {
-  var el = document.getElementById('spo-rows');
-  el.innerHTML = _spoRows.map(function(r, i) {
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-      '<span style="font-size:10px;color:var(--muted);width:16px">#' + (i+1) + '</span>' +
-      '<input type="text" value="' + (r.qty ? n_id(r.qty) : '') + '" placeholder="Qty" oninput="_spoUpdateRow(' + i + ',this)" onfocus="this.value=this.value.replace(/\\./g,\'\')" onblur="this.value=this.value?n_id(parseFloat(this.value.replace(/\\./g,\'\'))||0):\'\'" style="width:100px;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;text-align:right">' +
-      '<span style="font-size:10px;color:var(--muted)">' + (_spoPO.uom||'') + '</span>' +
-      '<input type="date" value="' + (r.date||'') + '" onchange="_spoRows[' + i + '].date=this.value;_spoUpdateSummary()" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:11px;flex:1">' +
-      (_spoRows.length > 1 ? '<span onclick="_spoRemoveRow(' + i + ')" style="cursor:pointer;color:var(--red);font-size:12px" title="Hapus">✕</span>' : '') +
-    '</div>';
-  }).join('');
-  _spoUpdateSummary();
-}
-
-function _spoUpdateRow(idx, el) {
-  _spoRows[idx].qty = parseFloat(String(el.value).replace(/\./g,'')) || 0;
-  _spoUpdateSummary();
-}
-
-function _spoRemoveRow(idx) {
-  _spoRows.splice(idx, 1);
-  _spoRenderRows();
-}
-
-function _spoAddRow() {
-  var already = _getAlreadyScheduledQty(_spoPO.docNum, _spoPO.itemCode);
-  var used = _spoRows.reduce(function(s,r){ return s + (r.qty||0); }, 0);
-  var sisa = (_spoPO.openQty||0) - already - used;
-  _spoRows.push({ qty: Math.max(0, sisa), date: '' });
-  _spoRenderRows();
-}
-
-function _spoUpdateSummary() {
-  var already = _getAlreadyScheduledQty(_spoPO.docNum, _spoPO.itemCode);
-  var total = _spoRows.reduce(function(s,r){ return s + (r.qty||0); }, 0);
-  var sisa = (_spoPO.openQty||0) - already - total;
-  var el = document.getElementById('spo-summary');
-  var color = sisa < 0 ? 'var(--red)' : sisa === 0 ? 'var(--green)' : 'var(--amber)';
-  el.innerHTML =
-    '<div style="display:flex;justify-content:space-between">' +
-      '<span>Total request: <b>' + n_id(total) + '</b> ' + (_spoPO.uom||'') + '</span>' +
-      '<span style="color:' + color + ';font-weight:600">Sisa: ' + n_id(sisa) + ' ' + (_spoPO.uom||'') + '</span>' +
-    '</div>' +
-    (sisa < 0 ? '<div style="color:var(--red);font-size:10px;margin-top:3px">⚠ Total melebihi sisa PO!</div>' : '');
-}
-
-function saveSplitPO() {
-  if(!_spoPO) return;
-  var already = _getAlreadyScheduledQty(_spoPO.docNum, _spoPO.itemCode);
-  var total = _spoRows.reduce(function(s,r){ return s + (r.qty||0); }, 0);
-  if(total > (_spoPO.openQty||0) - already) { toast('Total melebihi sisa PO!', 'err'); return; }
-
-  // Validate rows
-  var valid = _spoRows.filter(function(r){ return r.qty > 0 && r.date; });
-  if(!valid.length) { toast('Isi minimal 1 jadwal (qty + tanggal)', 'err'); return; }
-
-  var item = STATE.projectionData.find(function(p){ return p.productCode === _spoPO.itemCode; });
-
-  valid.forEach(function(r) {
-    var ddmmyyyy = r.date.split('-').reverse().join('/');
-    var newEntry = {
-      supName: _spoPO.supplierName,
-      date: ddmmyyyy,
-      status: 'pending',
-      isManual: true,
-      entries: [{
-        item: item || { productCode: _spoPO.itemCode, description: _spoPO.itemName, uom: _spoPO.uom, itemType: /^3/.test(_spoPO.itemCode)?'RM':(/^4/.test(_spoPO.itemCode)?'PM':'FG') },
-        pos: [{ docNum: _spoPO.docNum, itemCode: _spoPO.itemCode, itemName: _spoPO.itemName, openQty: _spoPO.openQty, uom: _spoPO.uom, site: _spoPO.site, schedReqQty: r.qty }]
-      }],
-      items: _poName(_spoPO.itemCode, _spoPO.itemName) + ' · ' + n_id(r.qty) + ' ' + (_spoPO.uom||'')
-    };
-    STATE.scheduleData.push(newEntry);
-  });
-
-  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
-  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
-  closeModal('modal-split-po');
-  renderPO();
-  toast('✂ ' + valid.length + ' jadwal pengiriman dibuat ✓', 'ok');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAMBAH JADWAL MANUAL
-// ═══════════════════════════════════════════════════════════════════════════════
-var _msSelectedSup = '';
-var _msSelectedPO = null;
-
-function openManualSchedModal() {
-  if(!_requireAdmin('tambah jadwal')) return;
-  _msSelectedSup = '';
-  _msSelectedPO = null;
-  document.getElementById('ms-supplier').value = '';
-  document.getElementById('ms-items-area').style.display = 'none';
-  document.getElementById('ms-sup-list').style.display = 'none';
-  document.getElementById('ms-qty').value = '';
-  document.getElementById('ms-date').value = '';
-  document.getElementById('modal-manual-sched').classList.add('open');
-  document.getElementById('ms-supplier').focus();
-}
-
-function _msSearchSup() {
-  var q = document.getElementById('ms-supplier').value.toLowerCase();
-  var listEl = document.getElementById('ms-sup-list');
-  if(!q || q.length < 2) { listEl.style.display = 'none'; return; }
-  // Get unique suppliers from PO data
-  var sups = {};
-  STATE.poData.forEach(function(p){ if(p.supplierName) sups[p.supplierName] = true; });
-  var matches = Object.keys(sups).filter(function(s){ return s.toLowerCase().includes(q); }).slice(0, 8);
-  if(!matches.length) { listEl.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:11px">Tidak ditemukan</div>'; listEl.style.display = 'block'; return; }
-  listEl.innerHTML = matches.map(function(s){
-    return '<div onclick="_msPickSup(\'' + s.replace(/'/g, "\\'") + '\')" style="padding:8px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--bg4)\'" onmouseout="this.style.background=\'\'">' + s + '</div>';
-  }).join('');
-  listEl.style.display = 'block';
-}
-
-function _msPickSup(name) {
-  _msSelectedSup = name;
-  document.getElementById('ms-supplier').value = name;
-  document.getElementById('ms-sup-list').style.display = 'none';
-  // Show PO items for this supplier
-  var pos = STATE.poData.filter(function(p){
-    return (p.supplierName||'').toLowerCase() === name.toLowerCase() && (p.openQty||0) > 0;
-  }).sort(function(a,b){ return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate)); });
-
-  var itemsEl = document.getElementById('ms-items-list');
-  if(!pos.length) {
-    itemsEl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">Tidak ada PO aktif untuk supplier ini</div>';
-    document.getElementById('ms-items-area').style.display = 'block';
-    return;
-  }
-  itemsEl.innerHTML = pos.map(function(p){
-    var already = _getAlreadyScheduledQty(p.docNum, p.itemCode);
-    var sisa = (p.openQty||0) - already;
-    var sisaColor = sisa > 0 ? 'var(--green)' : 'var(--red)';
-    return '<div onclick="_msPickPO(\'' + p.docNum + '\',\'' + p.itemCode + '\',' + sisa + ')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px" onmouseover="this.style.background=\'var(--bg4)\'" onmouseout="this.style.background=\'\'" id="ms-po-' + p.docNum + '_' + p.itemCode + '">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:11px;font-weight:500">' + _poName(p.itemCode, p.itemName) + '</div>' +
-        '<div style="font-size:9.5px;color:var(--muted)">PO ' + p.docNum + ' · ' + (p.itemCode||'') + ' · ' + (p.site||'') + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;flex-shrink:0">' +
-        '<div style="font-family:var(--mono);font-size:11px">' + n_id(p.openQty||0) + ' ' + (p.uom||'') + '</div>' +
-        (already > 0 ? '<div style="font-size:9px;color:var(--muted)">Dijadwal: ' + n_id(already) + '</div>' : '') +
-        '<div style="font-size:9.5px;color:' + sisaColor + ';font-weight:500">Sisa: ' + n_id(sisa) + '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-  document.getElementById('ms-items-area').style.display = 'block';
-}
-
-function _msPickPO(docNum, itemCode, sisa) {
-  var po = STATE.poData.find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
-  if(!po) return;
-  _msSelectedPO = po;
-  // Highlight selected
-  document.querySelectorAll('[id^="ms-po-"]').forEach(function(el){ el.style.background = ''; });
-  var sel = document.getElementById('ms-po-' + docNum + '_' + itemCode);
-  if(sel) sel.style.background = 'var(--accent-bg)';
-  document.getElementById('ms-qty').value = sisa > 0 ? n_id(sisa) : '';
-  document.getElementById('ms-avail-info').textContent = 'Max available: ' + n_id(sisa) + ' ' + (po.uom||'') + ' · PO ' + docNum;
-}
-
-function saveManualSched() {
-  if(!_msSelectedSup || !_msSelectedPO) { toast('Pilih supplier dan item', 'err'); return; }
-  var qty = parseFloat(String(document.getElementById('ms-qty').value).replace(/\./g,'')) || 0;
-  var dateISO = document.getElementById('ms-date').value;
-  if(!dateISO) { toast('Isi tanggal kirim', 'err'); return; }
-  if(qty <= 0) { toast('Qty harus > 0', 'err'); return; }
-
-  var po = _msSelectedPO;
-  var already = _getAlreadyScheduledQty(po.docNum, po.itemCode);
-  var sisa = (po.openQty||0) - already;
-  if(qty > sisa) {
-    toast('Qty melebihi sisa PO (' + n_id(sisa) + ')', 'err');
-    return;
-  }
-
-  var ddmmyyyy = dateISO.split('-').reverse().join('/');
-  var item = STATE.projectionData.find(function(p){ return p.productCode === po.itemCode; });
-
-  var newEntry = {
-    supName: _msSelectedSup,
-    date: ddmmyyyy,
-    status: 'pending',
-    isManual: true,
-    entries: [{
-      item: item || { productCode: po.itemCode, description: po.itemName, uom: po.uom, itemType: /^3/.test(po.itemCode)?'RM':(/^4/.test(po.itemCode)?'PM':'FG') },
-      pos: [{ docNum: po.docNum, itemCode: po.itemCode, itemName: po.itemName, openQty: po.openQty, uom: po.uom, site: po.site, schedReqQty: qty }]
-    }],
-    items: _poName(po.itemCode, po.itemName) + ' · ' + n_id(qty) + ' ' + (po.uom||'')
-  };
-
-  // Set date in poOverrides
-  var pk = po.docNum + '_' + po.itemCode;
-  if(!STATE.poOverrides[pk]) STATE.poOverrides[pk] = {};
-  STATE.poOverrides[pk].date = dateISO;
-  STATE.poOverrides[pk].isAuto = true;
-
-  STATE.scheduleData.push(newEntry);
-  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
-  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
-  cloudSave('schedule', JSON.stringify(STATE.scheduleData));
-  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
-
-  closeModal('modal-manual-sched');
-  renderSchedule();
-  toast('Jadwal manual ditambahkan ✓', 'ok');
 }
 
 // ─── WA BLAST ────────────────────────────────────────────────────────────────
@@ -5236,7 +4755,6 @@ function loadSettingsForm() {
   var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
   if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif' + (_realtimeActive ? ' — Real-time sync ● Live' : '') : 'Menghubungkan...';
-  loadSupplierUsers();
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
@@ -5553,9 +5071,6 @@ function saveProjectionSnapshot() {
       endStock:p.endStock, comment:p.comment||''
     };
   });
-  // Limit to 5 snapshots max
-  var skeys = Object.keys(STATE.projectionSnapshots).sort();
-  while(skeys.length > 5) { delete STATE.projectionSnapshots[skeys.shift()]; }
   try {
     localStorage.setItem('proj_snapshots', JSON.stringify(STATE.projectionSnapshots));
     toast('Snapshot disimpan: ' + label + ' (' + STATE.projectionData.length + ' item) ✓','ok');
@@ -6066,12 +5581,6 @@ function _appInit() {
   STATE.realNameData     = JSON.parse(localStorage.getItem('realname_data')   || '{}');
   STATE.masterData       = JSON.parse(localStorage.getItem('master_data')     || 'null');
   STATE.projectionHistory= JSON.parse(localStorage.getItem('proj_history')    || '{}');
-  // Auto-trim proj_history to 7 days
-  var _phk = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
-  if(_phk.length > 7) {
-    while(_phk.length > 7) { delete STATE.projectionHistory[_phk.shift()]; }
-    try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e){}
-  }
   STATE.stockHistory     = JSON.parse(localStorage.getItem('stock_history')   || '{}');
   STATE.scheduleData     = JSON.parse(localStorage.getItem('schedule')        || '[]');
   STATE.supplierData     = JSON.parse(localStorage.getItem('suppliers')       || '[]');
