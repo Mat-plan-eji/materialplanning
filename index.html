@@ -4109,13 +4109,28 @@ function saveSchedQty(input) {
       var poQty = Math.min(remaining, po.openQty || 0);
       STATE.poOverrides[pk].reqQtyOverride = poQty;
       remaining -= poQty;
-      // Sync date to PO list
-      if(dateISO && poQty > 0) {
+      if(poQty > 0 && dateISO) {
         STATE.poOverrides[pk].date = dateISO;
         STATE.poOverrides[pk].isAuto = true;
         STATE.poOverrides[pk].isManual = false;
+      } else if(poQty === 0) {
+        // Clear date for POs no longer needed
+        delete STATE.poOverrides[pk].date;
+        delete STATE.poOverrides[pk].isAuto;
+        delete STATE.poOverrides[pk].isManual;
+        delete STATE.poOverrides[pk].reqQtyOverride;
       }
     });
+    // Remove POs with 0 qty from entry (keep at least the first one)
+    if(entry.pos.length > 1) {
+      var firstPO = entry.pos[0];
+      entry.pos = entry.pos.filter(function(po){
+        var pk = po.docNum + '_' + po.itemCode;
+        var ov = STATE.poOverrides[pk] || {};
+        return ov.reqQtyOverride === undefined || ov.reqQtyOverride > 0;
+      });
+      if(!entry.pos.length) entry.pos = [firstPO];
+    }
   } else {
     // Fallback: single PO
     if(!STATE.poOverrides[poKey]) STATE.poOverrides[poKey] = {};
