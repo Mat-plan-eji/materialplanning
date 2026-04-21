@@ -559,11 +559,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
   </div>
   <div class="fbar">
-    <input type="text" id="srch-po" placeholder="Cari Doc Num / item / supplier..." oninput="renderPO()" style="width:220px">
-    <select id="f-po-type" onchange="renderPO()" style="width:90px"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
-    <select id="f-po-site" onchange="renderPO()"><option value="">Semua Site</option><option>BITUNG</option><option>SANGIANG</option></select>
-    <select id="f-po-req" onchange="renderPO()"><option value="">Semua Status Request</option><option value="has">Sudah Dijadwal</option><option value="none">Belum Dijadwal</option><option value="manual">Edit Manual</option></select>
-    <select id="f-po-conf" onchange="renderPO()"><option value="">Semua Status Konfirmasi</option><option value="confirmed">Sudah Konfirmasi</option><option value="unconfirmed">Belum Konfirmasi</option></select>
+    <input type="text" id="srch-po" placeholder="Cari Doc Num / item / supplier..." oninput="_poShowAll=false;_poDeb()" style="width:220px">
+    <select id="f-po-type" onchange="_poShowAll=false;renderPO()" style="width:90px"><option value="">RM+PM+FG</option><option value="RM">RM</option><option value="PM">PM</option><option value="FG">FG</option></select>
+    <select id="f-po-site" onchange="_poShowAll=false;renderPO()"><option value="">Semua Site</option><option>BITUNG</option><option>SANGIANG</option></select>
+    <select id="f-po-req" onchange="_poShowAll=false;renderPO()"><option value="">Semua Status Request</option><option value="has">Sudah Dijadwal</option><option value="none">Belum Dijadwal</option><option value="manual">Edit Manual</option></select>
+    <select id="f-po-conf" onchange="_poShowAll=false;renderPO()"><option value="">Semua Status Konfirmasi</option><option value="confirmed">Sudah Konfirmasi</option><option value="unconfirmed">Belum Konfirmasi</option></select>
   </div>
   <div id="po-table"><div class="loading"><div class="spin"></div>Klik Refresh SAP untuk memuat PO...</div></div>
 </div>
@@ -1853,6 +1853,7 @@ function loadOSPO() {
 
 // ─── SYNC ALL — 5 API paralel, lanjut meski sebagian gagal ──────────────────
 async function syncAll() {
+  if(!_requireAdmin('sync data')) return;
   _showSyncBar(true);
   ['stock','po','grpo','ospr'].forEach(function(k){ _setSyncItem(k,'loading'); });
   document.getElementById('dash-sub').textContent = 'Menyinkronkan semua data...';
@@ -1912,6 +1913,21 @@ async function syncAll() {
   setTimeout(function(){ _showSyncBar(false); }, 4000);
 }
 
+// PO filter debounce
+var _poDebTimer = null;
+function _poDeb() { clearTimeout(_poDebTimer); _poDebTimer = setTimeout(renderPO, 200); }
+
+// Date to ISO helper (handles DD/MM/YYYY and YYYY/MM/DD)
+function _dateToSortISO(d) {
+  if(!d) return '9999';
+  var p = String(d).split('/');
+  if(p.length === 3) return p[0].length === 4 ? p[0]+'-'+p[1]+'-'+p[2] : p[2]+'-'+p[1]+'-'+p[0];
+  return d;
+}
+
+var _poShowAll = false;
+var _PO_LIMIT = 300;
+
 function renderPO() {
   var srch = (document.getElementById('srch-po')||{value:''}).value.toLowerCase();
   var site = (document.getElementById('f-po-site')||{value:''}).value;
@@ -1962,12 +1978,14 @@ function renderPO() {
     var ca = (a.itemCode||'').toLowerCase();
     var cb = (b.itemCode||'').toLowerCase();
     if(ca !== cb) return ca < cb ? -1 : 1;
-    // poReqDate as DD/MM/YYYY → compare as ISO
-    function toISO(d){ if(!d) return '9999'; var p=String(d).split('/'); if(p.length===3){ return p[0].length===4 ? p[0]+'-'+p[1]+'-'+p[2] : p[2]+'-'+p[1]+'-'+p[0]; } return d; }
-    return toISO(a.poReqDate).localeCompare(toISO(b.poReqDate));
+    // poReqDate sort
+    return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate));
   });
 
-  var rows = filtered.map(function(p){
+  var totalFiltered = filtered.length;
+  var limited = (!_poShowAll && filtered.length > _PO_LIMIT) ? filtered.slice(0, _PO_LIMIT) : filtered;
+
+  var rows = limited.map(function(p){
     var key = p.docNum + '_' + p.itemCode;
     var ovr = STATE.poOverrides[key] || {};
     var reqDate = ovr.date || (p._reqDate || '');
@@ -2020,19 +2038,21 @@ function renderPO() {
     return row;
   }).join('');
 
-  // Header filter row
+  // Header filter row — aligned to 13 columns
   var frow = '<tr style="background:var(--bg4)">'
-    + '<th><input class="th-filter" id="hf-doc"   oninput="renderPO()" placeholder="filter..." value="' + hfDoc   + '"></th>'
-    + '<th><input class="th-filter" id="hf-sup"   oninput="renderPO()" placeholder="filter..." value="' + hfSup   + '"></th>'
-    + '<th><input class="th-filter" id="hf-code"  oninput="renderPO()" placeholder="filter..." value="' + hfCode  + '"></th>'
-    + '<th><input class="th-filter" id="hf-name"  oninput="renderPO()" placeholder="filter..." value="' + hfName  + '"></th>'
-    + '<th><input class="th-filter" id="hf-site2" oninput="renderPO()" placeholder="filter..." value="' + hfSite  + '"></th>'
-    + '<th></th><th></th><th></th>'
-    + '<th><input class="th-filter" id="hf-req"   oninput="renderPO()" placeholder="tgl..." value="' + hfReq   + '"></th>'
-    + '<th><input class="th-filter" id="hf-conf"  oninput="renderPO()" placeholder="tgl..." value="' + hfConf  + '"></th>'
-    + '<th><input class="th-filter" id="hf-conf2" style="display:none"></th>'
-    + '<th></th>'
-    + '<th><input class="th-filter" id="hf-notes" oninput="renderPO()" placeholder="filter..." value="' + hfNotes + '"></th>'
+    + '<th><input class="th-filter" id="hf-doc"   oninput="_poDeb()" placeholder="filter..." value="' + hfDoc   + '"></th>'
+    + '<th><input class="th-filter" id="hf-sup"   oninput="_poDeb()" placeholder="filter..." value="' + hfSup   + '"></th>'
+    + '<th><input class="th-filter" id="hf-code"  oninput="_poDeb()" placeholder="filter..." value="' + hfCode  + '"></th>'
+    + '<th><input class="th-filter" id="hf-name"  oninput="_poDeb()" placeholder="filter..." value="' + hfName  + '"></th>'
+    + '<th><input class="th-filter" id="hf-site2" oninput="_poDeb()" placeholder="filter..." value="' + hfSite  + '"></th>'
+    + '<th></th>'  // Open Qty
+    + '<th></th>'  // UOM
+    + '<th></th>'  // PO Req Date
+    + '<th><input class="th-filter" id="hf-req"   oninput="_poDeb()" placeholder="tgl..." value="' + hfReq   + '"></th>'
+    + '<th></th>'  // Qty Konfirm
+    + '<th><input class="th-filter" id="hf-conf"  oninput="_poDeb()" placeholder="tgl..." value="' + hfConf  + '"></th>'
+    + '<th></th>'  // Tgl Update
+    + '<th><input class="th-filter" id="hf-notes" oninput="_poDeb()" placeholder="filter..." value="' + hfNotes + '"></th>'
     + '</tr>';
 
   document.getElementById('po-table').innerHTML =
@@ -2048,7 +2068,10 @@ function renderPO() {
     + '</thead>'
     + '<tbody>' + rows + '</tbody></table></div></div>'
     + '<div style="padding:8px 0;font-size:11px;color:var(--muted)">'
-    + filtered.length + ' PO &nbsp;|&nbsp; '
+    + (limited.length < totalFiltered
+      ? limited.length + ' / ' + totalFiltered + ' PO ditampilkan &nbsp;<button class="btn btn-xs" onclick="_poShowAll=true;renderPO()">Tampilkan semua</button>'
+      : totalFiltered + ' PO')
+    + ' &nbsp;|&nbsp; '
     + '<span style="color:var(--amber)">●</span> Manual &nbsp;|&nbsp; '
     + '<span style="color:var(--teal)">●</span> Dari Jadwal Pengiriman / Auto-generate'
     + '</div>';
