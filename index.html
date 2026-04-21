@@ -4589,9 +4589,9 @@ function _getSchedsForPO(docNum, itemCode) {
   var result = [];
   STATE.scheduleData.forEach(function(s, idx) {
     (s.entries||[]).forEach(function(en) {
-      var found = (en.pos||[]).some(function(p){ return p.docNum === docNum && p.itemCode === itemCode; });
+      var found = (en.pos||[]).some(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
       if(found) {
-        var po = (en.pos||[]).find(function(p){ return p.docNum === docNum && p.itemCode === itemCode; });
+        var po = (en.pos||[]).find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
         var schedQty = po && po.schedReqQty !== undefined ? po.schedReqQty : (po ? po.openQty : 0);
         result.push({ schedIdx: idx, date: s.date, status: s.status, qty: schedQty, supName: s.supName });
       }
@@ -4606,7 +4606,7 @@ function _getAlreadyScheduledQty(docNum, itemCode) {
   STATE.scheduleData.forEach(function(s) {
     (s.entries||[]).forEach(function(en) {
       (en.pos||[]).forEach(function(p) {
-        if(p.docNum === docNum && p.itemCode === itemCode) {
+        if(String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode)) {
           total += p.schedReqQty !== undefined ? p.schedReqQty : (p.openQty || 0);
         }
       });
@@ -4623,8 +4623,8 @@ var _spoRows = [];
 
 function openSplitPOModal(docNum, itemCode) {
   if(!_requireAdmin('split PO')) return;
-  var po = STATE.poData.find(function(p){ return p.docNum === docNum && p.itemCode === itemCode; });
-  if(!po) return;
+  var po = STATE.poData.find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
+  if(!po) { toast('PO tidak ditemukan', 'err'); return; }
   _spoPO = po;
   var already = _getAlreadyScheduledQty(docNum, itemCode);
   var sisa = (po.openQty||0) - already;
@@ -4801,7 +4801,7 @@ function _msPickSup(name) {
 }
 
 function _msPickPO(docNum, itemCode, sisa) {
-  var po = STATE.poData.find(function(p){ return p.docNum === docNum && p.itemCode === itemCode; });
+  var po = STATE.poData.find(function(p){ return String(p.docNum) === String(docNum) && String(p.itemCode) === String(itemCode); });
   if(!po) return;
   _msSelectedPO = po;
   // Highlight selected
