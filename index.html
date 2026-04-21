@@ -353,7 +353,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v19</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v20</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -451,6 +451,14 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <span style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--muted)" id="grpo-poll-status"></span><span onclick="_pollGRPONow()" style="cursor:pointer;font-size:10px;color:var(--accent)" title="Refresh GRPO sekarang">↺</span></span>
         </div>
         <div id="dash-grpo-today-list" style="max-height:320px;overflow-y:auto;font-size:11px"></div>
+      </div>
+      <!-- Overdue: confirmed tapi belum diterima -->
+      <div class="card" style="padding:14px 16px;border-color:rgba(239,68,68,.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:500;color:var(--red);text-transform:uppercase;letter-spacing:.5px">⚠ Overdue — Belum Diterima</span>
+          <span id="s-overdue-count" style="font-size:10px;background:var(--red);color:#fff;padding:1px 6px;border-radius:8px">0</span>
+        </div>
+        <div id="dash-overdue-list" style="max-height:200px;overflow-y:auto;font-size:11px"></div>
       </div>
       <!-- System status -->
       <div class="card" style="padding:14px 16px">
@@ -1234,7 +1242,21 @@ function _applyRealtimeChanges(keys) {
           renderFlags.po = true; renderFlags.sched = true;
           break;
         case 'proj_comments':
-          STATE.projComments = JSON.parse(val || '{}');
+          var incoming = JSON.parse(val || '{}');
+          // Merge: keep local manual comments if newer than incoming
+          if(!STATE.projComments) STATE.projComments = {};
+          Object.keys(incoming).forEach(function(code){
+            var inc = incoming[code];
+            var loc = STATE.projComments[code];
+            // If local is manual and incoming is auto → keep local
+            if(loc && loc._manual && inc && !inc._manual) return;
+            // Otherwise accept incoming
+            STATE.projComments[code] = inc;
+          });
+          // Also add any incoming keys we don't have locally
+          Object.keys(incoming).forEach(function(code){
+            if(!STATE.projComments[code]) STATE.projComments[code] = incoming[code];
+          });
           // Re-apply comment ke projectionData
           STATE.projectionData.forEach(function(p) {
             var c = STATE.projComments[p.productCode];
@@ -2212,9 +2234,14 @@ function resetPOOverrides() {
     ovr.confSource = '';
   });
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
-  // Also clear projection comments derived from confirmations
-  STATE.projComments = {};
-  try { localStorage.setItem('proj_comments', '{}'); } catch(e) {}
+  // Clear auto-generated comments (keep manual ones)
+  if(STATE.projComments) {
+    Object.keys(STATE.projComments).forEach(function(code){
+      var c = STATE.projComments[code];
+      if(c && !c._manual) delete STATE.projComments[code];
+    });
+  }
+  try { localStorage.setItem('proj_comments', JSON.stringify(STATE.projComments || {})); } catch(e) {}
   renderPO();
   toast('Semua tanggal request dan konfirmasi direset ✓', 'ok');
 }
@@ -3251,6 +3278,28 @@ function checkNotifications() {
   localStorage.setItem('notifications', JSON.stringify(_notifications));
   localStorage.setItem('prev_urgent_set', JSON.stringify(_prevUrgentSet));
   updateNotifBadge();
+
+  // ── Auto-clear comment when GRPO received ──────────────────────────────────
+  if(STATE.grpoData.length && STATE.projComments) {
+    var grpoCodes = {};
+    STATE.grpoData.forEach(function(g){ grpoCodes[g.itemCode] = true; });
+    var cmtChanged = false;
+    Object.keys(STATE.projComments).forEach(function(code){
+      var cmt = STATE.projComments[code];
+      if(!cmt || cmt._manual) return; // Don't touch manual comments
+      if(grpoCodes[code]) {
+        // GRPO received for this item → clear auto-comment
+        delete STATE.projComments[code];
+        var p = STATE.projectionData.find(function(x){ return x.productCode === code; });
+        if(p) p.comment = '';
+        cmtChanged = true;
+      }
+    });
+    if(cmtChanged) {
+      try { localStorage.setItem('proj_comments', JSON.stringify(STATE.projComments)); } catch(e) {}
+      cloudSave('proj_comments', JSON.stringify(STATE.projComments));
+    }
+  }
 }
 
 function updateNotifBadge() {
@@ -3436,6 +3485,59 @@ function renderDashboard() {
       }).join('');
     }
   }
+  // ── Overdue: confirmed past date but no GRPO ─────────────────────────────
+  var overdueEl = document.getElementById('dash-overdue-list');
+  var overdueCountEl = document.getElementById('s-overdue-count');
+  if(overdueEl) {
+    var todayISO2 = new Date().toISOString().split('T')[0];
+    var grpoReceivedCodes = {};
+    STATE.grpoData.forEach(function(g){ grpoReceivedCodes[g.itemCode] = true; });
+    var overdue = [];
+    Object.keys(STATE.poOverrides).forEach(function(key){
+      var ovr = STATE.poOverrides[key];
+      if(!ovr.confDate) return;
+      // confDate is ISO (YYYY-MM-DD), check if past
+      if(ovr.confDate >= todayISO2) return;
+      var parts = key.split('_');
+      var itemCode = parts.slice(1).join('_');
+      // Skip if GRPO already received for this item
+      if(grpoReceivedCodes[itemCode]) return;
+      // Filter by dashboard type
+      if(_dashType !== 'ALL') {
+        var t = /^3/.test(itemCode)?'RM':(/^4/.test(itemCode)?'PM':'FG');
+        if(t !== _dashType) return;
+      }
+      var po = STATE.poData.find(function(p){ return p.docNum === parts[0] && p.itemCode === itemCode; });
+      overdue.push({
+        docNum: parts[0], itemCode: itemCode,
+        itemName: po ? _poName(po.itemCode, po.itemName) : itemCode,
+        supplier: po ? po.supplierName : '—',
+        confDate: ovr.confDate, confQty: ovr.confQty || 0
+      });
+    });
+    // Sort by confDate ascending (oldest first)
+    overdue.sort(function(a,b){ return a.confDate.localeCompare(b.confDate); });
+    if(overdueCountEl) overdueCountEl.textContent = overdue.length;
+    if(!overdue.length) {
+      overdueEl.innerHTML = '<div style="color:var(--muted);padding:8px 0;text-align:center">Tidak ada item overdue</div>';
+    } else {
+      overdueEl.innerHTML = overdue.map(function(o){
+        var daysLate = Math.floor((Date.now() - new Date(o.confDate).getTime()) / 86400000);
+        var dateDisp = o.confDate.split('-').reverse().join('/');
+        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--border)">' +
+          '<div style="flex:1;min-width:0;overflow:hidden">' +
+            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + o.itemName + '</div>' +
+            '<div style="font-size:9px;color:var(--muted)">' + o.supplier + ' · PO ' + o.docNum + '</div>' +
+          '</div>' +
+          '<div style="flex-shrink:0;text-align:right">' +
+            '<div style="font-size:10px;color:var(--red);font-weight:500">' + dateDisp + '</div>' +
+            '<div style="font-size:9px;color:var(--red)">+' + daysLate + ' hari</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
   // Match left column height to right column
   setTimeout(_matchDashColumns, 50);
   setTimeout(_matchDashColumns, 300);
