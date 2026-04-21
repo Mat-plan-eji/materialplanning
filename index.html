@@ -4385,22 +4385,47 @@ function buildWAMsg(entry) {
   var sup = STATE.supplierData.find(function(s){return s.name.toLowerCase() === entry.supName.toLowerCase()});
   var pic = sup && sup.picName ? 'Bu @~' + sup.picName : 'Bu/Pak';
   var fyi = sup && sup.fyi ? '\nfyi Bu @~' + sup.fyi : '';
-  var sites = (entry.entries||[]).flatMap(function(e){return (e.pos||[]).map(function(p){return p.site||''})}).filter(Boolean);
-  var siteStr = sites.length ? sites[0].toLowerCase() : 'pabrik';
-  var itemList = '';
+
+  // Collect items grouped by site
+  var bySite = {};
   if(entry.entries) {
     entry.entries.forEach(function(e){
       (e.pos||[]).forEach(function(p){
+        var site = (p.site||'').toUpperCase() || 'PABRIK';
+        if(!bySite[site]) bySite[site] = [];
         var _pk = p.docNum + '_' + p.itemCode;
         var _ov = STATE.poOverrides[_pk] || {};
         var _qty = _ov.reqQtyOverride !== undefined ? _ov.reqQtyOverride : (p.openQty||0);
+        if(_qty <= 0) return; // Skip 0 qty
         var _nm = _poName(p.itemCode, p.itemName);
-        itemList += '• PO ' + p.docNum + ' - ' + _nm + ' (' + n_id(_qty) + ' ' + p.uom + ')\n';
+        bySite[site].push('• PO ' + p.docNum + ' - ' + _nm + ' (' + n_id(_qty) + ' ' + (p.uom||'') + ')');
       });
-      if(!(e.pos||[]).length) itemList += '• ' + _dispName(e.item) + '\n';
+      if(!(e.pos||[]).length) {
+        var site = (e.item && e.item.site || '').toUpperCase() || 'PABRIK';
+        if(!bySite[site]) bySite[site] = [];
+        bySite[site].push('• ' + _dispName(e.item));
+      }
     });
-  } else itemList = entry.items + '\n';
-  return 'Pagi ' + pic + ', berikut request pengiriman tgl ' + entry.date + ' ke alamat ' + siteStr + ', mohon konfirmasinya 🙏\n\n' + itemList.trim() + fyi;
+  } else {
+    bySite['PABRIK'] = [entry.items || ''];
+  }
+
+  var siteKeys = Object.keys(bySite).filter(function(s){ return bySite[s].length > 0; });
+  var itemList = '';
+
+  if(siteKeys.length <= 1) {
+    // Single site — format lama
+    var siteStr = siteKeys.length ? siteKeys[0].toLowerCase() : 'pabrik';
+    itemList = (bySite[siteKeys[0]] || []).join('\n');
+    return 'Pagi ' + pic + ', berikut request pengiriman tgl ' + entry.date + ' ke alamat ' + siteStr + ', mohon konfirmasinya 🙏\n\n' + itemList + fyi;
+  } else {
+    // Multiple sites — group
+    siteKeys.sort();
+    itemList = siteKeys.map(function(site){
+      return 'Ke alamat ' + site.charAt(0) + site.slice(1).toLowerCase() + ':\n' + bySite[site].join('\n');
+    }).join('\n\n');
+    return 'Pagi ' + pic + ', berikut request pengiriman tgl ' + entry.date + ', mohon konfirmasinya 🙏\n\n' + itemList + fyi;
+  }
 }
 
 function previewWA(idx) {
