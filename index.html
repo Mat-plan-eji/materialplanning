@@ -353,7 +353,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v18</span></h2>
+      <h2 style="font-size:17px;font-weight:600;margin:0">Material Planner Dashboard <span style="opacity:.35;font-size:10px;font-weight:400">v19</span></h2>
       <p id="dash-sub" style="font-size:11.5px;color:var(--muted);margin-top:3px">Sync data untuk memulai</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2010,7 +2010,7 @@ function renderPO() {
          + ' style="width:120px;color:' + (confDate ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
     // Tgl Update — read-only
-    row += '<td class="mono" style="font-size:10.5px;color:var(--muted)">' + (confUpd||'—') + '</td>';
+    row += '<td class="mono" style="font-size:10.5px;color:var(--muted);text-align:center">' + (confUpd||'—') + '</td>';
     // Notes — editable
     row += '<td>'
          + '<input type="text" value="' + notes + '" data-key="' + key + '" onchange="setPOField(this,&quot;notes&quot;)" placeholder="' + (_isAdmin?'Notes...':'🔒') + '"'
@@ -2042,8 +2042,8 @@ function renderPO() {
     + '<col style="width:80px"><col style="width:120px"><col style="width:85px"><col style="width:150px"></colgroup>'
     + '<thead>'
     + '<tr><th>Doc Num<div class="col-resize" data-col="0"></div></th><th>Supplier<div class="col-resize" data-col="1"></div></th><th>Item Code<div class="col-resize" data-col="2"></div></th><th>Item Name<div class="col-resize" data-col="3"></div></th><th>Site<div class="col-resize" data-col="4"></div></th>'
-    + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM</th><th>PO Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim</th>'
-    + '<th>Qty Konfirm</th><th>Tgl Konfirmasi</th><th>Tgl Update</th><th>Notes</th></tr>'
+    + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM<div class="col-resize" data-col="6"></div></th><th>PO Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim<div class="col-resize" data-col="8"></div></th>'
+    + '<th>Qty Konfirm<div class="col-resize" data-col="9"></div></th><th>Tgl Konfirmasi<div class="col-resize" data-col="10"></div></th><th>Tgl Update<div class="col-resize" data-col="11"></div></th><th>Notes</th></tr>'
     + frow
     + '</thead>'
     + '<tbody>' + rows + '</tbody></table></div></div>'
@@ -3905,7 +3905,7 @@ function renderSchedule() {
         var poKey = po ? (po.docNum + '_' + po.itemCode) : '';
         var ovr = poKey ? (STATE.poOverrides[poKey] || {}) : {};
         var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
-        var dispQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
+        var dispQty = _getEntryReqQty(en);
         // DOI calculation: DOI max + (incoming / daily usage)
         var proj = STATE.projectionData.find(function(x){ return x.productCode === en.item.productCode; });
         var doiNow = proj ? Math.round(proj.doiFC||0) : 0;
@@ -4068,7 +4068,6 @@ function saveSchedQty(input) {
   var e = STATE.scheduleData[idx];
   if(!e || !poKey) return;
 
-  // Find the entry for this PO
   var itemCode = poKey.split('_')[1];
   var entry = (e.entries||[]).find(function(en){
     return en.pos && en.pos.some(function(p){ return (p.docNum+'_'+p.itemCode) === poKey; });
@@ -4082,13 +4081,11 @@ function saveSchedQty(input) {
     if(newQty > currentTotal) {
       var existingDocNums = {};
       entry.pos.forEach(function(p){ existingDocNums[p.docNum] = true; });
-      // Find more POs for same item + supplier
       var morePOs = STATE.poData.filter(function(p){
         return p.itemCode === itemCode
           && (p.supplierName||'').toLowerCase() === (e.supName||'').toLowerCase()
           && !existingDocNums[p.docNum];
       });
-      // Add POs until we have enough qty or run out
       for(var i=0; i<morePOs.length && currentTotal < newQty; i++) {
         entry.pos.push(morePOs[i]);
         currentTotal += morePOs[i].openQty || 0;
@@ -4102,22 +4099,35 @@ function saveSchedQty(input) {
       input.value = n_id(newQty);
       toast('Qty dibatasi sesuai total PO: ' + n_id(maxTotal), 'inf');
     }
+
+    // ── Distribute qty across POs ──────────────────────────────────────────
+    var remaining = newQty;
+    var dateISO = e.date ? (e.date.includes('/') ? e.date.split('/').reverse().join('-') : e.date) : '';
+    entry.pos.forEach(function(po){
+      var pk = po.docNum + '_' + po.itemCode;
+      if(!STATE.poOverrides[pk]) STATE.poOverrides[pk] = {};
+      var poQty = Math.min(remaining, po.openQty || 0);
+      STATE.poOverrides[pk].reqQtyOverride = poQty;
+      remaining -= poQty;
+      // Sync date to PO list
+      if(dateISO && poQty > 0) {
+        STATE.poOverrides[pk].date = dateISO;
+        STATE.poOverrides[pk].isAuto = true;
+        STATE.poOverrides[pk].isManual = false;
+      }
+    });
+  } else {
+    // Fallback: single PO
+    if(!STATE.poOverrides[poKey]) STATE.poOverrides[poKey] = {};
+    STATE.poOverrides[poKey].reqQtyOverride = newQty;
   }
 
-  // Simpan override qty di poOverrides
-  if(!STATE.poOverrides[poKey]) STATE.poOverrides[poKey] = {};
-  STATE.poOverrides[poKey].reqQtyOverride = newQty;
-
-  // Update items summary string di schedule entry
+  // Update items summary
   var summaryParts = [];
   (e.entries||[]).forEach(function(en){
     if(!en.item) return;
-    var po = en.pos && en.pos[0];
-    var pk = po ? (po.docNum + '_' + po.itemCode) : '';
-    var ovr = pk ? (STATE.poOverrides[pk] || {}) : {};
-    var reqQty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
-    var qty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : reqQty;
-    summaryParts.push((_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||''));
+    var totalQ = _getEntryReqQty(en);
+    summaryParts.push((_dispName(en.item)||'') + ' · ' + n_id(totalQ) + ' ' + (en.item.uom||''));
   });
   e.items = summaryParts.join(', ');
 
@@ -4126,6 +4136,16 @@ function saveSchedQty(input) {
   cloudSave('schedule', JSON.stringify(STATE.scheduleData));
   cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
   toast('Qty disimpan ✓', 'ok');
+}
+
+// Get total request qty for a schedule entry (sum of distributed PO overrides)
+function _getEntryReqQty(en) {
+  if(!en.pos || !en.pos.length) return 0;
+  return en.pos.reduce(function(s,po){
+    var pk = po.docNum + '_' + po.itemCode;
+    var ovr = STATE.poOverrides[pk] || {};
+    return s + (ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : (po.openQty||0));
+  }, 0);
 }
 function toggleApprove(idx) {
   var e = STATE.scheduleData[idx];
@@ -4310,6 +4330,7 @@ function openFbModal(idx) {
     + '<thead><tr style="background:var(--bg3)">'
     + '<th style="padding:7px 10px;text-align:left;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">Item</th>'
     + '<th style="padding:7px 10px;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">PO</th>'
+    + '<th style="padding:7px 10px;text-align:right;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">Open Qty</th>'
     + '<th style="padding:7px 10px;text-align:right;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">Qty Request</th>'
     + '<th style="padding:7px 10px;text-align:right;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">Qty Konfirm</th>'
     + '<th style="padding:7px 10px;font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--border)">✓ Confirm</th>'
@@ -4337,6 +4358,7 @@ function openFbModal(idx) {
             + '<div style="font-size:11.5px">' + _rmName + '</div>'
             + '</td>';
       html += '<td style="padding:7px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + (po.docNum||'—') + '</td>';
+      html += '<td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + n_id(origQty) + '</td>';
       html += '<td style="padding:7px 10px;text-align:right;font-family:var(--mono)">' + n_id(reqQty) + '</td>';
       html += '<td style="padding:5px 8px">'
             + '<input type="number" class="fb-qty-input" data-po-key="' + (poKey||'') + '" data-req-qty="' + reqQty + '"'
