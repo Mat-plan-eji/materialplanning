@@ -1412,6 +1412,9 @@ function _applyRealtimeChanges(keys) {
           break;
         case 'proj_history':
           STATE.projectionHistory = JSON.parse(val || '{}');
+          // Auto-trim to 7 days
+          var _phKeys = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
+          while(_phKeys.length > 7) { delete STATE.projectionHistory[_phKeys.shift()]; }
           break;
         case 'proj_hidden_cols':
           PROJ_HIDDEN_COLS = JSON.parse(val || '[]');
@@ -3106,18 +3109,17 @@ function _doBuildProjection() {
 
   STATE.projectionData = projection;
 
-  // Auto-save history for today
+  // Auto-save history for today — compressed (only essential fields)
   STATE.projectionHistory[todayISO] = projection.map(function(p){
-    return {productCode:p.productCode,description:p.description,realName:p.realName,uom:p.uom,
-      supplier:p.supplier,site:p.site,stockBTG:p.stockBTG,stockSNG:p.stockSNG,doiFC:p.doiFC,
-      doiMatcom:p.doiMatcom,actualMRP:p.actualMRP,max3MRP:p.max3MRP,
-      actualUsageDaily:p.actualUsageDaily,totalIncoming:p.totalIncoming,totalOSPR:p.totalOSPR,
-      coverageDateStr:p.coverageDateStr,category:p.category,endStock:p.endStock,
-      mrpNextMonth:p.mrpNextMonth,endStockNext:p.endStockNext,comment:p.comment,itemType:p.itemType};
+    return {c:p.productCode,d:p.doiFC,u:p.isUrgent?1:0,t:p.itemType,s:(p.stockBTG||0)+(p.stockSNG||0),m:p.max3MRP};
   });
+  STATE.projectionHistory.urgentCount = urgentCount; // for trend indicator
+  // Trim to 7 days max
+  var hKeys = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
+  while(hKeys.length > 7) { delete STATE.projectionHistory[hKeys.shift()]; }
   try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {
-    var keys = Object.keys(STATE.projectionHistory).sort();
-    while(keys.length > 30) { delete STATE.projectionHistory[keys.shift()]; }
+    // If still too big, trim to 3 days
+    while(hKeys.length > 3) { delete STATE.projectionHistory[hKeys.shift()]; }
     try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e2) {}
   }
 
@@ -3835,6 +3837,16 @@ function updateDashStats() {
   var ydISO = yesterday.toISOString().split('T')[0];
   var snapKeys = Object.keys(STATE.projectionSnapshots || {}).sort();
   var lastSnap = snapKeys.length ? STATE.projectionSnapshots[snapKeys[snapKeys.length-1]] : null;
+  // Fallback: use yesterday from projectionHistory
+  if(!lastSnap || lastSnap.urgentCount === undefined) {
+    var histKeys = Object.keys(STATE.projectionHistory || {}).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
+    if(histKeys.length > 1) {
+      var prevDay = STATE.projectionHistory[histKeys[histKeys.length-2]];
+      if(prevDay && Array.isArray(prevDay)) {
+        lastSnap = { urgentCount: prevDay.filter(function(p){ return p.u; }).length };
+      }
+    }
+  }
   if(lastSnap && lastSnap.urgentCount !== undefined) {
     var diff = urgent - lastSnap.urgentCount;
     var trendEl = document.getElementById('trend-urgent');
@@ -5539,6 +5551,9 @@ function saveProjectionSnapshot() {
       endStock:p.endStock, comment:p.comment||''
     };
   });
+  // Limit to 5 snapshots max
+  var skeys = Object.keys(STATE.projectionSnapshots).sort();
+  while(skeys.length > 5) { delete STATE.projectionSnapshots[skeys.shift()]; }
   try {
     localStorage.setItem('proj_snapshots', JSON.stringify(STATE.projectionSnapshots));
     toast('Snapshot disimpan: ' + label + ' (' + STATE.projectionData.length + ' item) ✓','ok');
@@ -6049,6 +6064,12 @@ function _appInit() {
   STATE.realNameData     = JSON.parse(localStorage.getItem('realname_data')   || '{}');
   STATE.masterData       = JSON.parse(localStorage.getItem('master_data')     || 'null');
   STATE.projectionHistory= JSON.parse(localStorage.getItem('proj_history')    || '{}');
+  // Auto-trim proj_history to 7 days
+  var _phk = Object.keys(STATE.projectionHistory).filter(function(k){ return k.match(/^\d{4}-/); }).sort();
+  if(_phk.length > 7) {
+    while(_phk.length > 7) { delete STATE.projectionHistory[_phk.shift()]; }
+    try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e){}
+  }
   STATE.stockHistory     = JSON.parse(localStorage.getItem('stock_history')   || '{}');
   STATE.scheduleData     = JSON.parse(localStorage.getItem('schedule')        || '[]');
   STATE.supplierData     = JSON.parse(localStorage.getItem('suppliers')       || '[]');
