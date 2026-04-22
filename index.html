@@ -2782,17 +2782,6 @@ function _doBuildProjection() {
   var osprByItem = STATE.osprByItem || {};
   var stockData = STATE.stockData || {};
 
-  // Confirmed incoming: confQty dari poOverrides yg punya confDate (supplier sudah konfirmasi)
-  // Ditambahkan ke totalStock agar coverage memanjang dan item tidak ke-generate ulang
-  var confQtyByItem = {};
-  Object.keys(STATE.poOverrides || {}).forEach(function(key){
-    var ovr = STATE.poOverrides[key];
-    if(!ovr || !ovr.confDate || !ovr.confQty) return; // skip kalau confDate kosong
-    var itemCode = key.slice(key.indexOf('_') + 1);
-    if(!itemCode) return;
-    confQtyByItem[itemCode] = (confQtyByItem[itemCode] || 0) + (parseFloat(ovr.confQty) || 0);
-  });
-
   // Yesterday stock for actual usage: stock_prev + incoming - stock_today
   var histDates = Object.keys(STATE.stockHistory).sort();
   var yd = new Date(now); yd.setDate(yd.getDate() - 1);
@@ -2819,14 +2808,10 @@ function _doBuildProjection() {
     var totalIncoming = grpoByItem[code] || 0;
     var totalOSPR = osprByItem[code] || 0;
 
-    // Tambahkan confirmed incoming (confQty yg sudah ada confDate) ke totalStock
-    // agar coverage memperhitungkan barang yg sudah dikonfirmasi supplier akan datang
-    var confirmedIncoming = confQtyByItem[code] || 0;
-    var totalStockWithConf = totalStock + confirmedIncoming;
-
     // DOI Max = stock / (MRP Max / days) — basis coverage & kategori
+    // Pakai totalStock murni dari SAP, bukan termasuk confirmed incoming
     var estUsgMax  = max3MRP > 0 ? max3MRP / daysInMonth : 0;
-    var doiFC      = estUsgMax > 0 ? totalStockWithConf / estUsgMax : (totalStockWithConf > 0 ? 999 : 0);
+    var doiFC      = estUsgMax > 0 ? totalStock / estUsgMax : (totalStock > 0 ? 999 : 0);
 
     // DOI Real = stock / (Actual MRP / days)
     var estUsgReal = actualMRP > 0 ? actualMRP / daysInMonth : 0;
@@ -3773,8 +3758,24 @@ function generateSchedule() {
   }
 
   // ── 3. Filter item urgent — hanya yg max3MRP > 0 ─────────────────────────────
+  // Bangun index confQty per itemCode (hanya yg punya confDate) untuk cek apakah
+  // kebutuhan item sudah terpenuhi oleh konfirmasi supplier — dipakai di Step 9
+  var confQtyByItem = {};
+  Object.keys(STATE.poOverrides || {}).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(!ovr || !ovr.confDate || !ovr.confQty) return;
+    var itemCode = key.slice(key.indexOf('_') + 1);
+    if(!itemCode) return;
+    confQtyByItem[itemCode] = (confQtyByItem[itemCode] || 0) + (parseFloat(ovr.confQty) || 0);
+  });
+
   var urgentItems = STATE.projectionData.filter(function(p){
     if(!(p.max3MRP > 0)) return false;  // MRP Max = 0 / null / undefined → skip
+    // Jika confQty sudah mencukupi kebutuhan (max3MRP - stock), item tidak perlu dijadwal ulang
+    var stockTotal = (p.stockBTG || 0) + (p.stockSNG || 0);
+    var needed = Math.max(0, (p.max3MRP || 0) - stockTotal);
+    var confirmed = confQtyByItem[p.productCode] || 0;
+    if(needed > 0 && confirmed >= needed) return false;
     return p.coverageDate <= coverageCutoff;
   });
 
@@ -3943,7 +3944,7 @@ function generateSchedule() {
         if(da !== db) return da.localeCompare(db);
         return String(a.docNum).localeCompare(String(b.docNum));
       });
-      var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0));
+      var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0) - (confQtyByItem[item.productCode] || 0));
       // Ambil multiple dari master data — PO dengan openQty < multiple dilewati
       var masterItem = STATE.masterData && STATE.masterData[item.productCode];
       var multipleQty = masterItem ? (masterItem.multiple || 0) : 0;
