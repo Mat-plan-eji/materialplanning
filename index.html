@@ -3901,7 +3901,11 @@ function generateSchedule() {
     var itemSummaryParts = [], selectedPOs = [], selectedEntries = [];
     sup.entries.forEach(function(e){
       var item = e.item;
-      var sortedPOs = (e.pos||[]).slice().sort(function(a,b){ return String(a.docNum).localeCompare(String(b.docNum)); });
+      var sortedPOs = (e.pos||[]).slice().sort(function(a,b){
+        var da = _dateToSortISO(a.prReqDate), db = _dateToSortISO(b.prReqDate);
+        if(da !== db) return da.localeCompare(db);
+        return String(a.docNum).localeCompare(String(b.docNum));
+      });
       var needed = Math.max(0, (item.max3MRP || 0) - (item.stockBTG||0) - (item.stockSNG||0));
       // Ambil multiple dari master data — PO dengan openQty < multiple dilewati
       var masterItem = STATE.masterData && STATE.masterData[item.productCode];
