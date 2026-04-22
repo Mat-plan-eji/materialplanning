@@ -1302,7 +1302,7 @@ function _applyRealtimeChanges(keys) {
         case 'sap_cache_po':
           var rawP = JSON.parse(val || '[]');
           STATE.poData = rawP.map(function(p){
-            if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:fmtSAPDate(p.r),site:p.t};
+            if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,prReqDate:fmtSAPDate(p.r),site:p.t};
             return p;
           });
           loadOSPO();
@@ -1319,7 +1319,7 @@ function _applyRealtimeChanges(keys) {
         case 'sap_cache_ospr':
           var rawO2 = JSON.parse(val || '[]');
           STATE.osprData = rawO2.map(function(o){
-            if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:fmtSAPDate(o.r),site:o.t};
+            if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,prReqDate:fmtSAPDate(o.r),site:o.t};
             return o;
           });
           break;
@@ -1812,7 +1812,7 @@ async function loadPO() {
       return true;
     }).map(function(r){
       return { docNum: r.DocNum, docDate: fmtSAPDate(r.DocDate),
-        poReqDate: fmtSAPDate(r.PO_Req_Date), site: r.U_ReqSite||'',
+        prReqDate: fmtSAPDate(r.PR_Req_Date), site: r.U_ReqSite||'',
         supplierName: r.CardName, itemCode: r.ItemCode,
         itemName: r.Dscription, openQty: r.OpenQty, uom: r.unitMsr,
         status: r.DocStatus, lineStatus: r.PO_LineStatus };
@@ -1867,7 +1867,7 @@ function loadOSPO() {
   STATE.ospoData = STATE.poData.map(function(p){
     return { docNum: p.docNum, itemCode: p.itemCode, itemName: p.itemName,
       supplierName: p.supplierName, openQty: p.openQty, uom: p.uom,
-      poReqDate: p.poReqDate, site: p.site||'' };
+      prReqDate: p.prReqDate, site: p.site||'' };
   });
   populateOSPOMonths();
   return Promise.resolve();
@@ -1902,7 +1902,7 @@ async function syncAll() {
       var sStock = JSON.stringify(STATE.stockData);
       // Compress PO: short keys, hanya field esensial
       var compPO = (STATE.poData||[]).map(function(p){
-        return {d:p.docNum,i:p.itemCode,n:p.itemName,s:p.supplierName,q:p.openQty,u:p.uom,r:p.poReqDate,t:p.site};
+        return {d:p.docNum,i:p.itemCode,n:p.itemName,s:p.supplierName,q:p.openQty,u:p.uom,r:p.prReqDate,t:p.site};
       });
       var sPO = JSON.stringify(compPO);
       // Compress GRPO
@@ -1911,7 +1911,7 @@ async function syncAll() {
       });
       var sGRPO = JSON.stringify(compGRPO);
       var sOSPR = JSON.stringify((STATE.osprData||[]).map(function(o){
-        return {d:o.docNum,i:o.itemCode,n:o.itemName,s:o.supplierName,q:o.openQty,u:o.uom,r:o.poReqDate,t:o.site};
+        return {d:o.docNum,i:o.itemCode,n:o.itemName,s:o.supplierName,q:o.openQty,u:o.uom,r:o.prReqDate,t:o.site};
       }));
       console.log('[syncAll] Cache sizes — stock:', Math.round(sStock.length/1024)+'KB, po:', Math.round(sPO.length/1024)+'KB, grpo:', Math.round(sGRPO.length/1024)+'KB');
       localStorage.setItem('sap_cache_stock', sStock);
@@ -1992,7 +1992,7 @@ function renderPO() {
     return;
   }
 
-  // Sort: supplier ASC → itemCode ASC → poReqDate ASC
+  // Sort: supplier ASC → itemCode ASC → prReqDate ASC
   filtered = filtered.slice().sort(function(a, b) {
     var sa = (a.supplierName||'').toLowerCase();
     var sb = (b.supplierName||'').toLowerCase();
@@ -2000,8 +2000,8 @@ function renderPO() {
     var ca = (a.itemCode||'').toLowerCase();
     var cb = (b.itemCode||'').toLowerCase();
     if(ca !== cb) return ca < cb ? -1 : 1;
-    // poReqDate sort
-    return _dateToSortISO(a.poReqDate).localeCompare(_dateToSortISO(b.poReqDate));
+    // prReqDate sort
+    return _dateToSortISO(a.prReqDate).localeCompare(_dateToSortISO(b.prReqDate));
   });
 
   var totalFiltered = filtered.length;
@@ -2033,7 +2033,7 @@ function renderPO() {
     row += '<td>' + (p.site||'—') + '</td>';
     row += '<td class="mono td-right">' + n_id(p.openQty||0) + '</td>';
     row += '<td>' + (p.uom||'') + '</td>';
-    row += '<td class="mono">' + (p.poReqDate||'—') + '</td>';
+    row += '<td class="mono">' + (p.prReqDate||'—') + '</td>';
     // Tgl Request Kirim — editable, color by source
     row += '<td title="' + reqTitle + '">'
          + '<input type="date" value="' + reqDate + '" data-key="' + key + '" onchange="setPODate(this,true)"'
@@ -2069,7 +2069,7 @@ function renderPO() {
     + '<th><input class="th-filter" id="hf-site2" oninput="_poDeb()" placeholder="filter..." value="' + hfSite  + '"></th>'
     + '<th></th>'  // Open Qty
     + '<th></th>'  // UOM
-    + '<th></th>'  // PO Req Date
+    + '<th></th>'  // PR Req Date
     + '<th><input class="th-filter" id="hf-req"   oninput="_poDeb()" placeholder="tgl..." value="' + hfReq   + '"></th>'
     + '<th></th>'  // Qty Konfirm
     + '<th><input class="th-filter" id="hf-conf"  oninput="_poDeb()" placeholder="tgl..." value="' + hfConf  + '"></th>'
@@ -2084,7 +2084,7 @@ function renderPO() {
     + '<col style="width:80px"><col style="width:120px"><col style="width:85px"><col style="width:150px"></colgroup>'
     + '<thead>'
     + '<tr><th>Doc Num<div class="col-resize" data-col="0"></div></th><th>Supplier<div class="col-resize" data-col="1"></div></th><th>Item Code<div class="col-resize" data-col="2"></div></th><th>Item Name<div class="col-resize" data-col="3"></div></th><th>Site<div class="col-resize" data-col="4"></div></th>'
-    + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM<div class="col-resize" data-col="6"></div></th><th>PO Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim<div class="col-resize" data-col="8"></div></th>'
+    + '<th>Open Qty<div class="col-resize" data-col="5"></div></th><th>UOM<div class="col-resize" data-col="6"></div></th><th>PR Req Date<div class="col-resize" data-col="7"></div></th><th>Tgl Request Kirim<div class="col-resize" data-col="8"></div></th>'
     + '<th>Qty Konfirm<div class="col-resize" data-col="9"></div></th><th>Tgl Konfirmasi<div class="col-resize" data-col="10"></div></th><th>Tgl Update<div class="col-resize" data-col="11"></div></th><th>Notes</th></tr>'
     + frow
     + '</thead>'
@@ -2330,8 +2330,8 @@ function populateOSPOMonths() {
   if(!sel) return;
   var months = {};
   STATE.ospoData.forEach(function(r){
-    if(r.poReqDate){
-      var parts = r.poReqDate.split('/');
+    if(r.prReqDate){
+      var parts = r.prReqDate.split('/');
       if(parts.length === 3) { var k = parts[1]+'/'+parts[2]; months[k] = true; }
     }
   });
@@ -2345,8 +2345,8 @@ function renderOSPO() {
   var month = (document.getElementById('f-ospo-month')||{value:''}).value;
   var f = STATE.ospoData.filter(function(r){
     if(srch && !(r.itemCode||'').toLowerCase().includes(srch) && !(r.itemName||'').toLowerCase().includes(srch) && !(r.supplierName||'').toLowerCase().includes(srch)) return false;
-    if(month && r.poReqDate){
-      var parts = r.poReqDate.split('/');
+    if(month && r.prReqDate){
+      var parts = r.prReqDate.split('/');
       if(parts.length === 3 && parts[1]+'/'+parts[2] !== month) return false;
     }
     return true;
@@ -2354,7 +2354,7 @@ function renderOSPO() {
   if(!f.length){document.getElementById('ospo-table').innerHTML='<div class="empty"><div class="empty-ico">📦</div><h3>Tidak ada OSPO</h3></div>';return;}
   document.getElementById('ospo-table').innerHTML = '<div class="card"><div class="tbl-wrap"><table>' +
     '<thead>' +
-    '<tr><th>Doc Num</th><th>Supplier</th><th>Item Code</th><th>Item Name</th><th>Site</th><th>Open Qty</th><th>UOM</th><th>PO Req Date</th></tr>' +
+    '<tr><th>Doc Num</th><th>Supplier</th><th>Item Code</th><th>Item Name</th><th>Site</th><th>Open Qty</th><th>UOM</th><th>PR Req Date</th></tr>' +
     '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" id="of-doc" oninput="renderOSPO()" placeholder="filter..."></th>' +
     '<th><input class="th-filter" id="of-sup" oninput="renderOSPO()" placeholder="filter..."></th>' +
@@ -2372,7 +2372,7 @@ function renderOSPO() {
       if(oc && !(r.itemCode||'').toLowerCase().includes(oc)) return false;
       if(on && !(r.itemName||'').toLowerCase().includes(on)) return false;
       return true;
-    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+_poName(r.itemCode,r.itemName)+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+r.uom+'</td><td class="mono">'+(r.poReqDate||'—')+'</td></tr>'}).join('') +
+    }).map(function(r){return '<tr><td class="mono">'+r.docNum+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">'+r.supplierName+'</td><td class="mono">'+r.itemCode+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+_poName(r.itemCode,r.itemName)+'</td><td>'+(r.site||'—')+'</td><td class="mono td-right">'+n_id(r.openQty||0)+'</td><td>'+r.uom+'</td><td class="mono">'+(r.prReqDate||'—')+'</td></tr>'}).join('') +
     '</tbody></table></div></div>' +
     '<div style="padding:6px 0;font-size:11px;color:var(--muted)">' + f.length + ' OSPO</div>';
 }
@@ -2768,8 +2768,8 @@ function _doBuildProjection() {
   var ospoByItem = {};
   STATE.ospoData.forEach(function(o){
     if(!ospoByItem[o.itemCode]) ospoByItem[o.itemCode] = {};
-    if(o.poReqDate) {
-      var parts = o.poReqDate.split('/');
+    if(o.prReqDate) {
+      var parts = o.prReqDate.split('/');
       if(parts.length === 3) {
         var dd = parts[0], mm = parts[1], yyyy = parts[2];
         var yyyymm = parseInt(yyyy) * 100 + parseInt(mm);
@@ -5602,7 +5602,7 @@ function _appInit() {
       var raw = JSON.parse(cachedPO);
       STATE.poData = raw.map(function(p){
         // Support both compressed {d,i,n,...} and full {docNum,itemCode,...}
-        if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,poReqDate:fmtSAPDate(p.r),site:p.t};
+        if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,prReqDate:fmtSAPDate(p.r),site:p.t};
         return p;
       });
     }
@@ -5616,7 +5616,7 @@ function _appInit() {
     if(cachedOSPR) {
       var rawO = JSON.parse(cachedOSPR);
       STATE.osprData = rawO.map(function(o){
-        if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,poReqDate:fmtSAPDate(o.r),site:o.t};
+        if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,prReqDate:fmtSAPDate(o.r),site:o.t};
         return o;
       });
     }
