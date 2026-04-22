@@ -4247,7 +4247,7 @@ function saveSchedQty(input) {
         delete STATE.poOverrides[pk].date;
         delete STATE.poOverrides[pk].isAuto;
         delete STATE.poOverrides[pk].isManual;
-        delete STATE.poOverrides[pk].reqQtyOverride;
+        STATE.poOverrides[pk].reqQtyOverride = 0; // set 0, jangan delete — agar filter !== undefined || > 0 bisa exclude dengan benar
       }
     });
     // Remove POs with 0 qty from entry (keep at least the first one)
