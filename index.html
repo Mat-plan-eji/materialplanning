@@ -2782,6 +2782,17 @@ function _doBuildProjection() {
   var osprByItem = STATE.osprByItem || {};
   var stockData = STATE.stockData || {};
 
+  // Confirmed incoming: confQty dari poOverrides yg punya confDate (supplier sudah konfirmasi)
+  // Ditambahkan ke totalStock agar coverage memanjang dan item tidak ke-generate ulang
+  var confQtyByItem = {};
+  Object.keys(STATE.poOverrides || {}).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(!ovr || !ovr.confDate || !ovr.confQty) return; // skip kalau confDate kosong
+    var itemCode = key.slice(key.indexOf('_') + 1);
+    if(!itemCode) return;
+    confQtyByItem[itemCode] = (confQtyByItem[itemCode] || 0) + (parseFloat(ovr.confQty) || 0);
+  });
+
   // Yesterday stock for actual usage: stock_prev + incoming - stock_today
   var histDates = Object.keys(STATE.stockHistory).sort();
   var yd = new Date(now); yd.setDate(yd.getDate() - 1);
@@ -2808,9 +2819,14 @@ function _doBuildProjection() {
     var totalIncoming = grpoByItem[code] || 0;
     var totalOSPR = osprByItem[code] || 0;
 
+    // Tambahkan confirmed incoming (confQty yg sudah ada confDate) ke totalStock
+    // agar coverage memperhitungkan barang yg sudah dikonfirmasi supplier akan datang
+    var confirmedIncoming = confQtyByItem[code] || 0;
+    var totalStockWithConf = totalStock + confirmedIncoming;
+
     // DOI Max = stock / (MRP Max / days) — basis coverage & kategori
     var estUsgMax  = max3MRP > 0 ? max3MRP / daysInMonth : 0;
-    var doiFC      = estUsgMax > 0 ? totalStock / estUsgMax : (totalStock > 0 ? 999 : 0);
+    var doiFC      = estUsgMax > 0 ? totalStockWithConf / estUsgMax : (totalStockWithConf > 0 ? 999 : 0);
 
     // DOI Real = stock / (Actual MRP / days)
     var estUsgReal = actualMRP > 0 ? actualMRP / daysInMonth : 0;
@@ -3811,13 +3827,19 @@ function generateSchedule() {
   var suppliers = Object.values(bySupplier);
 
   // ── 6. Cek manual override ───────────────────────────────────────────────────
+  // Hanya pakai tanggal manual kalau jatuh di dalam delivery week (Mon-Fri)
+  // Tanggal manual di luar delivery week (sudah lewat / minggu lain) diabaikan
   suppliers.forEach(function(sup){
     var manualDate = null;
     sup.entries.forEach(function(e){
       e.pos.forEach(function(po){
         var key = po.docNum + '_' + po.itemCode;
-        if(STATE.poOverrides[key] && STATE.poOverrides[key].isManual && STATE.poOverrides[key].date) {
-          if(!manualDate || STATE.poOverrides[key].date < manualDate) manualDate = STATE.poOverrides[key].date;
+        var ovr = STATE.poOverrides[key];
+        if(ovr && ovr.isManual && ovr.date) {
+          // Hanya gunakan kalau tanggalnya dalam range delivery week
+          if(ovr.date >= delivMonISO && ovr.date <= delivFriISO) {
+            if(!manualDate || ovr.date < manualDate) manualDate = ovr.date;
+          }
         }
       });
     });
@@ -3886,6 +3908,19 @@ function generateSchedule() {
   });
 
   // ── 9. Generate schedule entries (FIFO PO selection) ─────────────────────────
+  // ── Index item & PO yang sudah dijadwal di kartu aktif (semua status) ────────
+  // Cek by itemCode dan by poKey agar tidak dobel
+  var scheduledItemCodes = {};
+  var scheduledPOKeys = {};
+  STATE.scheduleData.forEach(function(s){
+    (s.entries||[]).forEach(function(en){
+      if(en.item && en.item.productCode) scheduledItemCodes[en.item.productCode] = true;
+      (en.pos||[]).forEach(function(po){
+        if(po.docNum && po.itemCode) scheduledPOKeys[po.docNum + '_' + po.itemCode] = true;
+      });
+    });
+  });
+
   var newSchedule = [];
   var dayLoad = {};
 
@@ -3901,6 +3936,8 @@ function generateSchedule() {
     var itemSummaryParts = [], selectedPOs = [], selectedEntries = [];
     sup.entries.forEach(function(e){
       var item = e.item;
+      // Skip item yang sudah ada di kartu jadwal aktif
+      if(scheduledItemCodes[item.productCode]) return;
       var sortedPOs = (e.pos||[]).slice().sort(function(a,b){
         var da = _dateToSortISO(a.prReqDate), db = _dateToSortISO(b.prReqDate);
         if(da !== db) return da.localeCompare(db);
@@ -3910,10 +3947,15 @@ function generateSchedule() {
       // Ambil multiple dari master data — PO dengan openQty < multiple dilewati
       var masterItem = STATE.masterData && STATE.masterData[item.productCode];
       var multipleQty = masterItem ? (masterItem.multiple || 0) : 0;
+      // Exclude PO yang sudah ada di kartu jadwal lain
+      var sortedPOs2 = sortedPOs.filter(function(po){
+        return !scheduledPOKeys[po.docNum + '_' + po.itemCode];
+      });
+      if(!sortedPOs2.length) sortedPOs2 = sortedPOs; // fallback kalau semua sudah terjadwal
       // Filter: hanya PO yang openQty >= multiple (kalau multiple > 0)
       var eligiblePOs = multipleQty > 0
-        ? sortedPOs.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
-        : sortedPOs;
+        ? sortedPOs2.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
+        : sortedPOs2;
       // Fallback: kalau semua difilter, pakai PO pertama (agar tidak kosong total)
       if(!eligiblePOs.length && sortedPOs.length) eligiblePOs = [sortedPOs[0]];
       var accumulated = 0, pickedPOs = [];
@@ -3932,8 +3974,8 @@ function generateSchedule() {
     });
 
     var poNums = selectedPOs.map(function(p){ return p.docNum; }).filter(Boolean);
-    var exists = STATE.scheduleData.find(function(s){ return s.supName === sup.supName && s.status !== 'confirmed'; });
-    if(!exists) {
+    // Hanya buat kartu kalau masih ada entries yang lolos (tidak semua di-skip)
+    if(selectedEntries.length > 0) {
       newSchedule.push({
         supName: sup.supName, date: delivDate,
         items: itemSummaryParts.join(', '), pos: poNums.join(', '),
