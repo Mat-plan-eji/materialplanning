@@ -6148,8 +6148,10 @@ function renderForecast(isGenerate) {
   _fcUpdateKPIs(allItems, fcData);
 
   var info = document.getElementById('fc-table-info');
-  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item</span>'
-    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> · klik baris untuk detail</span>';
+  var syncTs = localStorage.getItem('last_sync') || '';
+  var syncLabel = syncTs ? 'Stock per: <b>' + syncTs + '</b>' : 'Stock belum disync';
+  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + syncLabel + '</span>'
+    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
 
   if(!allItems.length) {
     el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Ubah filter atau klik Generate</p></div>';
@@ -6429,7 +6431,7 @@ function _fcRenderRekap(el, items, fcData, fStatus) {
     var stClr   = r.isOverdue ? 'var(--red)' : (r.isUrgent ? 'var(--amber)' : 'var(--text)');
     var stLabel = r.isOverdue ? 'Terlambat' : (r.isUrgent ? 'Segera' : 'Oke');
     var stSub   = r.isOverdue ? '⚠ lewat' : (r.daysLeft + 'h lagi');
-    var rowBg   = idx%2===0?'':'background:rgba(30,37,53,.25)';
+    var rowBg   = idx%2===0?'':'background:rgba(30,37,53,.12)';
     html += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
       + '<td style="padding:9px 10px;font-family:var(--mono);font-size:11px;white-space:nowrap">'+r.code+' '+badge+'</td>'
       + '<td style="padding:9px 10px;font-size:12px;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</td>'
@@ -6500,12 +6502,12 @@ function _fcRenderSupplier(el, items, fcData) {
         + cells + '</tr>';
     }
 
-    html += supRow('Requirement', fc.forecast, 'var(--text)', 0);
-    html += supRow('OSPO', fc.ospo, 'var(--teal)', 1);
+    html += supRow('OSPO', fc.ospo, 'var(--teal)', 0);
+    html += supRow('OSPR', fc.ospr, 'var(--accent)', 1);
     html += '<tr style="border-bottom:2px solid var(--border);' + bgBase + '">'
-      + '<td style="padding:5px 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap">OSPR</td>'
-      + fc.ospr.map(function(v) {
-          return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;color:'+(v>0?'var(--accent)':'var(--hint)')+'">'+( v>0?n_id(Math.round(v)):'—')+'</td>';
+      + '<td style="padding:5px 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);white-space:nowrap">Propose PR</td>'
+      + fc.propose.map(function(v) {
+          return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;font-weight:'+(v>0?'700':'400')+';color:'+(v>0?'var(--amber)':'var(--hint)')+'">'+( v>0?n_id(Math.round(v)):'—')+'</td>';
         }).join('')
       + '</tr>';
   });
@@ -6526,9 +6528,9 @@ function _fcExportSupplier() {
     var master = STATE.masterData[code] || {};
     var fc     = fcData[code];
     var desc   = '"'+(master.desc||'').replace(/"/g,"'")+'"';
-    rows.push([code, desc, 'Requirement'].concat(fc.forecast.map(function(v){return Math.round(v||0);})).join(','));
-    rows.push([code, desc, 'OSPO'       ].concat(fc.ospo.map(function(v){return Math.round(v||0);})).join(','));
-    rows.push([code, desc, 'OSPR'       ].concat(fc.ospr.map(function(v){return Math.round(v||0);})).join(','));
+    rows.push([code, desc, 'OSPO'      ].concat(fc.ospo.map(function(v){return Math.round(v||0);})).join(','));
+    rows.push([code, desc, 'OSPR'      ].concat(fc.ospr.map(function(v){return Math.round(v||0);})).join(','));
+    rows.push([code, desc, 'Propose PR'].concat(fc.propose.map(function(v){return Math.round(v||0);})).join(','));
   });
   var blob = new Blob([rows.join('\n')],{type:'text/csv'});
   var a = document.createElement('a');
@@ -6707,11 +6709,11 @@ function _fcBuildRows(target) {
     var rows = [hdr];
     items.forEach(function(code) {
       var m=STATE.masterData[code]||{}, fc=fcD[code];
-      if(!fc.forecast.some(function(v){return v>0;})) return;
+      if(!fc.ospo.some(function(v){return v>0;}) && !fc.ospr.some(function(v){return v>0;}) && !fc.propose.some(function(v){return v>0;})) return;
       var desc=m.desc||'';
-      rows.push([code,desc,'Requirement'].concat(fc.forecast.map(function(v){return Math.round(v||0);})));
-      rows.push([code,desc,'OSPO'       ].concat(fc.ospo.map(function(v){return Math.round(v||0);})));
-      rows.push([code,desc,'OSPR'       ].concat(fc.ospr.map(function(v){return Math.round(v||0);})));
+      rows.push([code,desc,'OSPO'     ].concat(fc.ospo.map(function(v){return Math.round(v||0);})));
+      rows.push([code,desc,'OSPR'     ].concat(fc.ospr.map(function(v){return Math.round(v||0);})));
+      rows.push([code,desc,'Propose PR'].concat(fc.propose.map(function(v){return Math.round(v||0);})));
     });
     return rows;
   }
