@@ -5935,8 +5935,8 @@ var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
 var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
 var _fcView      = 'detail';
 var _fcExpanded  = {};
-var _fcPropose     = {};   // manual overrides { code: [9] }
-var _fcAutoPropose = false; // true = run auto-propose algo; false = all propose blank
+var _fcPropose     = (function(){ try{ return JSON.parse(localStorage.getItem('fc_propose')||'{}'); }catch(e){return {};} })();
+var _fcAutoPropose = localStorage.getItem('fc_autopropose') === '1';
 var _fcDOI       = 30;
 
 function _fcGetDOI() {
@@ -6210,6 +6210,7 @@ function generateProposePR() {
   setTimeout(function() {
     renderForecast(true);
     if(btn) { btn.disabled = false; btn.textContent = '⚡ Generate Propose PR'; }
+    try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); localStorage.setItem('fc_autopropose','1'); } catch(e){}
     var badge = document.getElementById('fc-gen-badge');
     if(badge) { badge.style.display = 'inline'; setTimeout(function(){ badge.style.display='none'; }, 5000); }
     toast('Propose PR di-generate ✓','ok');
@@ -6414,7 +6415,7 @@ function _fcDetailRow(code, fc, master) {
   function gRow(label, vals, clsFn, editable, fieldCode) {
     var cells = vals.map(function(v, i) {
       if(editable) {
-        var moqV  = fc.moq || fc.multiple || 1;
+        var moqV  = fc.multiple || 1;  // step by multiple
         var cur   = Math.round(v) || 0;
         var haVal = cur > 0;
         var amberBdr = 'rgba(245,158,11,.4)';
@@ -6426,9 +6427,9 @@ function _fcDetailRow(code, fc, master) {
         var codeJ = JSON.stringify(fieldCode);
         return '<td style="padding:2px 3px" onclick="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="number" value="'+cur+'" data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
+          + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'" data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
           +   ' oninput="_fcProposeEdit(this)"'
-          +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none;-moz-appearance:textfield">'
+          +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
           + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
           +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+moqV+')" tabindex="-1"'
           +     ' style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
@@ -6699,7 +6700,8 @@ function _fcToggle(code) {
 // ─── Reset semua propose PR ──────────────────────────────────────────────────
 function _fcResetPropose() {
   _fcPropose = {};
-  _fcAutoPropose = false; // matikan auto-propose → semua jadi 0
+  _fcAutoPropose = false;
+  try { localStorage.removeItem('fc_propose'); localStorage.removeItem('fc_autopropose'); } catch(e){}
   renderForecast();
   toast('Propose PR dikosongkan ✓', 'ok');
 }
@@ -6737,6 +6739,8 @@ function _fcProposeEdit(input) {
   // Update input style based on value
   input.style.color = qty > 0 ? 'var(--amber)' : 'var(--muted)';
   input.style.fontWeight = qty > 0 ? '700' : '400';
+  // Persist to localStorage
+  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
   // Recalc and update stock/DOI cells in-place
   var ospoIdx = _buildOSPOIndex();
   var fc = _calcForecast(code, ospoIdx);
