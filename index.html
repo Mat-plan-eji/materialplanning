@@ -690,10 +690,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
     <!-- Filter rows -->
     <select id="f-fc-rows" onchange="renderForecast()" style="font-size:12px;padding:5px 10px">
-      <option value="">Semua baris</option>
+      <option value="">Semua (kolom propose)</option>
+      <option value="detail">Detail (semua expand)</option>
       <option value="propose">Propose PR saja</option>
       <option value="under">Under DOI saja</option>
-      <option value="forecast">Forecast saja</option>
+      <option value="forecast">Requirement saja</option>
       <option value="stock">Stock saja</option>
       <option value="doi">DOI saja</option>
     </select>
@@ -2778,8 +2779,9 @@ function processMasterData(rows) {
     var multiple = parseIDNum(row['Multiple'] || row['Multipel'] || row['Order Multiple'] || row['multiple'] || '0');
     var uom = String(row['Inventory Uom'] || row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim();
     var supplier = String(row['Supplier'] || row['Supplier Name'] || row['Vendor'] || '').trim();
-    var lt = parseIDNum(row['L.T'] || row['LT'] || row['Lead Time'] || row['LeadTime'] || row['Leadtime'] || '0');
-    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt };
+    var lt  = parseIDNum(row['L.T'] || row['LT'] || row['Lead Time'] || row['LeadTime'] || row['Leadtime'] || '0');
+    var abc = String(row['ABC'] || row['Abc'] || row['Class'] || row['ABC Class'] || '').trim().toUpperCase();
+    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt, abc: abc };
   });
   return result;
 }
@@ -5881,27 +5883,25 @@ function _appInit() {
 var FC_MONTHS    = ['April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
 var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
-var _fcView      = 'detail';   // 'detail' | 'rekap'
-var _fcExpanded  = {};         // { code: true }
-var _fcPropose   = {};         // manual overrides: { code: [9] }
-var _fcDOI       = 30;         // current DOI target
+var _fcView      = 'detail';
+var _fcExpanded  = {};
+var _fcPropose   = {};   // manual overrides { code: [9] }
+var _fcDOI       = 30;
 
 function _fcGetDOI() {
   var el = document.getElementById('fc-doi-target');
   return el ? (parseInt(el.value) || 30) : (_fcDOI || 30);
 }
-
 function _fcDOIChange(val) {
   _fcDOI = parseInt(val) || 30;
   renderForecast();
 }
-
 function _fcSetView(v) {
   _fcView = v;
-  var tabD = document.getElementById('fc-tab-detail');
-  var tabR = document.getElementById('fc-tab-rekap');
-  if(tabD) { tabD.style.background = v==='detail' ? 'var(--accent)' : 'transparent'; tabD.style.color = v==='detail' ? '#fff' : 'var(--muted)'; }
-  if(tabR) { tabR.style.background = v==='rekap'  ? 'var(--accent)' : 'transparent'; tabR.style.color = v==='rekap'  ? '#fff' : 'var(--muted)'; }
+  ['detail','rekap'].forEach(function(id) {
+    var btn = document.getElementById('fc-tab-' + id);
+    if(btn) { btn.style.background = v===id?'var(--accent)':'transparent'; btn.style.color = v===id?'#fff':'var(--muted)'; }
+  });
   renderForecast();
 }
 
@@ -5922,131 +5922,139 @@ function _buildOSPOIndex() {
   return idx;
 }
 
-// ─── Core calc for one item ──────────────────────────────────────────────────
+// ─── Core calc — formula verified vs CSV:
+//   stock[m] = stock[m-1] + ospo[m] + propose[m] - forecast[m]
+//   propose col = delivery month (PR issued LT_days before = first day of month - LT_days)
+// ────────────────────────────────────────────────────────────────────────────
 function _calcForecast(code, ospoIdx) {
-  var now     = new Date();
+  var now     = new Date(); now.setHours(0,0,0,0);
   var maxDOI  = _fcGetDOI();
   var master  = (STATE.masterData || {})[code] || {};
   var mrp     = (STATE.mrpData    || {})[code] || {};
-  var stock   = (STATE.stockData  || {})[code] || {};
+  var stockD  = (STATE.stockData  || {})[code] || {};
 
   var lt_days  = master.lt || 30;
-  var lt_mo    = Math.max(1, Math.round(lt_days / 30));
+  var lt_mo    = Math.ceil(lt_days / 30);   // months to add for delivery
   var moq      = master.moq || 0;
   var multiple = master.multiple || 1;
-  var soh      = (stock.btg || 0) + (stock.sng || 0);
-  var ospr     = (STATE.osprByItem || {})[code] || 0;
+  var soh      = (stockD.btg || 0) + (stockD.sng || 0);
+  // OSPR = total open purchase requests, counted in first available month
+  var ospr_total = (STATE.osprByItem || {})[code] || 0;
+
+  var curYear  = now.getFullYear();
 
   // Forecast per month
   var forecast = FC_MONTHS.map(function(m) { return (mrp.months && mrp.months[m]) || 0; });
 
   // OSPO per month
-  var curYear = now.getFullYear();
-  var ospo = FC_MONTHS.map(function(m, i) {
+  var ospo = FC_MONTHS.map(function(_, i) {
     var yyyymm = curYear * 100 + FC_MONTH_NUMS[i];
     return ((ospoIdx[code] || {})[yyyymm]) || 0;
   });
 
-  // confQty adjustments (from poOverrides with confDate)
+  // OSPR per month — put total in first non-zero forecast month
+  var ospr = new Array(9).fill(0);
+  if(ospr_total > 0) ospr[0] = ospr_total;
+
+  // confQty by month (already confirmed by supplier)
   var confByMonth = new Array(9).fill(0);
   Object.keys(STATE.poOverrides || {}).forEach(function(key) {
     var ovr = STATE.poOverrides[key];
     if(!ovr || !ovr.confDate || !ovr.confQty) return;
     if(key.slice(key.indexOf('_')+1) !== code) return;
-    // Parse confDate YYYY-MM-DD → find which FC month
     var parts = ovr.confDate.split('-');
     if(parts.length === 3) {
       var mo = parseInt(parts[1]);
-      var yi = curYear * 100 + mo;
       var idx2 = FC_MONTH_NUMS.indexOf(mo);
       if(idx2 >= 0) confByMonth[idx2] += parseFloat(ovr.confQty) || 0;
     }
   });
 
-  // Initial stock projection (no propose)
+  // ── Initial stock projection (no propose yet) ─────────────────────────────
+  // April: remaining days of month
+  var daysRemain = FC_DAYS[0] - now.getDate() + 1;
+  var fcApr = forecast[0] > 0 ? forecast[0] * (daysRemain / FC_DAYS[0]) : 0;
   var stockProj = new Array(9).fill(0);
-  var remainFrac = (FC_DAYS[0] - now.getDate()) / FC_DAYS[0];
-  stockProj[0] = soh + ospr + confByMonth[0] + ospo[0] - forecast[0] * remainFrac;
-  for(var m2 = 1; m2 < 9; m2++) {
-    stockProj[m2] = stockProj[m2-1] + ospo[m2] + confByMonth[m2] - forecast[m2];
+  stockProj[0] = soh + ospr[0] + confByMonth[0] + ospo[0] - fcApr;
+  for(var m = 1; m < 9; m++) {
+    stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] + confByMonth[m] - forecast[m];
   }
 
-  // Manual propose overrides
+  // ── Manual propose overrides ───────────────────────────────────────────────
   var manProp = (_fcPropose[code] || new Array(9).fill(0)).slice();
 
-  // Apply manual arrivals
+  // Apply manual propose (delivery in same month as propose col)
   var stockM = stockProj.slice();
   for(var pm = 0; pm < 9; pm++) {
     if(manProp[pm] > 0) {
-      for(var n = Math.min(8, pm + lt_mo); n < 9; n++) stockM[n] += manProp[pm];
+      for(var n = pm; n < 9; n++) stockM[n] += manProp[pm];
     }
   }
 
-  // Auto propose
+  // ── Auto propose ──────────────────────────────────────────────────────────
+  // If stock[m] < minStock → propose delivery in month m
+  // PR must be issued: first day of month m - lt_days
   var autoProp = new Array(9).fill(0);
   var stockF   = stockM.slice();
-  for(var m3 = 0; m3 < 9; m3++) {
-    var daily   = forecast[m3] > 0 ? forecast[m3] / FC_DAYS[m3] : 0;
+  for(var m2 = 0; m2 < 9; m2++) {
+    var daily   = forecast[m2] > 0 ? forecast[m2] / FC_DAYS[m2] : 0;
     var minSt   = maxDOI * daily;
-    if(stockF[m3] < minSt) {
-      var propM = Math.max(0, m3 - lt_mo);
-      var shortage = minSt - stockF[m3];
+    if(stockF[m2] < minSt) {
+      var shortage = minSt - stockF[m2];
       var qty = shortage;
       if(multiple > 0) qty = Math.ceil(qty / multiple) * multiple;
       if(moq > 0 && qty < moq) qty = moq;
       if(qty <= 0) continue;
-      autoProp[propM] += qty;
-      for(var n2 = Math.min(8, propM + lt_mo); n2 < 9; n2++) stockF[n2] += qty;
+      autoProp[m2] += qty;
+      for(var n2 = m2; n2 < 9; n2++) stockF[n2] += qty;
     }
   }
 
-  // Total propose
+  // Total propose (delivery month)
   var totalProp = FC_MONTHS.map(function(_, i) { return manProp[i] + autoProp[i]; });
 
   // DOI
-  var doi = FC_MONTHS.map(function(m4, i) {
+  var doi = FC_MONTHS.map(function(_, i) {
     var daily2 = forecast[i] > 0 ? forecast[i] / FC_DAYS[i] : 0;
     return daily2 > 0 ? Math.round(stockF[i] / daily2) : (stockF[i] > 0 ? 999 : 0);
   });
 
-  // Suggest: for each propose > 0, when should PR be created?
-  // "Create PR latest by: today's date + LT from proposal month minus today's date in days"
-  // Actually: PR must be submitted LT_days before delivery month starts
-  // Delivery is start of (proposeMonth + LT_months), so create PR = deliveryStart - LT_days
+  // ── Tgl Create PR for each propose month ─────────────────────────────────
+  // PR issued = first day of delivery month - lt_days
   var suggestions = [];
-  var now2 = new Date(); now2.setHours(0,0,0,0);
   for(var si = 0; si < 9; si++) {
-    if(totalProp[si] > 0) {
-      // Delivery arrives start of month si + lt_mo
-      var delivYr  = curYear;
-      var delivMo  = FC_MONTH_NUMS[si] + lt_mo;  // 1-indexed
-      while(delivMo > 12) { delivMo -= 12; delivYr++; }
-      var delivStart = new Date(delivYr, delivMo - 1, 1);
-      // Create PR latest = delivStart - lt_days
-      var createPR = new Date(delivStart);
-      createPR.setDate(createPR.getDate() - lt_days);
-      var daysLeft = Math.round((createPR - now2) / 86400000);
-      suggestions.push({
-        proposeMonth: FC_MONTHS[si],
-        qty: totalProp[si],
-        createPRBy: createPR,
-        daysLeft: daysLeft,
-        isUrgent: daysLeft <= 7,
-        isOverdue: daysLeft < 0
-      });
-    }
+    if(totalProp[si] <= 0) continue;
+    // Delivery = 1st of month si
+    var delivYr = curYear;
+    var delivMo = FC_MONTH_NUMS[si];
+    var delivDate = new Date(delivYr, delivMo - 1, 1);
+    // Create PR = delivDate - lt_days
+    var createPR = new Date(delivDate);
+    createPR.setDate(createPR.getDate() - lt_days);
+    var daysLeft = Math.round((createPR - now) / 86400000);
+    suggestions.push({
+      proposeIdx: si,
+      proposeMonth: FC_MONTHS[si],
+      delivDate: delivDate,
+      qty: totalProp[si],
+      createPRBy: createPR,
+      daysLeft: daysLeft,
+      isUrgent: daysLeft >= 0 && daysLeft <= 7,
+      isOverdue: daysLeft < 0
+    });
   }
 
   return {
-    forecast: forecast, ospo: ospo, stock: stockF,
-    stockBase: stockProj, doi: doi,
-    propose: totalProp, lt_mo: lt_mo, lt_days: lt_days,
+    forecast: forecast, ospo: ospo, ospr: ospr,
+    stock: stockF, stockBase: stockProj,
+    doi: doi, propose: totalProp,
+    lt_days: lt_days, lt_mo: lt_mo,
     moq: moq, multiple: multiple, maxDOI: maxDOI,
     soh: soh, suggestions: suggestions
   };
 }
 
-// ─── Generate Propose PR ─────────────────────────────────────────────────────
+// ─── Generate ─────────────────────────────────────────────────────────────────
 function generateProposePR() {
   if(!STATE.masterData) { toast('Muat Master Data terlebih dahulu','err'); return; }
   if(!STATE.mrpData)    { toast('Muat MRP terlebih dahulu','err'); return; }
@@ -6055,431 +6063,446 @@ function generateProposePR() {
   toast('Propose PR di-generate ✓','ok');
 }
 
-// ─── Main render ─────────────────────────────────────────────────────────────
+// ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
   var el = document.getElementById('fc-table');
   if(!el) return;
-
   if(!STATE.masterData || !STATE.mrpData) {
     el.innerHTML = '<div class="empty" style="padding:60px 20px"><div class="empty-ico">📅</div><h3>Belum ada data</h3><p>Muat Master Data &amp; MRP dari Data Source lalu klik Generate Propose PR</p></div>';
-    document.getElementById('fc-table-info').innerHTML = '';
+    var info = document.getElementById('fc-table-info'); if(info) info.innerHTML = '';
     return;
   }
 
-  var ospoIdx  = _buildOSPOIndex();
-  var srch     = (document.getElementById('srch-fc')   ||{value:''}).value.toLowerCase().trim();
-  var fType    = (document.getElementById('f-fc-type') ||{value:''}).value;
-  var fRows    = (document.getElementById('f-fc-rows') ||{value:''}).value;
+  var ospoIdx = _buildOSPOIndex();
+  var srch    = (document.getElementById('srch-fc')   ||{value:''}).value.toLowerCase().trim();
+  var fType   = (document.getElementById('f-fc-type') ||{value:''}).value;
+  var fRows   = (document.getElementById('f-fc-rows') ||{value:''}).value;
 
-  // Build items
   var allItems = Object.keys(STATE.masterData).filter(function(code) {
-    var iType = /^3/.test(code) ? 'RM' : (/^4/.test(code) ? 'PM' : 'FG');
-    if(iType === 'FG') return false;
-    if(fType && iType !== fType) return false;
-    var m = STATE.masterData[code];
-    var mrp = STATE.mrpData[code] || {};
+    var iType = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
+    if(iType==='FG') return false;
+    if(fType && iType!==fType) return false;
     if(srch) {
-      var hay = (code + ' ' + (m.desc||'') + ' ' + (m.supplier||'') + ' ' + ((STATE.realNameData||{})[code]||'')).toLowerCase();
+      var hay = (code+' '+(STATE.masterData[code].desc||'')+' '+(STATE.masterData[code].supplier||'')+' '+((STATE.realNameData||{})[code]||'')).toLowerCase();
       if(!hay.includes(srch)) return false;
     }
     return true;
   });
 
-  // Calc all
   var fcData = {};
   allItems.forEach(function(code) { fcData[code] = _calcForecast(code, ospoIdx); });
 
-  // Filter by rows type
-  if(fRows === 'propose') allItems = allItems.filter(function(c){ return fcData[c].propose.some(function(v){ return v>0; }); });
-  else if(fRows === 'under') allItems = allItems.filter(function(c){ return fcData[c].doi[0] < _fcGetDOI() && fcData[c].doi[0] >= 0; });
+  if(fRows==='propose') allItems = allItems.filter(function(c){ return fcData[c].propose.some(function(v){return v>0;}); });
+  else if(fRows==='under') allItems = allItems.filter(function(c){ return fcData[c].doi[0]>=0 && fcData[c].doi[0]<_fcGetDOI(); });
 
-  // Update KPIs
   _fcUpdateKPIs(allItems, fcData);
 
   var info = document.getElementById('fc-table-info');
-  if(info) info.innerHTML = '<span>Menampilkan <b>' + allItems.length + '</b> item</span>'
-    + '<span>DOI target: <b>' + _fcGetDOI() + ' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
+  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item</span>'
+    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> · klik baris untuk detail</span>';
 
   if(!allItems.length) {
     el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Ubah filter atau klik Generate</p></div>';
     return;
   }
 
-  if(_fcView === 'rekap') {
-    _fcRenderRekap(el, allItems, fcData);
-  } else {
-    _fcRenderDetail(el, allItems, fcData, fRows);
-  }
+  if(_fcView==='rekap') { _fcRenderRekap(el, allItems, fcData); }
+  else                  { _fcRenderDetail(el, allItems, fcData, fRows); }
 }
 
-// ─── KPI update ──────────────────────────────────────────────────────────────
+// ─── KPIs ─────────────────────────────────────────────────────────────────────
 function _fcUpdateKPIs(items, fcData) {
-  var rm=0,pm=0,propose=0,under=0;
-  var doi = _fcGetDOI();
+  var rm=0, pm=0, propose=0, under=0, doi=_fcGetDOI();
   items.forEach(function(code) {
-    var iType = /^3/.test(code) ? 'RM' : 'PM';
-    if(iType==='RM') rm++; else pm++;
-    var fc = fcData[code];
-    if(fc.propose.some(function(v){ return v>0; })) propose++;
-    if(fc.doi[0] >= 0 && fc.doi[0] < doi) under++;
+    if(/^3/.test(code)) rm++; else pm++;
+    if(fcData[code].propose.some(function(v){return v>0;})) propose++;
+    var d=fcData[code].doi[0]; if(d>=0 && d<doi) under++;
   });
-  var set = function(id, v) { var e=document.getElementById(id); if(e) e.textContent=v; };
-  set('fc-kpi-total', items.length);
-  set('fc-kpi-total-sub', rm + ' RM · ' + pm + ' PM');
-  set('fc-kpi-rm', rm);
-  set('fc-kpi-pm', pm);
-  set('fc-kpi-propose', propose);
-  set('fc-kpi-under', under);
+  var s=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  s('fc-kpi-total',items.length); s('fc-kpi-total-sub',rm+' RM · '+pm+' PM');
+  s('fc-kpi-rm',rm); s('fc-kpi-pm',pm); s('fc-kpi-propose',propose); s('fc-kpi-under',under);
 }
 
-// ─── Detail view ─────────────────────────────────────────────────────────────
+// ─── Detail view ──────────────────────────────────────────────────────────────
 function _fcRenderDetail(el, items, fcData, fRows) {
-  var now = new Date();
-  var yr2 = String(now.getFullYear()).slice(-2);
+  var yr2 = String(new Date().getFullYear()).slice(-2);
+  var expandAll = (fRows === 'detail');
 
-  // Header
-  var showRows = fRows || 'all';
   var months_hdr = FC_MONTHS.map(function(m) {
-    return '<th style="min-width:78px;text-align:right;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'
-      + m.slice(0,3) + ' \'' + yr2 + '</th>';
+    return '<th style="min-width:72px;text-align:right;padding:7px 5px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'
+      + m.slice(0,3)+" '"+yr2+'</th>';
   }).join('');
 
-  var html = '<div style="overflow-x:auto">'
-    + '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">'
+  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:960px">'
     + '<thead><tr>'
-    + '<th style="width:18px;padding:8px 4px;border-bottom:2px solid var(--border2)"></th>'
-    + '<th style="text-align:left;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap;min-width:90px">Kode</th>'
-    + '<th style="text-align:left;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:160px">Deskripsi</th>'
-    + '<th style="text-align:left;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap;min-width:100px">Supplier</th>'
-    + '<th style="text-align:center;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">LT</th>'
-    + '<th style="text-align:right;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">SOH</th>'
-    + months_hdr
-    + '</tr></thead><tbody id="fc-tbody">';
+    + '<th style="width:16px;padding:7px 4px;border-bottom:2px solid var(--border2)"></th>'
+    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">Kode</th>'
+    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">Deskripsi</th>'
+    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">Supplier</th>'
+    + '<th style="text-align:center;padding:7px 6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">ABC</th>'
+    + '<th style="text-align:center;padding:7px 6px;font-size:9.5px;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">LT</th>'
+    + '<th style="text-align:right;padding:7px 8px;font-size:9.5px;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">SOH</th>'
+    + months_hdr + '</tr></thead><tbody>';
 
   items.forEach(function(code) {
-    var fc   = fcData[code];
-    var m    = STATE.masterData[code] || {};
-    var iType= /^3/.test(code)?'RM':'PM';
-    var badge= iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-    var name = (_isAdmin && (STATE.realNameData||{})[code]) ? ('<span style="color:var(--teal)">'+(STATE.realNameData[code])+'</span>') : (m.desc||'—');
-    var isExp= !!_fcExpanded[code];
-    var hasProp = fc.propose.some(function(v){ return v>0; });
-    var doi0 = fc.doi[0];
-    var doiColor = doi0 < 0 ? 'var(--red)' : (doi0 < _fcGetDOI() ? 'var(--amber)' : 'var(--green)');
+    var fc     = fcData[code];
+    var m      = STATE.masterData[code] || {};
+    var iType  = /^3/.test(code)?'RM':'PM';
+    var badge  = iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
+    var name   = (_isAdmin && (STATE.realNameData||{})[code]) ? '<span style="color:var(--teal)">'+(STATE.realNameData[code])+'</span>' : (m.desc||'—');
+    var abc    = m.abc || '';
+    var abcColor = abc==='A'?'var(--red)':abc==='B'?'var(--amber)':abc==='C'?'var(--green)':'var(--muted)';
+    var isExp  = expandAll || !!_fcExpanded[code];
 
-    // Summary row columns — show first propose col value per month
-    var monthCells = FC_MONTHS.map(function(_, i) {
-      if(showRows === 'forecast') {
-        var v = fc.forecast[i];
-        return '<td style="text-align:right;padding:6px;font-family:var(--mono);font-size:11px;color:var(--muted)">' + (v?n_id(Math.round(v)):'—') + '</td>';
+    // Urgency chip
+    var urgSug  = fc.suggestions.filter(function(s){return s.isUrgent;});
+    var overSug = fc.suggestions.filter(function(s){return s.isOverdue;});
+    var chip = overSug.length ? '<span style="margin-left:5px;font-size:9px;background:var(--red-bg);color:var(--red);padding:1px 5px;border-radius:2px;font-weight:600">Terlambat PR</span>'
+             : urgSug.length  ? '<span style="margin-left:5px;font-size:9px;background:var(--amber-bg);color:var(--amber);padding:1px 5px;border-radius:2px;font-weight:600">Segera PR</span>' : '';
+
+    // Per-month cells — show propose by default
+    var mCells = FC_MONTHS.map(function(_, i) {
+      if(fRows==='forecast') {
+        var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(Math.round(v)):'—')+'</td>';
+      } else if(fRows==='stock') {
+        var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOI()*daily;
+        var cl=v2<0?'var(--red)':v2<minS?'var(--amber)':'var(--text)';
+        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(Math.round(v2))+'</td>';
+      } else if(fRows==='doi') {
+        var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOI()?'var(--amber)':d>99?'var(--muted)':'var(--green)';
+        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d===999?'∞':d)+'</td>';
+      } else {
+        // propose (default)
+        var pv=fc.propose[i];
+        if(!pv) return '<td style="text-align:right;padding:6px 5px;color:var(--hint);font-size:11px">—</td>';
+        return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:3px">'+n_id(Math.round(pv))+'</td>';
       }
-      if(showRows === 'stock') {
-        var v2 = fc.stock[i];
-        var clr = v2 < 0 ? 'var(--red)' : (v2 < fc.maxDOI * (fc.forecast[i]/FC_DAYS[i]) ? 'var(--amber)' : 'var(--text)');
-        return '<td style="text-align:right;padding:6px;font-family:var(--mono);font-size:11px;color:'+clr+'">' + n_id(Math.round(v2)) + '</td>';
-      }
-      if(showRows === 'doi') {
-        var d = fc.doi[i];
-        var dc = d < 0 ? 'var(--red)' : (d < _fcGetDOI() ? 'var(--amber)' : 'var(--green)');
-        return '<td style="text-align:right;padding:6px;font-family:var(--mono);font-size:11px;color:'+dc+'">' + (d===999?'∞':d) + '</td>';
-      }
-      // Default: propose
-      var pv = fc.propose[i];
-      if(!pv) return '<td style="text-align:right;padding:6px;color:var(--hint);font-size:11px">—</td>';
-      return '<td style="text-align:right;padding:6px;font-family:var(--mono);font-size:11px;background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:3px">'
-        + n_id(Math.round(pv)) + '</td>';
     }).join('');
 
-    // Suggestion chip
-    var urgSug = fc.suggestions.filter(function(s){ return s.isUrgent && !s.isOverdue; });
-    var overSug = fc.suggestions.filter(function(s){ return s.isOverdue; });
-    var sugChip = '';
-    if(overSug.length) sugChip = '<span style="margin-left:6px;font-size:9px;background:var(--red-bg);color:var(--red);padding:1px 5px;border-radius:2px;font-weight:600">Terlambat PR</span>';
-    else if(urgSug.length) sugChip = '<span style="margin-left:6px;font-size:9px;background:var(--amber-bg);color:var(--amber);padding:1px 5px;border-radius:2px;font-weight:600">Segera PR</span>';
-
-    html += '<tr class="fc-item-row" data-code="' + code + '" onclick="_fcToggle(\'' + code + '\')" style="cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'
-      + '<td style="padding:8px 4px 8px 8px;text-align:center;color:var(--muted);font-size:11px;transition:transform .15s" id="fc-chev-'+code+'">' + (isExp ? '▾' : '›') + '</td>'
-      + '<td style="padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">' + code + ' ' + badge + '</td>'
-      + '<td style="padding:8px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500">' + name + sugChip + '</td>'
-      + '<td style="padding:8px 10px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)">' + (m.supplier||'—') + '</td>'
-      + '<td style="padding:8px 10px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)">' + (fc.lt_days||'—') + 'd</td>'
-      + '<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:11px">' + n_id(Math.round(fc.soh)) + '</td>'
-      + monthCells
+    var chevId = 'fc-chev-'+code;
+    html += '<tr class="fc-item-row" data-code="'+code+'" onclick="_fcToggle(\''+code+'\')" '
+      + 'style="cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" '
+      + 'onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'
+      + '<td style="padding:8px 4px 8px 8px;text-align:center;color:var(--muted);font-size:11px" id="'+chevId+'">'+(isExp?'▾':'›')+'</td>'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">'+code+' '+badge+'</td>'
+      + '<td style="padding:8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500">'+name+chip+'</td>'
+      + '<td style="padding:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)">'+(m.supplier||'—')+'</td>'
+      + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:700;color:'+abcColor+'">'+(abc||'—')+'</td>'
+      + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(fc.lt_days?fc.lt_days+'d':'—')+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono);font-size:11px">'+n_id(Math.round(fc.soh))+'</td>'
+      + mCells
       + '</tr>';
 
-    // Expanded detail
-    if(isExp) {
-      html += _fcDetailRow(code, fc, m);
-    }
+    if(isExp) html += _fcDetailRow(code, fc, m);
   });
 
   html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
-// ─── Detail expanded row ──────────────────────────────────────────────────────
+// ─── Expanded detail row ──────────────────────────────────────────────────────
 function _fcDetailRow(code, fc, master) {
-  var now = new Date();
-  var iType = /^3/.test(code) ? 'RM' : 'PM';
-  var rn = (_isAdmin && (STATE.realNameData||{})[code]) ? (STATE.realNameData[code]) : '';
-  var yr2 = String(now.getFullYear()).slice(-2);
+  var yr2  = String(new Date().getFullYear()).slice(-2);
+  var iType= /^3/.test(code)?'RM':'PM';
+  var rn   = (_isAdmin && (STATE.realNameData||{})[code]) ? (STATE.realNameData[code]) : '';
+  var abc  = master.abc || '';
+  var abcColor = abc==='A'?'var(--red)':abc==='B'?'var(--amber)':abc==='C'?'var(--green)':'var(--muted)';
 
-  // Meta info
-  var metaHTML = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">';
-  var metaRows = [
-    ['Kode', '<span style="font-family:var(--mono)">' + code + '</span>'],
-    ['Tipe', iType],
-    ['UoM', master.uom||'—'],
-    ['MOQ', n_id(master.moq||0)],
-    ['Multiple', n_id(master.multiple||1)],
-    ['Lead Time', fc.lt_days + ' hari'],
-    ['SOH Sekarang', n_id(Math.round(fc.soh))],
-  ];
-  if(rn && _isAdmin) metaRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
-  metaRows.forEach(function(r) {
-    metaHTML += '<dt style="color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:2px">' + r[0] + '</dt>'
-      + '<dd style="margin:0;font-family:var(--mono);font-size:11.5px">' + r[1] + '</dd>';
+  // Meta panel
+  var meta = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">';
+  var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
+    ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
+    ['SOH',n_id(Math.round(fc.soh))],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
+  if(rn && _isAdmin) mRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
+  mRows.forEach(function(r){
+    meta += '<dt style="color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:2px">'+r[0]+'</dt>'
+          + '<dd style="margin:0;font-family:var(--mono);font-size:11.5px">'+r[1]+'</dd>';
   });
-  metaHTML += '</div>';
+  meta += '</div>';
 
   // Suggestions
-  var sugHTML = '';
+  var sug = '';
   if(fc.suggestions.length) {
-    sugHTML = '<div style="margin-top:10px">';
-    sugHTML += '<div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-bottom:5px">Suggest Buat PR</div>';
+    sug = '<div style="margin-top:10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-bottom:5px">Suggest Buat PR</div>';
     fc.suggestions.forEach(function(s) {
       var d  = s.createPRBy;
-      var ds = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-      var color = s.isOverdue ? 'var(--red)' : (s.isUrgent ? 'var(--amber)' : 'var(--green)');
-      var bg    = s.isOverdue ? 'var(--red-bg)' : (s.isUrgent ? 'var(--amber-bg)' : 'var(--green-bg)');
-      var label = s.isOverdue ? '⚠ Terlambat' : (s.isUrgent ? '⚡ ' + s.daysLeft + ' hari lagi' : '✓ ' + s.daysLeft + ' hari lagi');
-      sugHTML += '<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:' + bg + ';border-radius:var(--r);margin-bottom:4px;font-size:11px">'
-        + '<span style="font-family:var(--mono);color:var(--muted)">' + s.proposeMonth + '</span>'
-        + '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">' + n_id(Math.round(s.qty)) + ' ' + (master.uom||'') + '</span>'
-        + '<span style="margin-left:auto;font-size:10px;color:' + color + ';font-weight:600">' + label + '</span>'
-        + '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Buat PR sebelum ' + ds + '</span>'
+      var ds = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+      var cl = s.isOverdue?'var(--red)':(s.isUrgent?'var(--amber)':'var(--green)');
+      var bg = s.isOverdue?'var(--red-bg)':(s.isUrgent?'var(--amber-bg)':'var(--green-bg)');
+      var lb = s.isOverdue?'⚠ Terlambat':(s.isUrgent?'⚡ '+s.daysLeft+'h lagi':'✓ '+s.daysLeft+'h lagi');
+      sug += '<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:'+bg+';border-radius:var(--r);margin-bottom:4px;font-size:11px">'
+        + '<span style="font-family:var(--mono);color:var(--muted)">'+s.proposeMonth+'</span>'
+        + '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">'+n_id(Math.round(s.qty))+' '+(master.uom||'')+'</span>'
+        + '<span style="margin-left:auto;font-size:10px;color:'+cl+';font-weight:600">'+lb+'</span>'
+        + '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Buat PR sebelum '+ds+'</span>'
         + '</div>';
     });
-    sugHTML += '</div>';
+    sug += '</div>';
   }
 
   // Forecast grid
-  var monthHdr = FC_MONTHS.map(function(m) {
-    return '<th style="text-align:right;padding:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">' + m.slice(0,3) + ' \'' + yr2 + '</th>';
+  var mhdr = FC_MONTHS.map(function(m) {
+    return '<th style="text-align:right;padding:6px 5px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'+m.slice(0,3)+" '"+yr2+'</th>';
   }).join('');
 
-  function gridRow(label, values, cls, fmtFn, isPropose) {
-    var rowBg = isPropose ? 'background:rgba(245,158,11,.04)' : '';
-    var cells = values.map(function(v, i) {
-      if(isPropose) {
-        if(!v || v <= 0) return '<td style="text-align:right;padding:5px 6px;color:var(--hint);font-size:11px">—</td>';
-        return '<td style="text-align:right;padding:4px 6px">'
-          + '<input type="number" value="' + Math.round(v) + '" data-code="' + code + '" data-mi="' + i + '"'
-          + ' oninput="_fcProposeEdit(this)" onclick="event.stopPropagation()"'
-          + ' style="width:80px;text-align:right;font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--amber);background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);border-radius:3px;padding:3px 5px;outline:none">'
-          + '</td>';
+  function gRow(label, vals, clsFn, editable, fieldCode) {
+    var cells = vals.map(function(v, i) {
+      if(editable) {
+        var mlt = fc.multiple || 1;
+        var cur = Math.round(v) || 0;
+        var inputStyle = cur > 0
+          ? 'color:var(--amber);background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);'
+          : 'color:var(--muted);background:transparent;border:1px solid var(--border);';
+        var stepDown = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + (-mlt) + ')';
+        var stepUp   = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + mlt    + ')';
+        return '<td style="padding:3px 4px">'
+          + '<div style="display:flex;align-items:center;gap:2px" onclick="event.stopPropagation()">'
+          + '<span onclick="' + stepDown + '" title="-' + mlt + '" '
+          + 'style="cursor:pointer;font-size:10px;color:var(--muted);padding:2px 4px;border-radius:2px;user-select:none;background:var(--bg4);line-height:1">'
+          + '▼</span>'
+          + '<input type="number" value="' + cur + '" data-code="' + fieldCode + '" data-mi="' + i + '" data-mlt="' + mlt + '"'
+          + ' oninput="_fcProposeEdit(this)"'
+          + ' style="width:70px;text-align:right;font-family:var(--mono);font-size:11.5px;font-weight:700;' + inputStyle + 'border-radius:3px;padding:3px 5px;outline:none">'
+          + '<span onclick="' + stepUp + '" title="+' + mlt + '" '
+          + 'style="cursor:pointer;font-size:10px;color:var(--muted);padding:2px 4px;border-radius:2px;user-select:none;background:var(--bg4);line-height:1">'
+          + '▲</span>'
+          + '</div></td>'
       }
-      var txt = fmtFn ? fmtFn(v, i) : (v!==0 ? n_id(Math.round(v)) : '<span style="color:var(--hint)">—</span>');
-      return '<td style="text-align:right;padding:5px 6px;font-family:var(--mono);font-size:11px;' + (cls||'') + '">' + txt + '</td>';
+      var style = clsFn ? clsFn(v, i) : 'color:var(--text)';
+      var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
+      return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</td>';
     }).join('');
-    return '<tr style="border-bottom:1px dotted var(--border);' + rowBg + '">'
-      + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:110px">' + label + '</td>'
+    return '<tr style="border-bottom:1px dotted var(--border)">'
+      + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
       + cells + '</tr>';
   }
 
-  var gridHTML = '<div style="overflow-x:auto;margin-top:10px">'
-    + '<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)">'
-    + '<thead><tr><th style="text-align:left;padding:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:110px">Info</th>' + monthHdr + '</tr></thead>'
+  var grid = '<div style="overflow-x:auto;margin-top:10px">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr><th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'+mhdr+'</tr></thead>'
     + '<tbody>'
-    + gridRow('Forecast', fc.forecast, 'color:var(--text)')
-    + gridRow('OSPO', fc.ospo, 'color:var(--teal)')
-    + gridRow('Stock EOMonth', fc.stock, '', function(v,i) {
-        var daily = fc.forecast[i]>0 ? fc.forecast[i]/FC_DAYS[i] : 0;
-        var minSt = _fcGetDOI() * daily;
-        var clr = v<0 ? 'color:var(--red);font-weight:600' : (v<minSt ? 'color:var(--amber)' : 'color:var(--green)');
-        return '<span style="' + clr + '">' + n_id(Math.round(v)) + '</span>';
+    + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
+    + gRow('OSPO', fc.ospo, function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
+    + gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
+    + gRow('Stock (Ending)', fc.stock, function(v,i){
+        var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0, minS=_fcGetDOI()*daily;
+        return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
       })
-    + gridRow('DOI (hari)', fc.doi, '', function(v) {
-        var clr = v<0 ? 'color:var(--red)' : (v<_fcGetDOI() ? 'color:var(--amber)' : (v>99?'color:var(--muted)':'color:var(--green)'));
-        return '<span style="' + clr + '">' + (v===999?'∞':v) + '</span>';
-      })
-    + gridRow('Propose PR', fc.propose, '', null, true)
+    + gRow('DOI (hari)', fc.doi, function(v){
+        return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+      }, false, null)
+    + gRow('Propose PR', fc.propose, null, true, code)
     + '</tbody></table></div>';
 
-  var colspan = 6 + 9;
-  return '<tr id="fc-detail-' + code + '" style="border-bottom:2px solid var(--border2)">'
-    + '<td colspan="' + colspan + '" style="padding:0;background:var(--bg)">'
-    + '<div style="padding:16px 20px;display:grid;grid-template-columns:220px 1fr;gap:16px;animation:fadeIn .15s">'
-    + '<div>' + metaHTML + sugHTML + '</div>'
-    + '<div>' + gridHTML + '</div>'
+  // DOI override render — rewrite last row cells as text not inputs
+  // (Propose row is editable via inputs, DOI cells above show auto values)
+
+  var colspan = 7 + 9;
+  return '<tr id="fc-detail-'+code+'" style="border-bottom:2px solid var(--border2)">'
+    + '<td colspan="'+colspan+'" style="padding:0;background:var(--bg)">'
+    + '<div style="padding:16px 20px;display:grid;grid-template-columns:220px 1fr;gap:16px">'
+    + '<div>'+meta+sug+'</div>'
+    + '<div>'+grid+'</div>'
     + '</div></td></tr>';
 }
 
-// ─── Rekap view (vertical) ────────────────────────────────────────────────────
+// ─── Rekap view ───────────────────────────────────────────────────────────────
 function _fcRenderRekap(el, items, fcData) {
-  var yr = new Date().getFullYear();
-  // Filter items with any propose
-  var propItems = items.filter(function(c){ return fcData[c].propose.some(function(v){return v>0;}); });
+  var now  = new Date();
+  var yr   = now.getFullYear();
 
-  if(!propItems.length) {
-    el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada Propose PR</h3><p>Semua item mencukupi atau klik Generate</p></div>';
+  // Build flat list of all propose rows
+  var propRows = [];
+  items.forEach(function(code) {
+    var fc     = fcData[code];
+    var master = STATE.masterData[code] || {};
+    var mrp    = STATE.mrpData[code] || {};
+    var iType  = /^3/.test(code)?'RM':'PM';
+    var name   = master.desc || mrp.desc || '';
+    var site   = (STATE.stockData && STATE.stockData[code])
+                 ? ((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):''))
+                 : '';
+    fc.suggestions.forEach(function(s) {
+      propRows.push({
+        code: code, name: name, iType: iType,
+        site: site, uom: master.uom||'',
+        qty: s.qty,
+        delivDate: s.delivDate,
+        createPRBy: s.createPRBy,
+        daysLeft: s.daysLeft,
+        isUrgent: s.isUrgent,
+        isOverdue: s.isOverdue,
+        proposeMonth: s.proposeMonth,
+        abc: master.abc||''
+      });
+    });
+  });
+
+  if(!propRows.length) {
+    el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada Propose PR</h3><p>Klik Generate Propose PR terlebih dahulu</p></div>';
     return;
   }
 
-  // Group by month
-  var byMonth = {};
-  FC_MONTHS.forEach(function(m, i) { byMonth[m] = []; });
-  propItems.forEach(function(code) {
-    var fc = fcData[code];
-    var master = STATE.masterData[code] || {};
-    FC_MONTHS.forEach(function(m, i) {
-      if(fc.propose[i] > 0) {
-        var sug = fc.suggestions.find(function(s){ return s.proposeMonth === m; });
-        byMonth[m].push({ code: code, master: master, fc: fc, qty: fc.propose[i], uom: master.uom||'', sug: sug });
-      }
-    });
-  });
+  // Sort by createPRBy (ascending)
+  propRows.sort(function(a,b){ return a.createPRBy - b.createPRBy; });
 
-  var html = '';
+  var fmt = function(d) {
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  };
 
-  // Summary table at top
-  html += '<div style="margin-bottom:20px;overflow-x:auto">'
-    + '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Rekap Propose PR — Semua Bulan</div>'
-    + '<table style="border-collapse:collapse;font-size:12px;min-width:600px;width:100%">'
-    + '<thead><tr><th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Item</th>'
-    + '<th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border2);font-size:10px;color:var(--muted);font-weight:700">Supplier</th>'
-    + FC_MONTHS.map(function(m){ return '<th style="text-align:right;padding:7px 6px;border-bottom:2px solid var(--border2);font-size:10px;color:var(--muted);font-weight:700;white-space:nowrap">' + m.slice(0,3) + '</th>'; }).join('')
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    + '<div style="font-size:11px;color:var(--muted)"><b>'+propRows.length+'</b> baris propose PR</div>'
+    + '<button class="btn btn-sm btn-primary" onclick="_fcExportRekap()" style="font-size:11px">↓ Export CSV Rekap PR</button>'
+    + '</div>'
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
+    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Item No.</th>'
+    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Item Description</th>'
+    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">ABC</th>'
+    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Whse</th>'
+    + '<th style="text-align:right;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Required Qty</th>'
+    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Required Date</th>'
+    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Tgl Create PR</th>'
+    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Status</th>'
     + '</tr></thead><tbody>';
 
-  propItems.forEach(function(code) {
-    var fc = fcData[code];
-    var master = STATE.masterData[code] || {};
-    var iType = /^3/.test(code)?'RM':'PM';
-    var badge = iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-    var name = (_isAdmin && (STATE.realNameData||{})[code]) ? (STATE.realNameData[code]) : (master.desc||'—');
-    html += '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:7px 10px"><span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + code + ' </span>' + badge + '<br><span style="font-size:11.5px;font-weight:500">' + name + '</span></td>'
-      + '<td style="padding:7px 10px;font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (master.supplier||'—') + '</td>'
-      + FC_MONTHS.map(function(m, i) {
-          var v = fc.propose[i];
-          if(!v) return '<td style="text-align:right;padding:7px 6px;color:var(--hint);font-size:11px">—</td>';
-          return '<td style="text-align:right;padding:7px 6px;font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--amber)">' + n_id(Math.round(v)) + '</td>';
-        }).join('')
+  propRows.forEach(function(r, idx) {
+    var abcColor = r.abc==='A'?'var(--red)':r.abc==='B'?'var(--amber)':r.abc==='C'?'var(--green)':'var(--muted)';
+    var badge = r.iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
+    var statusColor = r.isOverdue?'var(--red)':r.isUrgent?'var(--amber)':'var(--green)';
+    var statusBg    = r.isOverdue?'var(--red-bg)':r.isUrgent?'var(--amber-bg)':'var(--green-bg)';
+    var statusLabel = r.isOverdue?'Terlambat':r.isUrgent?('Segera ('+r.daysLeft+'h)'):r.daysLeft+'h lagi';
+    var rowBg = idx%2===0?'':'background:rgba(30,37,53,.3)';
+    html += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
+      + '<td style="padding:9px 10px;font-family:var(--mono);font-size:11px">'+r.code+' '+badge+'</td>'
+      + '<td style="padding:9px 10px;font-size:12px;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</td>'
+      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:'+abcColor+'">'+(r.abc||'—')+'</td>'
+      + '<td style="padding:9px 10px;font-size:11.5px">'+( r.site||'—')+'</td>'
+      + '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--amber)">'+n_id(Math.round(r.qty))+' <span style="font-size:10px;color:var(--muted)">'+r.uom+'</span></td>'
+      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--muted)">'+fmt(r.delivDate)+'</td>'
+      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500">'+fmt(r.createPRBy)+'</td>'
+      + '<td style="padding:6px 10px;text-align:center"><span style="font-size:10.5px;padding:2px 8px;background:'+statusBg+';color:'+statusColor+';border-radius:3px;font-weight:600">'+statusLabel+'</span></td>'
       + '</tr>';
   });
+
   html += '</tbody></table></div>';
-
-  // Per-month cards
-  FC_MONTHS.forEach(function(m, i) {
-    var mItems = byMonth[m];
-    if(!mItems.length) return;
-    html += '<div style="margin-bottom:16px">'
-      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-      + '<div style="font-size:13px;font-weight:600;color:var(--text)">' + m + ' ' + yr + '</div>'
-      + '<div style="font-size:11px;color:var(--muted)">' + mItems.length + ' item</div>'
-      + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
-
-    mItems.forEach(function(it) {
-      var sug = it.sug;
-      var urgColor = sug ? (sug.isOverdue?'var(--red)':(sug.isUrgent?'var(--amber)':'var(--green)')) : 'var(--muted)';
-      var urgLabel = sug ? (sug.isOverdue?'Terlambat':(sug.isUrgent?'Segera ('+sug.daysLeft+'h)':''+sug.daysLeft+' hari')) : '';
-      var crDate = sug ? (function() {
-        var d = sug.createPRBy;
-        return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-      })() : '';
-      var iType = /^3/.test(it.code)?'RM':'PM';
-      var badge = iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-      var name = (_isAdmin && (STATE.realNameData||{})[it.code]) ? (STATE.realNameData[it.code]) : (it.master.desc||'—');
-
-      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
-        + '<div><span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">' + it.code + ' </span>' + badge
-        + '<div style="font-size:12px;font-weight:600;margin-top:2px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</div>'
-        + '</div>'
-        + '<div style="text-align:right">'
-        + '<div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--amber)">' + n_id(Math.round(it.qty)) + '</div>'
-        + '<div style="font-size:10px;color:var(--muted)">' + it.uom + '</div>'
-        + '</div></div>'
-        + '<div style="font-size:10.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (it.master.supplier||'—') + '</div>'
-        + (sug ? '<div style="margin-top:8px;padding:5px 8px;background:var(--bg4);border-radius:var(--r);font-size:10.5px;display:flex;justify-content:space-between">'
-          + '<span style="color:var(--muted)">Buat PR sebelum <b style="color:var(--text)">' + crDate + '</b></span>'
-          + '<span style="color:' + urgColor + ';font-weight:600">' + urgLabel + '</span>'
-          + '</div>' : '')
-        + '</div>';
-    });
-    html += '</div></div>';
-  });
-
   el.innerHTML = html;
+
+  // Store for export
+  window._fcRekapRows = propRows;
 }
 
-// ─── Toggle expand ────────────────────────────────────────────────────────────
+// ─── Export Rekap CSV ─────────────────────────────────────────────────────────
+function _fcExportRekap() {
+  var rows = window._fcRekapRows || [];
+  if(!rows.length) { toast('Tidak ada data rekap', 'err'); return; }
+  var fmt = function(d) {
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  };
+  var header = ['Item No.','Item Description','ABC','Whse','Required Qty','UoM','Required Date','Tgl Create PR','Tipe','Status'];
+  var lines  = [header.join(',')];
+  rows.forEach(function(r) {
+    lines.push([
+      r.code,
+      '"'+r.name.replace(/"/g,"'")+'"',
+      r.abc||'',
+      '"'+(r.site||'')+'"',
+      Math.round(r.qty),
+      r.uom,
+      fmt(r.delivDate),
+      fmt(r.createPRBy),
+      r.iType,
+      r.isOverdue?'Terlambat':r.isUrgent?'Segera':'OK'
+    ].join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'rekap_propose_pr_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); toast('Rekap PR exported ✓','ok');
+}
+
+// ─── Toggle expand row ────────────────────────────────────────────────────────
 function _fcToggle(code) {
   _fcExpanded[code] = !_fcExpanded[code];
   renderForecast();
-  // Scroll to keep item in view
   setTimeout(function() {
-    var el = document.querySelector('.fc-item-row[data-code="' + code + '"]');
-    if(el) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    var row = document.querySelector('[data-code="'+code+'"]');
+    if(row) row.scrollIntoView({behavior:'smooth', block:'nearest'});
   }, 50);
 }
 
-// ─── Edit propose inline ──────────────────────────────────────────────────────
+// ─── Inline propose edit ──────────────────────────────────────────────────────
+// ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
+function _fcProposeStep(code, mi, delta) {
+  var detEl = document.getElementById('fc-detail-'+code);
+  if(!detEl) return;
+  var inputs = detEl.querySelectorAll('input[data-code="'+code+'"][data-mi="'+mi+'"]');
+  if(!inputs.length) return;
+  var inp = inputs[0];
+  var cur = parseFloat(inp.value) || 0;
+  var newVal = Math.max(0, cur + delta);
+  inp.value = newVal;
+  _fcProposeEdit(inp);
+}
+
 function _fcProposeEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat(input.value) || 0;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
   _fcPropose[code][mi] = qty;
-  // Recalc without full re-render — just update stock/DOI rows
+  // Update input style based on value
+  input.style.color = qty > 0 ? 'var(--amber)' : 'var(--muted)';
+  input.style.background = qty > 0 ? 'var(--amber-bg)' : 'transparent';
+  input.style.border = qty > 0 ? '1px solid rgba(245,158,11,.3)' : '1px solid var(--border)';
+  // Recalc and update stock/DOI cells in-place
   var ospoIdx = _buildOSPOIndex();
   var fc = _calcForecast(code, ospoIdx);
-  var detailEl = document.getElementById('fc-detail-' + code);
-  if(!detailEl) return;
-  // Update stock cells
-  var stockCells = detailEl.querySelectorAll('tr:nth-child(3) td:not(:first-child) span');
-  fc.stock.forEach(function(v, i) {
-    if(stockCells[i]) {
-      var daily = fc.forecast[i]>0 ? fc.forecast[i]/FC_DAYS[i] : 0;
-      var minSt = _fcGetDOI() * daily;
-      stockCells[i].style.color = v<0?'var(--red)':(v<minSt?'var(--amber)':'var(--green)');
-      stockCells[i].textContent = n_id(Math.round(v));
-    }
+  var detEl = document.getElementById('fc-detail-'+code);
+  if(!detEl) return;
+  var tbody = detEl.querySelector('tbody');
+  if(!tbody) return;
+  var trs = tbody.querySelectorAll('tr');
+  // Row order: Requirement(0), OSPO(1), OSPR(2), Stock(3), DOI(4), Propose(5)
+  function updateRow(tr, vals, clsFn) {
+    if(!tr) return;
+    var tds = tr.querySelectorAll('td:not(:first-child)');
+    vals.forEach(function(v, i) {
+      if(i >= tds.length) return;
+      var disp = (v===0||!v) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
+      var style = clsFn ? clsFn(v, i) : '';
+      tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</span>';
+    });
+  }
+  updateRow(trs[3], fc.stock, function(v,i){
+    var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0, minS=_fcGetDOI()*daily;
+    return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber)':'color:var(--green)';
   });
-  // Update DOI cells
-  var doiCells = detailEl.querySelectorAll('tr:nth-child(4) td:not(:first-child) span');
-  fc.doi.forEach(function(v, i) {
-    if(doiCells[i]) {
-      doiCells[i].style.color = v<0?'var(--red)':(v<_fcGetDOI()?'var(--amber)':(v>99?'var(--muted)':'var(--green)'));
-      doiCells[i].textContent = v===999?'∞':v;
-    }
+  updateRow(trs[4], fc.doi, function(v){
+    return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
   });
 }
 
-// ─── Export CSV ───────────────────────────────────────────────────────────────
+// ─── Export full forecast CSV ─────────────────────────────────────────────────
 function exportForecastCSV() {
-  if(!STATE.masterData || !STATE.mrpData) { toast('Belum ada data','err'); return; }
+  if(!STATE.masterData||!STATE.mrpData){toast('Belum ada data','err');return;}
   var ospoIdx = _buildOSPOIndex();
-  var header = ['Item No','Description','Supplier','UoM','LT','MOQ','Multiple','SOH'];
-  FC_MONTHS.forEach(function(m) { header.push('FC '+m,'OSPO '+m,'Stock '+m,'DOI '+m,'Propose '+m); });
-  var rows = [header.join(',')];
-  Object.keys(STATE.masterData).forEach(function(code) {
-    var iType = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
-    if(iType==='FG') return;
-    var master = STATE.masterData[code]||{};
-    var fc = _calcForecast(code, ospoIdx);
-    var line = [code, '"'+(master.desc||'').replace(/"/g,"'")+'"','"'+(master.supplier||'').replace(/"/g,"'")+'"',
-      master.uom||'', fc.lt_days||0, master.moq||0, master.multiple||1, Math.round(fc.soh)];
-    for(var i=0;i<9;i++) {
-      line.push(Math.round(fc.forecast[i]||0), Math.round(fc.ospo[i]||0),
-        Math.round(fc.stock[i]||0), fc.doi[i]||0, Math.round(fc.propose[i]||0));
-    }
+  var hdr = ['Item No','Description','ABC','Supplier','UoM','LT','MOQ','Multiple','SOH'];
+  FC_MONTHS.forEach(function(m){hdr.push('Req '+m,'OSPO '+m,'OSPR '+m,'Stock '+m,'DOI '+m,'Propose '+m);});
+  var rows = [hdr.join(',')];
+  Object.keys(STATE.masterData).forEach(function(code){
+    var iT=/^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG'); if(iT==='FG') return;
+    var master=STATE.masterData[code]||{};
+    var fc=_calcForecast(code,ospoIdx);
+    var line=[code,'"'+(master.desc||'').replace(/"/g,"'")+'"',master.abc||'','"'+(master.supplier||'').replace(/"/g,"'")+'"',
+      master.uom||'',fc.lt_days||0,master.moq||0,master.multiple||1,Math.round(fc.soh)];
+    for(var i=0;i<9;i++) line.push(Math.round(fc.forecast[i]||0),Math.round(fc.ospo[i]||0),Math.round(fc.ospr[i]||0),Math.round(fc.stock[i]||0),fc.doi[i]||0,Math.round(fc.propose[i]||0));
     rows.push(line.join(','));
   });
-  var blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'forecast_propose_pr_'+new Date().toISOString().slice(0,10)+'.csv';
+  var blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='forecast_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click(); toast('CSV exported ✓','ok');
 }
 
