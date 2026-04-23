@@ -6177,7 +6177,7 @@ function _calcForecast(code, ospoIdx) {
     // Create PR = delivDate - lt_days
     var createPR = new Date(delivDate);
     createPR.setDate(createPR.getDate() - lt_days);
-    var daysLeft = Math.round((createPR - now) / 86400000);
+    var daysLeft = Math.round((createPR - nowReal) / 86400000);
     suggestions.push({
       proposeIdx: si,
       proposeMonth: FC_MONTHS[si],
