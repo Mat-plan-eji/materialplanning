@@ -6218,6 +6218,9 @@ function generateProposePR() {
 
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
+  // isRealtime must be defined here too (also used in info label + _calcForecast)
+  var _rtCb = document.getElementById('fc-soh-realtime');
+  var isRealtime = !_rtCb || _rtCb.checked;
   var el = document.getElementById('fc-table');
   if(!el) return;
   if(!STATE.masterData || !STATE.mrpData) {
