@@ -6076,19 +6076,7 @@ function _calcForecast(code, ospoIdx) {
   var ospr = new Array(9).fill(0);
   if(ospr_total > 0) ospr[0] = ospr_total;
 
-  // confQty by month
-  var confByMonth = new Array(9).fill(0);
-  Object.keys(STATE.poOverrides || {}).forEach(function(key) {
-    var ovr = STATE.poOverrides[key];
-    if(!ovr || !ovr.confDate || !ovr.confQty) return;
-    if(key.slice(key.indexOf('_')+1) !== code) return;
-    var parts = ovr.confDate.split('-');
-    if(parts.length === 3) {
-      var mo = parseInt(parts[1]);
-      var idx2 = FC_MONTH_NUMS.indexOf(mo);
-      if(idx2 >= 0) confByMonth[idx2] += parseFloat(ovr.confQty) || 0;
-    }
-  });
+  // confQty tidak dipakai di stock projection — OSPO (openQty SAP) sudah cukup
 
   // ── Snapshot month index di FC_MONTHS ─────────────────────────────────────
   var snapMoIdx = FC_MONTH_NUMS.indexOf(snapMon);
@@ -6130,9 +6118,9 @@ function _calcForecast(code, ospoIdx) {
   // ── Stock projection ──────────────────────────────────────────────────────
   var stockProj = new Array(9).fill(0);
   for(var pre=0; pre<snapMoIdx; pre++) { stockProj[pre] = 0; }
-  stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] + confByMonth[snapMoIdx] - remainingMRP;
+  stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] - remainingMRP;
   for(var m = snapMoIdx+1; m < 9; m++) {
-    stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] + confByMonth[m] - forecast[m];
+    stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] - forecast[m];
   }
 
   // ── Manual propose overrides ───────────────────────────────────────────────
