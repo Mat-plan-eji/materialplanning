@@ -5935,7 +5935,8 @@ var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
 var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
 var _fcView      = 'detail';
 var _fcExpanded  = {};
-var _fcPropose   = {};   // manual overrides { code: [9] }
+var _fcPropose     = {};   // manual overrides { code: [9] }
+var _fcAutoPropose = false; // true = run auto-propose algo; false = all propose blank
 var _fcDOI       = 30;
 
 function _fcGetDOI() {
@@ -6134,22 +6135,23 @@ function _calcForecast(code, ospoIdx) {
     }
   }
 
-  // ── Auto propose ──────────────────────────────────────────────────────────
-  // If stock[m] < minStock → propose delivery in month m
-  // PR must be issued: first day of month m - lt_days
+  // ── Auto propose (hanya kalau _fcAutoPropose = true) ────────────────────────
   var autoProp = new Array(9).fill(0);
   var stockF   = stockM.slice();
-  for(var m2 = 0; m2 < 9; m2++) {
-    var daily   = forecast[m2] > 0 ? forecast[m2] / FC_DAYS[m2] : 0;
-    var minSt   = maxDOI * daily;
-    if(stockF[m2] < minSt) {
-      var shortage = minSt - stockF[m2];
-      var qty = shortage;
-      if(multiple > 0) qty = Math.ceil(qty / multiple) * multiple;
-      if(moq > 0 && qty < moq) qty = moq;
-      if(qty <= 0) continue;
-      autoProp[m2] += qty;
-      for(var n2 = m2; n2 < 9; n2++) stockF[n2] += qty;
+  if(_fcAutoPropose) {
+    for(var m2 = 0; m2 < 9; m2++) {
+      var daily   = forecast[m2] > 0 ? forecast[m2] / FC_DAYS[m2] : 0;
+      var minSt   = maxDOI * daily;
+      if(stockF[m2] < minSt) {
+        var shortage = minSt - stockF[m2];
+        var qty = shortage;
+        // Step by MOQ (bukan multiple)
+        if(moq > 0) qty = Math.ceil(qty / moq) * moq;
+        else if(multiple > 0) qty = Math.ceil(qty / multiple) * multiple;
+        if(qty <= 0) continue;
+        autoProp[m2] += qty;
+        for(var n2 = m2; n2 < 9; n2++) stockF[n2] += qty;
+      }
     }
   }
 
@@ -6202,6 +6204,7 @@ function generateProposePR() {
   if(!STATE.masterData) { toast('Muat Master Data terlebih dahulu','err'); return; }
   if(!STATE.mrpData)    { toast('Muat MRP terlebih dahulu','err'); return; }
   _fcPropose = {};
+  _fcAutoPropose = true;  // aktifkan auto-propose
   var btn = document.getElementById('fc-gen-btn');
   if(btn) { btn.disabled = true; btn.textContent = '⏳ Generating...'; }
   setTimeout(function() {
@@ -6411,20 +6414,22 @@ function _fcDetailRow(code, fc, master) {
   function gRow(label, vals, clsFn, editable, fieldCode) {
     var cells = vals.map(function(v, i) {
       if(editable) {
-        var mlt = fc.multiple || 1;
-        var cur = Math.round(v) || 0;
+        var moqV = fc.moq || fc.multiple || 1;
+        var cur  = Math.round(v) || 0;
         var haVal = cur > 0;
         var borderClr = haVal ? 'rgba(245,158,11,.4)' : 'var(--border)';
-        var stepDown = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + (-mlt) + ')';
-        var stepUp   = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + mlt    + ')';
-        // Compact design: arrows inside the input wrapper box
+        var stepDown = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + (-moqV) + ')';
+        var stepUp   = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + moqV   + ')';
+        // Input + stacked arrows on right
         return '<td style="padding:2px 4px;text-align:center" onclick="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:center;border:1px solid ' + borderClr + ';border-radius:4px;overflow:hidden;background:' + (haVal?'var(--amber-bg)':'var(--bg3)') + '">'
-          + '<span onclick="' + stepDown + '" title="-' + mlt + '" style="cursor:pointer;font-size:8px;color:var(--muted);padding:0 5px;user-select:none;align-self:stretch;display:flex;align-items:center;border-right:1px solid ' + borderClr + '">▼</span>'
-          + '<input type="number" value="' + cur + '" data-code="' + fieldCode + '" data-mi="' + i + '" data-mlt="' + mlt + '"'
+          + '<input type="number" value="' + cur + '" data-code="' + fieldCode + '" data-mi="' + i + '" data-moq="' + moqV + '"'
           + ' oninput="_fcProposeEdit(this)"'
-          + ' style="width:58px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:' + (haVal?'700':'400') + ';color:' + (haVal?'var(--amber)':'var(--muted)') + ';background:transparent;border:none;padding:3px 2px;outline:none">'
-          + '<span onclick="' + stepUp + '" title="+' + mlt + '" style="cursor:pointer;font-size:8px;color:var(--muted);padding:0 5px;user-select:none;align-self:stretch;display:flex;align-items:center;border-left:1px solid ' + borderClr + '">▲</span>'
+          + ' style="width:64px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:' + (haVal?'700':'400') + ';color:' + (haVal?'var(--amber)':'var(--muted)') + ';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none">'
+          + '<div style="display:flex;flex-direction:column;border-left:1px solid ' + borderClr + ';width:14px">'
+          + '<span onclick="' + stepUp   + '" style="cursor:pointer;font-size:7px;color:var(--muted);line-height:1;padding:2px 3px;user-select:none;flex:1;display:flex;align-items:flex-end;justify-content:center">▲</span>'
+          + '<span onclick="' + stepDown + '" style="cursor:pointer;font-size:7px;color:var(--muted);line-height:1;padding:2px 3px;user-select:none;flex:1;display:flex;align-items:flex-start;justify-content:center;border-top:1px solid ' + borderClr + '">▼</span>'
+          + '</div>'
           + '</div></td>'
       }
       var style = clsFn ? clsFn(v, i) : 'color:var(--text)';
@@ -6688,10 +6693,10 @@ function _fcToggle(code) {
 // ─── Inline propose edit ──────────────────────────────────────────────────────
 // ─── Reset semua propose PR ──────────────────────────────────────────────────
 function _fcResetPropose() {
-  if(!Object.keys(_fcPropose).length && !confirm('Reset semua nilai Propose PR ke hasil kalkulasi otomatis?')) return;
   _fcPropose = {};
+  _fcAutoPropose = false; // matikan auto-propose → semua jadi 0
   renderForecast();
-  toast('Propose PR direset ✓', 'ok');
+  toast('Propose PR dikosongkan ✓', 'ok');
 }
 
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
@@ -6711,12 +6716,22 @@ function _fcProposeEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat(input.value) || 0;
+  var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
   _fcPropose[code][mi] = qty;
+  // MOQ validation — notif kalau tidak kelipatan MOQ
+  if(qty > 0 && moqV > 1 && qty % moqV !== 0) {
+    input.style.border = '1.5px solid var(--red)';
+    input.title = 'Qty harus kelipatan MOQ (' + n_id(moqV) + ')';
+    // show small toast hint
+    toast('Qty ' + n_id(qty) + ' bukan kelipatan MOQ ' + n_id(moqV), 'err');
+  } else {
+    input.style.border = 'none';
+    input.title = '';
+  }
   // Update input style based on value
   input.style.color = qty > 0 ? 'var(--amber)' : 'var(--muted)';
-  input.style.background = qty > 0 ? 'var(--amber-bg)' : 'transparent';
-  input.style.border = qty > 0 ? '1px solid rgba(245,158,11,.3)' : '1px solid var(--border)';
+  input.style.fontWeight = qty > 0 ? '700' : '400';
   // Recalc and update stock/DOI cells in-place
   var ospoIdx = _buildOSPOIndex();
   var fc = _calcForecast(code, ospoIdx);
