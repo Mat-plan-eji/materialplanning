@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Material Planner Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -299,6 +302,592 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   /* Modal */
   .modal{width:95vw!important;max-width:95vw!important;max-height:85vh!important}
   .modal table{font-size:11px}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FORECAST BULLETIN — scoped to .fc-bulletin
+   Newspaper editorial aesthetic
+═══════════════════════════════════════════════════════════════════*/
+.fc-bulletin {
+  --fcb-paper:      #f6f2ea;
+  --fcb-paper2:     #efe9dd;
+  --fcb-surface:    #ffffff;
+  --fcb-surface2:   #faf7f0;
+  --fcb-ink:        #161310;
+  --fcb-ink2:       #3c352b;
+  --fcb-muted:      #7a7162;
+  --fcb-muted2:     #a19884;
+  --fcb-rule:       #d9d1c1;
+  --fcb-rule2:      #ebe4d3;
+  --fcb-accent:     #b65d2d;
+  --fcb-accent2:    #8f4320;
+  --fcb-under:      #3d6a4f;
+  --fcb-under-bg:   #e4ede4;
+  --fcb-over:       #a8341e;
+  --fcb-over-bg:    #f5dfd7;
+  --fcb-noreq:      #8a8172;
+  --fcb-noreq-bg:   #ece6d7;
+  --fcb-amber:      #8a6a1a;
+  --fcb-amber-bg:   #f4ead0;
+  --fcb-radius:     4px;
+  font-family: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  color: var(--fcb-ink);
+  background: var(--fcb-paper);
+  background-image:
+    radial-gradient(circle at 25% 15%, rgba(182,93,45,.025) 0, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(61,106,79,.02) 0, transparent 40%);
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+.fc-bulletin *, .fc-bulletin *::before, .fc-bulletin *::after { box-sizing: border-box; }
+
+/* Masthead */
+.fcb-masthead {
+  border-bottom: 3px double var(--fcb-ink);
+  padding: 20px 32px 14px;
+  background: var(--fcb-paper);
+}
+.fcb-masthead-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--fcb-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--fcb-rule);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.fcb-masthead-top b { color: var(--fcb-ink); font-weight: 700; }
+.fcb-masthead-top .right { display:flex; gap:20px; }
+.fcb-title {
+  font-family: "Fraunces", serif;
+  font-weight: 900;
+  font-size: clamp(36px,5vw,60px);
+  line-height: .95;
+  letter-spacing: -.02em;
+  margin: 6px 0 8px;
+  color: var(--fcb-ink);
+}
+.fcb-title em { font-style: italic; font-weight: 400; color: var(--fcb-accent); }
+.fcb-masthead-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--fcb-ink2);
+  border-top: 1px solid var(--fcb-rule);
+  padding-top: 8px;
+}
+.fcb-masthead-sub em { font-family:"Fraunces",serif; font-style:italic; color:var(--fcb-muted); }
+
+/* KPI Strip */
+.fcb-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(6,1fr);
+  background: var(--fcb-paper);
+  border-bottom: 1px solid var(--fcb-rule);
+}
+.fcb-kpi {
+  padding: 16px 18px 18px;
+  border-right: 1px solid var(--fcb-rule);
+}
+.fcb-kpi:last-child { border-right: none; }
+.fcb-kpi-label {
+  font-size: 10px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--fcb-muted);
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.fcb-kpi-value {
+  font-family: "Fraunces", serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--fcb-ink);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 3px;
+}
+.fcb-kpi-value.accent { color: var(--fcb-accent); }
+.fcb-kpi-value.under  { color: var(--fcb-under); }
+.fcb-kpi-value.over   { color: var(--fcb-over); }
+.fcb-kpi-value.amber  { color: var(--fcb-amber); }
+.fcb-kpi-delta { font-size: 11px; color: var(--fcb-muted); font-family: "JetBrains Mono", monospace; }
+.fcb-kpi-doi-wrap { display:flex; align-items:center; gap:5px; margin-top:2px; }
+.fcb-kpi-doi-inp {
+  font-family: "Fraunces", serif;
+  font-weight: 700;
+  font-size: 26px;
+  width: 70px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--fcb-rule);
+  color: var(--fcb-under);
+  outline: none;
+  padding: 0 2px;
+  text-align: center;
+}
+.fcb-kpi-doi-inp:focus { border-bottom-color: var(--fcb-accent); }
+
+/* Toolbar */
+.fcb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 32px;
+  background: var(--fcb-surface2);
+  border-bottom: 1px solid var(--fcb-rule);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(6px);
+}
+.fcb-tabs {
+  display: inline-flex;
+  border: 1.5px solid var(--fcb-ink);
+  border-radius: var(--fcb-radius);
+  overflow: hidden;
+  background: var(--fcb-surface);
+}
+.fcb-tab {
+  padding: 6px 16px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--fcb-ink);
+  font-family: "Manrope", inherit;
+  transition: background .12s;
+}
+.fcb-tab.active { background: var(--fcb-ink); color: var(--fcb-paper); }
+.fcb-tab:not(.active):hover { background: var(--fcb-paper2); }
+.fcb-tab + .fcb-tab { border-left: 1.5px solid var(--fcb-ink); }
+.fcb-select {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-family: "Manrope", inherit;
+  font-weight: 600;
+  border: 1.5px solid var(--fcb-rule);
+  background: var(--fcb-surface);
+  color: var(--fcb-ink);
+  border-radius: var(--fcb-radius);
+  outline: none;
+  cursor: pointer;
+}
+.fcb-select:hover { border-color: var(--fcb-ink); }
+.fcb-search {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  max-width: 300px;
+}
+.fcb-search::before {
+  content: "⌕";
+  position: absolute;
+  left: 11px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--fcb-muted);
+  pointer-events: none;
+}
+.fcb-search input {
+  width: 100%;
+  padding: 7px 12px 7px 32px;
+  font-size: 12.5px;
+  font-family: "Manrope", inherit;
+  border: 1.5px solid var(--fcb-rule);
+  background: var(--fcb-surface);
+  border-radius: var(--fcb-radius);
+  outline: none;
+  color: var(--fcb-ink);
+}
+.fcb-search input:focus { border-color: var(--fcb-accent); }
+.fcb-btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-family: "Manrope", inherit;
+  font-weight: 700;
+  letter-spacing: .04em;
+  border: 1.5px solid var(--fcb-rule);
+  background: var(--fcb-surface);
+  color: var(--fcb-ink);
+  border-radius: var(--fcb-radius);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+  white-space: nowrap;
+}
+.fcb-btn:hover { border-color: var(--fcb-ink); }
+.fcb-btn.primary { background: var(--fcb-ink); color: var(--fcb-paper); border-color: var(--fcb-ink); }
+.fcb-btn.primary:hover { background: var(--fcb-accent); border-color: var(--fcb-accent); }
+.fcb-btn.danger { border-color: var(--fcb-over); color: var(--fcb-over); }
+.fcb-btn.danger:hover { background: var(--fcb-over-bg); }
+.fcb-badge {
+  display: none;
+  font-size: 10.5px;
+  background: var(--fcb-under-bg);
+  color: var(--fcb-under);
+  border: 1px solid #cedccf;
+  border-radius: var(--fcb-radius);
+  padding: 3px 9px;
+  font-weight: 700;
+}
+
+/* Table */
+.fcb-table-wrap { padding: 0 32px 40px; }
+.fcb-table-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 13px 0 8px;
+  font-size: 11.5px;
+  color: var(--fcb-muted);
+  border-bottom: 1px solid var(--fcb-rule);
+  margin-bottom: 0;
+}
+.fcb-table-info b { color: var(--fcb-ink); font-weight: 700; }
+.fcb-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.fcb-items-table thead tr { border-bottom: 2px solid var(--fcb-ink); }
+.fcb-items-table thead th {
+  padding: 11px 8px;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--fcb-muted);
+  white-space: nowrap;
+  background: var(--fcb-paper);
+}
+.fcb-items-table thead th.r { text-align: right; }
+.fcb-items-table tbody tr.fcb-item-row {
+  border-bottom: 1px solid var(--fcb-rule2);
+  cursor: pointer;
+  transition: background .1s;
+}
+.fcb-items-table tbody tr.fcb-item-row:hover { background: var(--fcb-paper2); }
+.fcb-items-table tbody tr.fcb-item-row.expanded { background: var(--fcb-surface); }
+.fcb-items-table tbody td { padding: 11px 8px; vertical-align: middle; }
+.fcb-items-table tbody td.num {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  text-align: right;
+  color: var(--fcb-ink2);
+}
+.fcb-items-table tbody td.code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--fcb-muted);
+}
+.fcb-items-table tbody td.desc {
+  font-weight: 500;
+  color: var(--fcb-ink);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fcb-chev {
+  display: inline-block;
+  width: 14px;
+  color: var(--fcb-muted);
+  transition: transform .2s;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+.fcb-item-row.expanded .fcb-chev { transform: rotate(90deg); color: var(--fcb-accent); }
+
+/* Pills */
+.fcb-abc {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid var(--fcb-rule);
+  border-radius: 2px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fcb-ink2);
+  background: var(--fcb-surface2);
+}
+.fcb-abc.A { background: #f5dfd7; color: var(--fcb-over); border-color: #f0c9bc; }
+.fcb-abc.B { background: #f4ead0; color: var(--fcb-amber); border-color: #eadeb5; }
+.fcb-abc.C { background: #e4ede4; color: var(--fcb-under); border-color: #cedccf; }
+.fcb-type {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  font-family: "JetBrains Mono", monospace;
+}
+.fcb-type.RM { background: #dce8f5; color: #1a5276; }
+.fcb-type.PM { background: #e8d5f0; color: #6c3483; }
+
+.fcb-status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 2px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  border: 1px solid transparent;
+}
+.fcb-status.ok   { background: var(--fcb-under-bg); color: var(--fcb-under); border-color: #cedccf; }
+.fcb-status.warn { background: var(--fcb-amber-bg); color: var(--fcb-amber); border-color: #eadeb5; }
+.fcb-status.err  { background: var(--fcb-over-bg);  color: var(--fcb-over);  border-color: #f0c9bc; }
+
+/* Expanded detail row */
+tr.fcb-detail-row td {
+  padding: 0;
+  background: var(--fcb-surface2);
+  border-bottom: 2px solid var(--fcb-ink);
+}
+.fcb-detail-panel {
+  padding: 16px 20px 20px;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+}
+.fcb-detail-meta { font-size: 12px; }
+.fcb-detail-meta h3 {
+  font-family: "Fraunces", serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin: 0 0 3px;
+  line-height: 1.2;
+  color: var(--fcb-ink);
+}
+.fcb-detail-meta .code-big {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color: var(--fcb-muted);
+  margin-bottom: 10px;
+  letter-spacing: .04em;
+}
+.fcb-meta-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  font-size: 11px;
+  padding: 10px 12px;
+  background: var(--fcb-surface);
+  border: 1px solid var(--fcb-rule);
+  border-radius: var(--fcb-radius);
+}
+.fcb-meta-grid dt {
+  color: var(--fcb-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 9.5px;
+  padding-top: 1px;
+}
+.fcb-meta-grid dd {
+  margin: 0;
+  color: var(--fcb-ink);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+}
+
+/* Forecast grid */
+.fcb-grid-wrap { overflow-x: auto; }
+table.fcb-grid {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+.fcb-grid thead th {
+  padding: 7px 6px;
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--fcb-muted);
+  border-bottom: 2px solid var(--fcb-ink);
+  font-family: "Manrope", sans-serif;
+  white-space: nowrap;
+  background: transparent;
+}
+.fcb-grid thead th:first-child { text-align: left; padding-left: 2px; }
+.fcb-grid tbody tr { border-bottom: 1px dotted var(--fcb-rule); }
+.fcb-grid tbody tr:last-child { border-bottom: 2px solid var(--fcb-ink); }
+.fcb-grid tbody td {
+  padding: 5px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--fcb-ink2);
+}
+.fcb-grid tbody td:first-child {
+  text-align: left;
+  font-weight: 700;
+  color: var(--fcb-ink);
+  font-family: "Manrope", sans-serif;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding-left: 2px;
+  width: 110px;
+}
+.fcb-grid tr.row-req    td:first-child::before { content:"● "; color:var(--fcb-accent); }
+.fcb-grid tr.row-ospo   td:first-child::before { content:"● "; color:var(--fcb-amber); }
+.fcb-grid tr.row-ospr   td:first-child::before { content:"● "; color:var(--fcb-muted); }
+.fcb-grid tr.row-stock  td:first-child::before { content:"▸ "; color:var(--fcb-under); }
+.fcb-grid tr.row-doi    td:first-child::before { content:"▸ "; color:var(--fcb-under); }
+.fcb-grid tr.row-propose td:first-child::before { content:"▸ "; color:var(--fcb-accent); font-weight:900; }
+.fcb-grid .zero   { color: var(--fcb-muted2); }
+.fcb-grid .hi-stock { color: var(--fcb-ink); font-weight:600; }
+.fcb-grid .hi-prop  { color: var(--fcb-accent); font-weight:700; }
+.fcb-grid .doi-over { color: var(--fcb-over); font-weight:700; }
+.fcb-grid .doi-ok   { color: var(--fcb-under); }
+.fcb-grid tr.row-propose td { background: rgba(182,93,45,.05); }
+.fcb-grid tr.row-stock td   { background: rgba(61,106,79,.04); }
+.fcb-grid tr.row-doi td     { background: rgba(61,106,79,.03); }
+/* Propose PR editable input */
+.fcb-propose-cell {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--fcb-rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--fcb-surface);
+}
+.fcb-propose-cell.has-val {
+  border-color: rgba(182,93,45,.4);
+  background: rgba(182,93,45,.06);
+}
+.fcb-propose-cell input {
+  width: 66px;
+  text-align: right;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--fcb-muted2);
+  background: transparent;
+  border: none;
+  padding: 3px 5px;
+  outline: none;
+}
+.fcb-propose-cell.has-val input { color: var(--fcb-accent); font-weight: 700; }
+.fcb-propose-cell .arrows {
+  display: flex;
+  flex-direction: column;
+  width: 14px;
+  border-left: 1px solid var(--fcb-rule);
+}
+.fcb-propose-cell.has-val .arrows { border-color: rgba(182,93,45,.3); }
+.fcb-propose-cell .arrows button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  color: var(--fcb-muted);
+  font-size: 7px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fcb-propose-cell .arrows button:hover { background: var(--fcb-paper2); color: var(--fcb-ink); }
+.fcb-propose-cell .arrows button:last-child { border-top: 1px solid var(--fcb-rule); }
+.fcb-propose-cell.has-val .arrows button:last-child { border-color: rgba(182,93,45,.3); }
+
+/* Rekap PR table */
+.fcb-rekap-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.fcb-rekap-table thead tr { border-bottom: 2px solid var(--fcb-ink); }
+.fcb-rekap-table thead th {
+  padding: 9px 8px;
+  font-size: 10px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:var(--fcb-muted);
+  text-align: left;
+}
+.fcb-rekap-table thead th.r { text-align:right; }
+.fcb-rekap-table tbody tr { border-bottom: 1px solid var(--fcb-rule2); }
+.fcb-rekap-table tbody tr:nth-child(even) { background: rgba(239,233,221,.4); }
+.fcb-rekap-table tbody tr:hover { background: var(--fcb-paper2); }
+.fcb-rekap-table tbody td { padding: 10px 8px; }
+.fcb-rekap-table .mono { font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; }
+
+/* Forecast Supplier table */
+.fcb-sup-table { width:100%; border-collapse:collapse; font-size:12px; }
+.fcb-sup-table thead tr { border-bottom: 2px solid var(--fcb-ink); }
+.fcb-sup-table thead th {
+  padding: 8px 6px;
+  font-size: 10px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; color:var(--fcb-muted);
+  font-family:"Manrope",sans-serif; white-space:nowrap;
+}
+.fcb-sup-table thead th:first-child,.fcb-sup-table thead th:nth-child(2) { text-align:left; }
+.fcb-sup-table thead th:nth-child(n+3) { text-align:right; }
+.fcb-sup-table tbody tr { border-bottom: 1px solid var(--fcb-rule2); }
+.fcb-sup-table tbody tr.item-sep { border-bottom: 2px solid var(--fcb-rule); }
+.fcb-sup-table tbody td {
+  padding: 5px 6px;
+  font-family:"JetBrains Mono",monospace;
+  font-variant-numeric:tabular-nums;
+  font-size:11.5px;
+  color:var(--fcb-ink2);
+  text-align:right;
+}
+.fcb-sup-table tbody td:first-child,.fcb-sup-table tbody td:nth-child(2) {
+  font-family:"Manrope",sans-serif; font-size:12px; color:var(--fcb-muted); text-align:left;
+}
+.fcb-sup-table tbody td:nth-child(2) { color:var(--fcb-ink); font-weight:500; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fcb-sup-table .row-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--fcb-muted); text-align:left !important; font-family:"Manrope",sans-serif; }
+.fcb-sup-table .v-ospo   { color:var(--fcb-amber); }
+.fcb-sup-table .v-ospr   { color:var(--fcb-muted); }
+.fcb-sup-table .v-prop   { color:var(--fcb-accent); font-weight:700; }
+.fcb-sup-table .v-zero   { color:var(--fcb-muted2); }
+/* Footer */
+.fcb-footer {
+  padding: 20px 32px 24px;
+  border-top: 3px double var(--fcb-ink);
+  text-align: center;
+  color: var(--fcb-muted);
+  font-size: 11px;
+  letter-spacing: .05em;
+}
+.fcb-footer em { font-family:"Fraunces",serif; font-style:italic; color:var(--fcb-ink2); }
+/* SOH date picker area */
+.fcb-soh-area { display:flex; align-items:center; gap:6px; }
+.fcb-soh-area input[type=date] {
+  padding: 6px 8px;
+  font-size:12px;
+  font-family:"Manrope",inherit;
+  border: 1.5px solid var(--fcb-rule);
+  background: var(--fcb-surface);
+  border-radius: var(--fcb-radius);
+  color: var(--fcb-ink);
+  outline: none;
+}
+.fcb-soh-area input[type=date]:focus { border-color:var(--fcb-accent); }
+.fcb-soh-area label { font-size:12px; color:var(--fcb-ink2); cursor:pointer; display:flex; align-items:center; gap:4px; margin:0; }
+@media (max-width:1100px) { .fcb-kpi-strip { grid-template-columns:repeat(3,1fr); } }
+@media (max-width:780px) {
+  .fcb-masthead,.fcb-toolbar,.fcb-table-wrap { padding-left:16px; padding-right:16px; }
+  .fcb-title { font-size:36px; }
+  .fcb-kpi-strip { grid-template-columns:repeat(2,1fr); }
+  .fcb-detail-panel { grid-template-columns:1fr; }
 }
 </style>
 </head>
@@ -632,120 +1221,89 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
 <!-- FORECAST & PROPOSE PR -->
 <div class="page" id="pg-forecast">
-<div class="page-inner" style="padding:0">
+<div class="page-inner fc-bulletin" style="padding:0">
+
+  <!-- Masthead -->
+  <header class="fcb-masthead">
+    <div class="fcb-masthead-top">
+      <div>
+        <span>Forecast &amp; Propose PR Dashboard</span>
+        <span id="fcb-sync-label" style="color:var(--fcb-muted)"></span>
+      </div>
+      <div class="right">
+        <span><b id="fc-kpi-total">—</b> items tracked</span>
+        <span>DOI Target: <b id="fcb-doi-display">30</b> hari</span>
+      </div>
+    </div>
+    <h1 class="fcb-title">Forecast <em>Bulletin</em></h1>
+    <div class="fcb-masthead-sub">
+      <span>Raw Material &amp; Packaging Material — Auto-generated Propose PR dengan DOI Target</span>
+      <em id="fcb-period-label">April — Desember 2026</em>
+    </div>
+  </header>
 
   <!-- KPI Strip -->
-  <div id="fc-kpi-strip" style="display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--border);background:var(--bg2)">
-    <div style="padding:14px 18px;border-right:1px solid var(--border)">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">Items Tracked</div>
-      <div id="fc-kpi-total" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--text)">—</div>
-      <div id="fc-kpi-total-sub" style="font-size:10px;color:var(--muted);margin-top:2px">RM + PM</div>
+  <section class="fcb-kpi-strip" id="fc-kpi-strip">
+    <div class="fcb-kpi">
+      <div class="fcb-kpi-label">Raw Material</div>
+      <div class="fcb-kpi-value" id="fc-kpi-rm">—</div>
+      <div class="fcb-kpi-delta">items RM</div>
     </div>
-    <div style="padding:14px 18px;border-right:1px solid var(--border)">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">Raw Material</div>
-      <div id="fc-kpi-rm" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--accent)">—</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:2px">items RM</div>
+    <div class="fcb-kpi">
+      <div class="fcb-kpi-label">Packaging</div>
+      <div class="fcb-kpi-value" id="fc-kpi-pm">—</div>
+      <div class="fcb-kpi-delta">items PM</div>
     </div>
-    <div style="padding:14px 18px;border-right:1px solid var(--border)">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">Packaging</div>
-      <div id="fc-kpi-pm" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--purple)">—</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:2px">items PM</div>
+    <div class="fcb-kpi">
+      <div class="fcb-kpi-label"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--fcb-accent);margin-right:4px;vertical-align:middle"></span>Needs PR</div>
+      <div class="fcb-kpi-value accent" id="fc-kpi-propose">—</div>
+      <div class="fcb-kpi-delta">ada Propose PR &gt; 0</div>
     </div>
-    <div style="padding:14px 18px;border-right:1px solid var(--border)">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amber);margin-right:5px;vertical-align:middle"></span>Needs PR</div>
-      <div id="fc-kpi-propose" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--amber)">—</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:2px">ada Propose PR &gt; 0</div>
+    <div class="fcb-kpi">
+      <div class="fcb-kpi-label">Under DOI</div>
+      <div class="fcb-kpi-value over" id="fc-kpi-under">—</div>
+      <div class="fcb-kpi-delta">DOI bulan ini &lt; target</div>
     </div>
-    <div style="padding:14px 18px;border-right:1px solid var(--border)">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">Under DOI</div>
-      <div id="fc-kpi-under" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--red)">—</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:2px">DOI bulan ini &lt; target</div>
-    </div>
-    <div style="padding:14px 18px">
-      <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">DOI Target</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-        <input type="number" id="fc-doi-target" value="30" min="1" max="180"
-          style="width:65px;font-size:20px;font-weight:700;font-family:var(--mono);background:transparent;border:none;border-bottom:2px solid var(--border2);color:var(--teal);outline:none;padding:2px 0;text-align:center"
-          oninput="_fcDOIChange(this.value)" title="Target maksimum DOI">
-        <span style="font-size:11px;color:var(--muted)">hari</span>
+    <div class="fcb-kpi" style="grid-column:span 2">
+      <div class="fcb-kpi-label">DOI Target</div>
+      <div class="fcb-kpi-doi-wrap">
+        <input type="number" id="fc-doi-target" class="fcb-kpi-doi-inp" value="30" min="1" max="180" oninput="_fcDOIChange(this.value)" title="Target maksimum DOI">
+        <span style="font-size:12px;color:var(--fcb-muted);font-family:Manrope">hari &nbsp;·&nbsp; ubah &amp; auto recalc</span>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:4px">ubah & auto recalc</div>
     </div>
-  </div>
+  </section>
 
   <!-- Toolbar -->
-  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 20px;background:var(--bg3);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;backdrop-filter:blur(6px)">
-    <!-- View tabs -->
-    <div style="display:inline-flex;border:1.5px solid var(--border2);border-radius:var(--r);overflow:hidden;background:var(--bg2)">
-      <button id="fc-tab-detail" onclick="_fcSetView('detail')"
-        style="padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:var(--font)">Detail</button>
-      <button id="fc-tab-rekap" onclick="_fcSetView('rekap')"
-        style="padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:transparent;color:var(--muted);border:none;cursor:pointer;font-family:var(--font)">Rekap PR</button>
-      <button id="fc-tab-supplier" onclick="_fcSetView('supplier')"
-        style="padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;background:transparent;color:var(--muted);border:none;cursor:pointer;font-family:var(--font)">Forecast</button>
+  <div class="fcb-toolbar">
+    <div class="fcb-tabs">
+      <button id="fc-tab-detail"   onclick="_fcSetView('detail')"   class="fcb-tab active">Detail</button>
+      <button id="fc-tab-rekap"    onclick="_fcSetView('rekap')"    class="fcb-tab">Rekap PR</button>
+      <button id="fc-tab-supplier" onclick="_fcSetView('supplier')" class="fcb-tab">Forecast</button>
     </div>
-
-    <!-- Type -->
-    <select id="f-fc-type" onchange="renderForecast()" style="font-size:12px;padding:5px 10px">
-      <option value="">RM + PM</option><option value="RM">RM</option><option value="PM">PM</option>
-    </select>
-
-    <!-- Filter rows (Detail only) -->
-    <select id="f-fc-rows" onchange="renderForecast()" style="font-size:12px;padding:5px 10px" title="Filter tampilan baris (mode Detail)">
-      <option value="">Semua (kolom propose)</option>
-      <option value="detail">Detail (semua expand)</option>
-      <option value="propose">Propose PR saja</option>
-      <option value="under">Under DOI saja</option>
-      <option value="forecast">Requirement saja</option>
-      <option value="stock">Stock saja</option>
-      <option value="doi">DOI saja</option>
-    </select>
-
-    <!-- ABC filter (Detail only) -->
-    <select id="f-fc-abc" onchange="renderForecast()" style="font-size:12px;padding:5px 10px" title="Filter Class ABC">
-      <option value="">Semua Class</option>
-      <option value="A">Class A</option>
-      <option value="B">Class B</option>
-      <option value="C">Class C</option>
-    </select>
-
-    <!-- Status filter (Rekap only) -->
-    <select id="f-fc-status" onchange="renderForecast()" style="font-size:12px;padding:5px 10px" title="Filter status PR (mode Rekap)">
-      <option value="">Semua Status</option>
-      <option value="overdue">Terlambat</option>
-      <option value="urgent">Segera</option>
-      <option value="ok">Oke</option>
-    </select>
-
-    <!-- SOH Date picker -->
-    <div style="display:flex;align-items:center;gap:6px">
-      <input type="date" id="fc-soh-date" onchange="_fcDateChange()" title="Pilih tanggal snapshot SOH"
-        style="font-size:12px;padding:5px 8px;background:var(--bg4);border:1.5px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;font-family:var(--font)">
-      <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;margin:0;white-space:nowrap">
-        <input type="checkbox" id="fc-soh-realtime" checked onchange="_fcRealtimeToggle()" style="cursor:pointer">
-        SOH Realtime
-      </label>
+    <select id="f-fc-type"   onchange="renderForecast()" class="fcb-select"><option value="">RM + PM</option><option value="RM">RM</option><option value="PM">PM</option></select>
+    <select id="f-fc-rows"   onchange="renderForecast()" class="fcb-select"><option value="">Semua</option><option value="detail">Detail expand</option><option value="propose">Propose saja</option><option value="under">Under DOI</option></select>
+    <select id="f-fc-abc"    onchange="renderForecast()" class="fcb-select"><option value="">Semua Class</option><option value="A">Class A</option><option value="B">Class B</option><option value="C">Class C</option></select>
+    <select id="f-fc-status" onchange="renderForecast()" class="fcb-select"><option value="">Semua Status</option><option value="overdue">Terlambat</option><option value="urgent">Segera</option><option value="ok">Oke</option></select>
+    <div class="fcb-soh-area">
+      <input type="date" id="fc-soh-date" onchange="_fcDateChange()" title="Snapshot SOH">
+      <label><input type="checkbox" id="fc-soh-realtime" checked onchange="_fcRealtimeToggle()"> SOH Realtime</label>
     </div>
-
-    <!-- Search -->
-    <div style="position:relative;flex:1;min-width:160px;max-width:280px">
-      <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);pointer-events:none">⌕</span>
-      <input type="text" id="srch-fc" placeholder="Cari kode / nama..." oninput="renderForecast()"
-        style="width:100%;padding:6px 10px 6px 28px;font-size:12px;background:var(--bg4);border:1.5px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;font-family:var(--font)">
+    <div class="fcb-search">
+      <input type="text" id="srch-fc" placeholder="Cari kode / nama..." oninput="renderForecast()">
     </div>
-
-    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-      <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
-      <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
-      <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
-      <button class="btn btn-sm" onclick="_fcExportModal('detail')" style="font-size:11px">↓ Export</button>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button class="fcb-btn primary" id="fc-gen-btn" onclick="generateProposePR()">⚡ Generate Propose PR</button>
+      <span id="fc-gen-badge" class="fcb-badge">✓ Generated</span>
+      <button class="fcb-btn danger" onclick="_fcResetPropose()">↺ Reset</button>
+      <button class="fcb-btn" onclick="_fcExportModal('detail')">↓ Export</button>
     </div>
   </div>
 
   <!-- Table area -->
-  <div style="padding:16px 20px 48px">
-    <div id="fc-table-info" style="display:flex;justify-content:space-between;align-items:baseline;padding:0 0 8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:0"></div>
+  <div class="fcb-table-wrap">
+    <div id="fc-table-info" class="fcb-table-info"></div>
     <div id="fc-table"></div>
+    <footer class="fcb-footer"><em>Forecast Bulletin</em> · Raw Material &amp; Packaging Material · Auto-generated Propose PR</footer>
   </div>
 
 </div>
@@ -5951,7 +6509,9 @@ function _fcSetView(v) {
   _fcView = v;
   ['detail','rekap','supplier'].forEach(function(id) {
     var btn = document.getElementById('fc-tab-' + id);
-    if(btn) { btn.style.background = v===id?'var(--accent)':'transparent'; btn.style.color = v===id?'#fff':'var(--muted)'; }
+    if(btn) {
+      btn.classList.toggle('active', v === id);
+    }
   });
   renderForecast();
 }
@@ -6225,7 +6785,7 @@ function renderForecast(isGenerate) {
   var el = document.getElementById('fc-table');
   if(!el) return;
   if(!STATE.masterData || !STATE.mrpData) {
-    el.innerHTML = '<div class="empty" style="padding:60px 20px"><div class="empty-ico">📅</div><h3>Belum ada data</h3><p>Muat Master Data &amp; MRP dari Data Source lalu klik Generate Propose PR</p></div>';
+    el.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--fcb-muted);font-family:Fraunces,serif;font-style:italic;font-size:16px">📅 Belum ada data — muat Master Data &amp; MRP dari Data Source</div>';
     var info = document.getElementById('fc-table-info'); if(info) info.innerHTML = '';
     return;
   }
@@ -6266,9 +6826,14 @@ function renderForecast(isGenerate) {
     : (syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)');
   if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + '</span>'
     + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
+  // Update masthead display
+  var dsp = document.getElementById('fcb-doi-display'); if(dsp) dsp.textContent = _fcGetDOI();
+  var sl = document.getElementById('fcb-sync-label');
+  var syncTs2 = localStorage.getItem('last_sync')||'';
+  if(sl) sl.textContent = syncTs2 ? 'Sync: '+syncTs2 : '';
 
   if(!allItems.length) {
-    el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Ubah filter atau klik Generate</p></div>';
+    el.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--fcb-muted);font-family:Fraunces,serif;font-style:italic;font-size:16px">Tidak ada item — coba ubah filter atau klik Generate</div>';
     return;
   }
 
@@ -6296,365 +6861,201 @@ function _fcRenderDetail(el, items, fcData, fRows) {
   var expandAll = (fRows === 'detail');
 
   var months_hdr = FC_MONTHS.map(function(m) {
-    return '<th style="min-width:72px;text-align:right;padding:7px 5px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'
-      + m.slice(0,3)+" '"+yr2+'</th>';
+    return '<th class="r">' + m.slice(0,3) + " '" + yr2 + '</th>';
   }).join('');
 
-  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:960px">'
+  var html = '<div style="overflow-x:auto"><table class="fcb-items-table">'
     + '<thead><tr>'
-    + '<th style="width:16px;padding:7px 4px;border-bottom:2px solid var(--border2)"></th>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">Kode</th>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">Deskripsi</th>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">Supplier</th>'
-    + '<th style="text-align:center;padding:7px 6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">ABC</th>'
-    + '<th style="text-align:center;padding:7px 6px;font-size:9.5px;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">LT</th>'
-    + '<th style="text-align:right;padding:7px 8px;font-size:9.5px;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2)">SOH</th>'
+    + '<th style="width:18px"></th>'
+    + '<th>Item No.</th>'
+    + '<th>Deskripsi</th>'
+    + '<th>ABC</th>'
+    + '<th>Tipe</th>'
+    + '<th class="r">SOH</th>'
     + months_hdr + '</tr></thead><tbody>';
 
   items.forEach(function(code) {
     var fc     = fcData[code];
-    var m      = STATE.masterData[code] || {};
+    var master = STATE.masterData[code] || {};
+    var mrp    = STATE.mrpData[code]    || {};
     var iType  = /^3/.test(code)?'RM':'PM';
-    var badge  = iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-    var name   = (_isAdmin && (STATE.realNameData||{})[code]) ? '<span style="color:var(--teal)">'+(STATE.realNameData[code])+'</span>' : (m.desc||'—');
-    var abc    = m.abc || '';
-    var abcColor = abc==='A'?'var(--red)':abc==='B'?'var(--amber)':abc==='C'?'var(--green)':'var(--muted)';
+    var name   = (_isAdmin && (STATE.realNameData||{})[code])
+                 ? '<span style="color:var(--fcb-accent)">' + (STATE.realNameData[code]) + '</span>'
+                 : (master.desc || mrp.desc || '—');
+    var abc    = master.abc || '';
     var isExp  = expandAll || !!_fcExpanded[code];
+    var doiV   = fc.doi[0] || 0;
+    var doiCls = doiV > _fcGetDOI() ? ' style="color:var(--fcb-over);font-weight:700"'
+               : doiV > 0           ? ' style="color:var(--fcb-under)"' : '';
 
-    // Urgency chip
-    var urgSug  = fc.suggestions.filter(function(s){return s.isUrgent;});
-    var overSug = fc.suggestions.filter(function(s){return s.isOverdue;});
-    var chip = overSug.length ? '<span style="margin-left:5px;font-size:9px;background:var(--red-bg);color:var(--red);padding:1px 5px;border-radius:2px;font-weight:600">Terlambat PR</span>'
-             : urgSug.length  ? '<span style="margin-left:5px;font-size:9px;background:var(--amber-bg);color:var(--amber);padding:1px 5px;border-radius:2px;font-weight:600">Segera PR</span>' : '';
-
-    // Per-month cells — show propose by default
+    // Summary row cells per month (show first propose per month with amber)
     var mCells = FC_MONTHS.map(function(_, i) {
-      if(fRows==='forecast') {
-        var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(Math.round(v)):'—')+'</td>';
-      } else if(fRows==='stock') {
-        var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOI()*daily;
-        var cl=v2<0?'var(--red)':v2<minS?'var(--amber)':'var(--text)';
-        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(Math.round(v2))+'</td>';
-      } else if(fRows==='doi') {
-        var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOI()?'var(--amber)':d>99?'var(--muted)':'var(--green)';
-        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d===999?'∞':d)+'</td>';
-      } else {
-        // propose (default)
-        var pv=fc.propose[i];
-        if(!pv) return '<td style="text-align:right;padding:6px 5px;color:var(--hint);font-size:11px">—</td>';
-        return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:3px">'+n_id(Math.round(pv))+'</td>';
-      }
+      var prop = fc.propose[i] || 0;
+      if(prop > 0) return '<td class="num" style="color:var(--fcb-accent);font-weight:700">' + n_id(Math.round(prop)) + '</td>';
+      return '<td class="num" style="color:var(--fcb-muted2)">—</td>';
     }).join('');
 
-    var chevId = 'fc-chev-'+code;
-    html += '<tr class="fc-item-row" data-code="'+code+'" onclick="_fcToggle(\''+code+'\')" '
-      + 'style="cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" '
-      + 'onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'
-      + '<td style="padding:8px 4px 8px 8px;text-align:center;color:var(--muted);font-size:11px" id="'+chevId+'">'+(isExp?'▾':'›')+'</td>'
-      + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">'+code+' '+badge+'</td>'
-      + '<td style="padding:8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500">'+name+chip+'</td>'
-      + '<td style="padding:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)">'+(m.supplier||'—')+'</td>'
-      + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:700;color:'+abcColor+'">'+(abc||'—')+'</td>'
-      + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(fc.lt_days?fc.lt_days+'d':'—')+'</td>'
-      + '<td style="padding:8px;text-align:right;font-family:var(--mono);font-size:11px">'+n_id(Math.round(fc.soh))+'</td>'
+    // Top-level row
+    html += '<tr class="fcb-item-row' + (isExp?' expanded':'') + '" data-code="' + code + '" onclick="_fcToggleDetail(this.dataset.code)">'
+      + '<td><span class="fcb-chev">›</span></td>'
+      + '<td class="code">' + code + '</td>'
+      + '<td class="desc">' + name + '</td>'
+      + '<td><span class="fcb-abc ' + abc + '">' + (abc||'—') + '</span></td>'
+      + '<td><span class="fcb-type ' + iType + '">' + iType + '</span></td>'
+      + '<td class="num">' + n_id(Math.round(fc.soh)) + '</td>'
       + mCells
       + '</tr>';
 
-    if(isExp) html += _fcDetailRow(code, fc, m);
+    if(!isExp) return;
+
+    // ── Expanded detail row ─────────────────────────────────────────────
+    var site = (STATE.stockData && STATE.stockData[code])
+      ? ((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):''))
+      : '—';
+
+    var metaHtml = '<div class="fcb-detail-meta">'
+      + '<h3>' + (master.desc || mrp.desc || code) + '</h3>'
+      + '<div class="code-big">' + code + ' &nbsp;·&nbsp; ' + iType + '</div>'
+      + '<dl class="fcb-meta-grid">'
+      + '<dt>Supplier</dt><dd>' + (master.supplier || '—') + '</dd>'
+      + '<dt>UoM</dt><dd>' + (master.uom || '—') + '</dd>'
+      + '<dt>MOQ</dt><dd>' + (master.moq || '—') + '</dd>'
+      + '<dt>Multiple</dt><dd>' + (master.multiple || '—') + '</dd>'
+      + '<dt>Lead Time</dt><dd>' + (fc.lt_days || '—') + ' hari</dd>'
+      + '<dt>ABC Class</dt><dd><span class="fcb-abc ' + abc + '">' + (abc||'—') + '</span></dd>'
+      + '<dt>Whse</dt><dd>' + site + '</dd>'
+      + '<dt>SOH</dt><dd style="font-weight:700;color:var(--fcb-ink)">' + n_id(Math.round(fc.soh)) + ' ' + (master.uom||'') + '</dd>'
+      + '</dl>'
+      + '</div>';
+
+    // Month headers for grid
+    var gHdr = '<thead><tr><th style="text-align:left;padding-left:2px">Baris</th>'
+      + FC_MONTHS.map(function(m){ return '<th>' + m.slice(0,3) + " '" + yr2 + '</th>'; }).join('')
+      + '</tr></thead>';
+
+    function gridRow(cls, label, vals, valFn) {
+      return '<tr class="' + cls + '"><td>' + label + '</td>'
+        + vals.map(function(v,i){ return '<td>' + valFn(v,i) + '</td>'; }).join('')
+        + '</tr>';
+    }
+    function numCell(v, extra) {
+      var s = v > 0 ? n_id(Math.round(v)) : '<span class="zero">—</span>';
+      return extra ? '<span class="' + extra + '">' + s + '</span>' : s;
+    }
+
+    // Propose PR row with editable cells
+    var propRow = '<tr class="row-propose"><td>Propose PR</td>'
+      + fc.propose.map(function(v, i) {
+          var moqV  = fc.multiple || 1;
+          var cur   = Math.round(v) || 0;
+          var haVal = cur > 0;
+          var codeJ = JSON.stringify(code);
+          return '<td style="padding:2px 4px">'
+            + '<div class="fcb-propose-cell' + (haVal?' has-val':'') + '" onclick="event.stopPropagation()">'
+            + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="' + cur + '"'
+            +   ' data-code="' + code + '" data-mi="' + i + '" data-moq="' + moqV + '"'
+            +   ' oninput="_fcProposeEdit(this)">'
+            + '<div class="arrows">'
+            + '<button type="button" onclick="_fcProposeStep(' + codeJ + ',' + i + ',' + moqV + ')" tabindex="-1">&#9650;</button>'
+            + '<button type="button" onclick="_fcProposeStep(' + codeJ + ',' + i + ',' + (-moqV) + ')" tabindex="-1">&#9660;</button>'
+            + '</div></div></td>';
+        }).join('')
+      + '</tr>';
+
+    var doiRow = '<tr class="row-doi"><td>DOI (hari)</td>'
+      + fc.doi.map(function(d) {
+          var c = d > _fcGetDOI() ? 'doi-over' : (d > 0 ? 'doi-ok' : 'zero');
+          var txt = d > 0 ? (d >= 999 ? '∞' : String(Math.round(d))) : '—';
+          return '<td><span class="' + c + '">' + txt + '</span></td>';
+        }).join('')
+      + '</tr>';
+
+    var gridHtml = '<div class="fcb-grid-wrap">'
+      + '<table class="fcb-grid" id="fc-detail-' + code + '">'
+      + gHdr + '<tbody>'
+      + gridRow('row-req',   'Requirement', fc.forecast,  function(v){ return v>0?n_id(Math.round(v)):'<span class="zero">—</span>'; })
+      + gridRow('row-ospo',  'OSPO',        fc.ospo,      function(v){ return v>0?n_id(Math.round(v)):'<span class="zero">—</span>'; })
+      + gridRow('row-ospr',  'OSPR',        fc.ospr,      function(v){ return v>0?n_id(Math.round(v)):'<span class="zero">—</span>'; })
+      + propRow
+      + gridRow('row-stock', 'Stock Ending',fc.stock,     function(v){ var c=v<0?'style="color:var(--fcb-over)"':'class="hi-stock"'; return '<span '+c+'>'+n_id(Math.round(v))+'</span>'; })
+      + doiRow
+      + '</tbody></table></div>';
+
+    html += '<tr class="fcb-detail-row"><td colspan="' + (6 + FC_MONTHS.length) + '">'
+      + '<div class="fcb-detail-panel">'
+      + metaHtml
+      + '<div>' + gridHtml + '</div>'
+      + '</div></td></tr>';
   });
 
   html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
-// ─── Expanded detail row ──────────────────────────────────────────────────────
-function _fcDetailRow(code, fc, master) {
-  var yr2  = String(new Date().getFullYear()).slice(-2);
-  var iType= /^3/.test(code)?'RM':'PM';
-  var rn   = (_isAdmin && (STATE.realNameData||{})[code]) ? (STATE.realNameData[code]) : '';
-  var abc  = master.abc || '';
-  var abcColor = abc==='A'?'var(--red)':abc==='B'?'var(--amber)':abc==='C'?'var(--green)':'var(--muted)';
 
-  // Meta panel
-  var meta = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">';
-  var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
-    ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
-    ['SOH',n_id(Math.round(fc.soh))],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
-  if(rn && _isAdmin) mRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
-  mRows.forEach(function(r){
-    meta += '<dt style="color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:2px">'+r[0]+'</dt>'
-          + '<dd style="margin:0;font-family:var(--mono);font-size:11.5px">'+r[1]+'</dd>';
-  });
-  meta += '</div>';
-
-  // Suggestions
-  var sug = '';
-  if(fc.suggestions.length) {
-    sug = '<div style="margin-top:10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-bottom:5px">Suggest Buat PR</div>';
-    fc.suggestions.forEach(function(s) {
-      var d  = s.createPRBy;
-      var ds = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-      var cl = s.isOverdue?'var(--red)':(s.isUrgent?'var(--amber)':'var(--green)');
-      var bg = s.isOverdue?'var(--red-bg)':(s.isUrgent?'var(--amber-bg)':'var(--green-bg)');
-      var lb = s.isOverdue?'⚠ Terlambat':(s.isUrgent?'⚡ '+s.daysLeft+'h lagi':'✓ '+s.daysLeft+'h lagi');
-      sug += '<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:'+bg+';border-radius:var(--r);margin-bottom:4px;font-size:11px">'
-        + '<span style="font-family:var(--mono);color:var(--muted)">'+s.proposeMonth+'</span>'
-        + '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">'+n_id(Math.round(s.qty))+' '+(master.uom||'')+'</span>'
-        + '<span style="margin-left:auto;font-size:10px;color:'+cl+';font-weight:600">'+lb+'</span>'
-        + '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Buat PR sebelum '+ds+'</span>'
-        + '</div>';
-    });
-    sug += '</div>';
-  }
-
-  // Forecast grid
-  var mhdr = FC_MONTHS.map(function(m) {
-    return '<th style="text-align:right;padding:6px 5px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'+m.slice(0,3)+" '"+yr2+'</th>';
-  }).join('');
-
-  function gRow(label, vals, clsFn, editable, fieldCode) {
-    var cells = vals.map(function(v, i) {
-      if(editable) {
-        var moqV  = fc.multiple || 1;  // step by multiple
-        var cur   = Math.round(v) || 0;
-        var haVal = cur > 0;
-        var amberBdr = 'rgba(245,158,11,.4)';
-        var normBdr  = 'var(--border2)';
-        var bdr = haVal ? amberBdr : normBdr;
-        var inp_color = haVal ? 'var(--amber)' : 'var(--muted)';
-        var inp_weight = haVal ? '700' : '400';
-        var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
-        var codeJ = JSON.stringify(fieldCode);
-        return '<td style="padding:2px 3px" onclick="event.stopPropagation()">'
-          + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'" data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
-          +   ' oninput="_fcProposeEdit(this)"'
-          +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
-          + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
-          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+moqV+')" tabindex="-1"'
-          +     ' style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
-          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+(-moqV)+')" tabindex="-1"'
-          +     ' style="flex:1;border:none;border-top:1px solid '+bdr+';background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9660;</button>'
-          + '</div>'
-          + '</div></td>'
-      }
-      var style = clsFn ? clsFn(v, i) : 'color:var(--text)';
-      var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
-      return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</td>';
-    }).join('');
-    return '<tr style="border-bottom:1px dotted var(--border)">'
-      + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
-      + cells + '</tr>';
-  }
-
-  var grid = '<div style="overflow-x:auto;margin-top:10px">'
-    + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
-    + '<thead><tr><th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'+mhdr+'</tr></thead>'
-    + '<tbody>'
-    + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
-    + gRow('OSPO', fc.ospo, function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
-    + gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
-    + gRow('Stock (Ending)', fc.stock, function(v,i){
-        var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0, minS=_fcGetDOI()*daily;
-        return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
-      })
-    + gRow('DOI (hari)', fc.doi, function(v){
-        return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-      }, false, null)
-    + gRow('Propose PR', fc.propose, null, true, code)
-    + '</tbody></table></div>';
-
-  // DOI override render — rewrite last row cells as text not inputs
-  // (Propose row is editable via inputs, DOI cells above show auto values)
-
-  var colspan = 7 + 9;
-  return '<tr id="fc-detail-'+code+'" style="border-bottom:2px solid var(--border2)">'
-    + '<td colspan="'+colspan+'" style="padding:0;background:var(--bg)">'
-    + '<div style="padding:16px 20px;display:grid;grid-template-columns:220px 1fr;gap:16px">'
-    + '<div>'+meta+sug+'</div>'
-    + '<div>'+grid+'</div>'
-    + '</div></td></tr>';
-}
-
-// ─── Rekap view ───────────────────────────────────────────────────────────────
 function _fcRenderRekap(el, items, fcData, fStatus) {
-  var now  = new Date();
-  var yr   = now.getFullYear();
-
-  // Build flat list of all propose rows
+  var now = new Date();
   var propRows = [];
   items.forEach(function(code) {
-    var fc     = fcData[code];
-    var master = STATE.masterData[code] || {};
-    var mrp    = STATE.mrpData[code] || {};
-    var iType  = /^3/.test(code)?'RM':'PM';
-    var name   = master.desc || mrp.desc || '';
-    var site   = (STATE.stockData && STATE.stockData[code])
-                 ? ((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):''))
-                 : '';
-    fc.suggestions.forEach(function(s) {
-      propRows.push({
-        code: code, name: name, iType: iType,
-        site: site, uom: master.uom||'',
-        qty: s.qty,
-        delivDate: s.delivDate,
-        createPRBy: s.createPRBy,
-        daysLeft: s.daysLeft,
-        isUrgent: s.isUrgent,
-        isOverdue: s.isOverdue,
-        proposeMonth: s.proposeMonth,
-        abc: master.abc||''
-      });
+    var fc=fcData[code], master=STATE.masterData[code]||{}, mrp=STATE.mrpData[code]||{};
+    var iType=/^3/.test(code)?'RM':'PM';
+    var name=master.desc||mrp.desc||'';
+    var site=(STATE.stockData&&STATE.stockData[code])
+      ?((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):'')):'';
+    fc.suggestions.forEach(function(s){
+      propRows.push({code,name,iType,site,uom:master.uom||'',qty:s.qty,
+        delivDate:s.delivDate,createPRBy:s.createPRBy,daysLeft:s.daysLeft,
+        isUrgent:s.isUrgent,isOverdue:s.isOverdue,proposeMonth:s.proposeMonth,abc:master.abc||''});
     });
   });
 
+  propRows.sort(function(a,b){ return a.createPRBy - b.createPRBy; });
+  if(fStatus==='overdue') propRows=propRows.filter(function(r){return r.isOverdue;});
+  else if(fStatus==='urgent') propRows=propRows.filter(function(r){return r.isUrgent&&!r.isOverdue;});
+  else if(fStatus==='ok')     propRows=propRows.filter(function(r){return !r.isUrgent&&!r.isOverdue;});
+
   if(!propRows.length) {
-    el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada Propose PR</h3><p>Klik Generate Propose PR terlebih dahulu</p></div>';
+    el.innerHTML='<div class="fcb-empty" style="padding:60px 20px;text-align:center;color:var(--fcb-muted);font-family:Fraunces,serif;font-style:italic;font-size:16px">Tidak ada Propose PR — klik Generate Propose PR terlebih dahulu</div>';
     return;
   }
 
-  // Sort by createPRBy (ascending)
-  propRows.sort(function(a,b){ return a.createPRBy - b.createPRBy; });
+  var fmt=function(d){return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();};
 
-  // Apply status filter
-  if(fStatus === 'overdue') propRows = propRows.filter(function(r){ return r.isOverdue; });
-  else if(fStatus === 'urgent') propRows = propRows.filter(function(r){ return r.isUrgent && !r.isOverdue; });
-  else if(fStatus === 'ok')     propRows = propRows.filter(function(r){ return !r.isUrgent && !r.isOverdue; });
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 10px">'
+    +'<div style="font-size:11.5px;color:var(--fcb-muted)"><b style="color:var(--fcb-ink)">'+propRows.length+'</b> baris propose PR</div>'
+    +'<button class="fcb-btn primary" onclick="_fcExportModal(\x27rekap\x27)" style="font-size:11px">↓ Export Rekap PR</button>'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table class="fcb-rekap-table">'
+    +'<thead><tr>'
+    +'<th>Item No.</th><th>Deskripsi</th><th>ABC</th><th>Whse</th>'
+    +'<th class="r">Required Qty</th><th>Required Date</th><th>Tgl Create PR</th><th>Status</th>'
+    +'</tr></thead><tbody>';
 
-  var fmt = function(d) {
-    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-  };
-
-  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-    + '<div style="font-size:11px;color:var(--muted)"><b>'+propRows.length+'</b> baris propose PR</div>'
-    + '<button class="btn btn-sm btn-primary" onclick="_fcExportModal(\'rekap\')" style="font-size:11px">↓ Export Rekap PR</button>'
-    + '</div>'
-    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">'
-    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
-    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Item No.</th>'
-    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Item Description</th>'
-    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">ABC</th>'
-    + '<th style="text-align:left;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Whse</th>'
-    + '<th style="text-align:right;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Required Qty</th>'
-    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Required Date</th>'
-    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Tgl Create PR</th>'
-    + '<th style="text-align:center;padding:8px 10px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)">Status</th>'
-    + '</tr></thead><tbody>';
-
-  propRows.forEach(function(r, idx) {
-    var abcClr  = r.abc==='A'?'var(--red)':r.abc==='B'?'var(--amber)':r.abc==='C'?'var(--teal)':'var(--muted)';
-    var badge   = r.iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-    var stDot   = r.isOverdue ? '●' : (r.isUrgent ? '◑' : '○');
-    var stClr   = r.isOverdue ? 'var(--red)' : (r.isUrgent ? 'var(--amber)' : 'var(--text)');
-    var stLabel = r.isOverdue ? 'Terlambat' : (r.isUrgent ? 'Segera' : 'Oke');
-    var stSub   = r.isOverdue ? '⚠ lewat' : (r.daysLeft + 'h lagi');
-    var rowBg   = idx%2===0?'':'background:rgba(30,37,53,.12)';
-    html += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
-      + '<td style="padding:9px 10px;font-family:var(--mono);font-size:11px;white-space:nowrap">'+r.code+' '+badge+'</td>'
-      + '<td style="padding:9px 10px;font-size:12px;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</td>'
-      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:'+abcClr+'">'+(r.abc||'—')+'</td>'
-      + '<td style="padding:9px 10px;font-size:11.5px;color:var(--muted)">'+(r.site||'—')+'</td>'
-      + '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600">'+n_id(Math.round(r.qty))+'<span style="font-size:10px;color:var(--muted);margin-left:3px">'+r.uom+'</span></td>'
-      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--muted)">'+fmt(r.delivDate)+'</td>'
-      + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500">'+fmt(r.createPRBy)+'</td>'
-      + '<td style="padding:7px 10px;text-align:center">'
-      + '<div style="font-size:12px;color:'+stClr+';font-weight:600">'+stDot+' '+stLabel+'</div>'
-      + '<div style="font-size:10px;color:var(--muted)">'+stSub+'</div>'
-      + '</td>'
-      + '</tr>';
+  propRows.forEach(function(r,idx){
+    var abc=r.abc;
+    var badge=r.iType==='RM'?'<span class="fcb-type RM">RM</span>':'<span class="fcb-type PM">PM</span>';
+    var stDot=r.isOverdue?'●':r.isUrgent?'◑':'○';
+    var stCls=r.isOverdue?'err':r.isUrgent?'warn':'ok';
+    var stLbl=r.isOverdue?'Terlambat':r.isUrgent?'Segera':'Oke';
+    var stSub=r.isOverdue?'⚠ lewat':r.daysLeft+'h lagi';
+    html+='<tr>'
+      +'<td class="mono" style="white-space:nowrap">'+r.code+' '+badge+'</td>'
+      +'<td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</td>'
+      +'<td><span class="fcb-abc '+abc+'">'+(abc||'—')+'</span></td>'
+      +'<td style="color:var(--fcb-muted);font-size:12px">'+(r.site||'—')+'</td>'
+      +'<td class="mono r" style="font-weight:600">'+n_id(Math.round(r.qty))+' <span style="font-size:10px;color:var(--fcb-muted)">'+r.uom+'</span></td>'
+      +'<td class="mono" style="color:var(--fcb-muted)">'+fmt(r.delivDate)+'</td>'
+      +'<td class="mono" style="font-weight:600">'+fmt(r.createPRBy)+'</td>'
+      +'<td><span class="fcb-status '+stCls+'" style="white-space:nowrap">'+stDot+' '+stLbl+'</span>'
+      +'<div style="font-size:10px;color:var(--fcb-muted);margin-top:2px">'+stSub+'</div></td>'
+      +'</tr>';
   });
 
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
-
-  // Store for export
-  window._fcRekapRows = propRows;
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+  window._fcRekapRows=propRows;
 }
 
-
-// ─── Forecast Supplier view ───────────────────────────────────────────────────
-// Shows: Requirement, OSPO, OSPR per item — for sharing to supplier
-function _fcRenderSupplier(el, items, fcData) {
-  var yr2 = String(new Date().getFullYear()).slice(-2);
-
-  var months_hdr = FC_MONTHS.map(function(m) {
-    return '<th style="min-width:70px;text-align:right;padding:7px 5px;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'
-      + m.slice(0,3)+" '"+yr2+'</th>';
-  }).join('');
-
-  // Filter: only items with any forecast > 0 (no point showing blank rows)
-  var fcItems = items.filter(function(c){ return fcData[c].forecast.some(function(v){return v>0;}); });
-
-  var html = '<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">'
-    + '<div style="font-size:11px;color:var(--muted)"><b>'+fcItems.length+'</b> item · Forecast, OSPO, OSPR per bulan</div>'
-    + '<button class="btn btn-sm" onclick="_fcExportModal(\'supplier\')" style="font-size:11px">↓ Export</button>'
-    + '</div>'
-    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:880px">'
-    + '<thead><tr>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap;min-width:90px">Kode</th>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:160px">Deskripsi</th>'
-    + '<th style="text-align:left;padding:7px 8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">Baris</th>'
-    + months_hdr + '</tr></thead><tbody>';
-
-  fcItems.forEach(function(code, itemIdx) {
-    var fc     = fcData[code];
-    var m      = STATE.masterData[code] || {};
-    var iType  = /^3/.test(code)?'RM':'PM';
-    var badge  = iType==='RM'?'<span class="badge b-blue" style="font-size:8px">RM</span>':'<span class="badge b-purple" style="font-size:8px">PM</span>';
-    var name   = (_isAdmin && (STATE.realNameData||{})[code]) ? '<span style="color:var(--teal)">'+(STATE.realNameData[code])+'</span>' : (m.desc||'—');
-    var bgBase = itemIdx%2===0?'':'background:rgba(30,37,53,.2)';
-
-    function supRow(label, vals, clr, rowIdx) {
-      var isFirst = rowIdx === 0;
-      var cells = vals.map(function(v) {
-        return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;color:' + (v>0?clr:'var(--hint)') + '">'
-          + (v>0 ? n_id(Math.round(v)) : '—') + '</td>';
-      }).join('');
-      return '<tr style="border-bottom:1px dotted var(--border);' + bgBase + '">'
-        + (isFirst
-          ? '<td rowspan="3" style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted);vertical-align:top;white-space:nowrap;border-right:1px solid var(--border)">'+code+' '+badge+'</td>'
-          + '<td rowspan="3" style="padding:8px;font-size:11.5px;font-weight:500;vertical-align:top;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid var(--border)">'+name+'</td>'
-          : '')
-        + '<td style="padding:5px 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap">'+label+'</td>'
-        + cells + '</tr>';
-    }
-
-    html += supRow('OSPO', fc.ospo, 'var(--teal)', 0);
-    html += supRow('OSPR', fc.ospr, 'var(--accent)', 1);
-    html += '<tr style="border-bottom:2px solid var(--border);' + bgBase + '">'
-      + '<td style="padding:5px 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);white-space:nowrap">Propose PR</td>'
-      + fc.propose.map(function(v) {
-          return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;font-weight:'+(v>0?'700':'400')+';color:'+(v>0?'var(--amber)':'var(--hint)')+'">'+( v>0?n_id(Math.round(v)):'—')+'</td>';
-        }).join('')
-      + '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
-  window._fcSupplierItems = fcItems;
-  window._fcSupplierData  = fcData;
-}
-
-function _fcExportSupplier() {
-  var items   = window._fcSupplierItems || [];
-  var fcData  = window._fcSupplierData  || {};
-  if(!items.length) { toast('Tidak ada data','err'); return; }
-  var hdr = ['Item No','Description','Baris'].concat(FC_MONTHS);
-  var rows = [hdr.join(',')];
-  items.forEach(function(code) {
-    var master = STATE.masterData[code] || {};
-    var fc     = fcData[code];
-    var desc   = '"'+(master.desc||'').replace(/"/g,"'")+'"';
-    rows.push([code, desc, 'OSPO'      ].concat(fc.ospo.map(function(v){return Math.round(v||0);})).join(','));
-    rows.push([code, desc, 'OSPR'      ].concat(fc.ospr.map(function(v){return Math.round(v||0);})).join(','));
-    rows.push([code, desc, 'Propose PR'].concat(fc.propose.map(function(v){return Math.round(v||0);})).join(','));
-  });
-  var blob = new Blob([rows.join('\n')],{type:'text/csv'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'forecast_supplier_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click(); toast('Forecast exported ✓','ok');
-}
 
 // ─── Export Rekap CSV ─────────────────────────────────────────────────────────
 function _fcExportRekap() {
@@ -6690,11 +7091,8 @@ function _fcExportRekap() {
 function _fcToggle(code) {
   _fcExpanded[code] = !_fcExpanded[code];
   renderForecast();
-  setTimeout(function() {
-    var row = document.querySelector('[data-code="'+code+'"]');
-    if(row) row.scrollIntoView({behavior:'smooth', block:'nearest'});
-  }, 50);
 }
+function _fcToggleDetail(code) { _fcToggle(code); }
 
 // ─── Inline propose edit ──────────────────────────────────────────────────────
 // ─── Reset semua propose PR ──────────────────────────────────────────────────
@@ -6959,4 +7357,57 @@ appStart();
 
 </script>
 </body>
-</html>
+</html>function _fcRenderSupplier(el, items, fcData) {
+  var yr2 = String(new Date().getFullYear()).slice(-2);
+  var fcItems = items.filter(function(c){
+    return fcData[c].ospo.some(function(v){return v>0;})
+        || fcData[c].ospr.some(function(v){return v>0;})
+        || fcData[c].propose.some(function(v){return v>0;});
+  });
+
+  if(!fcItems.length) {
+    el.innerHTML='<div style="padding:60px 20px;text-align:center;color:var(--fcb-muted);font-family:Fraunces,serif;font-style:italic;font-size:16px">Tidak ada item dengan OSPO/OSPR/Propose PR</div>';
+    return;
+  }
+
+  var hdrCols = FC_MONTHS.map(function(m){
+    return '<th>'+m.slice(0,3)+" '"+yr2+'</th>';
+  }).join('');
+
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 10px">'
+    +'<div style="font-size:11.5px;color:var(--fcb-muted)"><b style="color:var(--fcb-ink)">'+fcItems.length+'</b> item · OSPO, OSPR, Propose PR per bulan</div>'
+    +'<button class="fcb-btn" onclick="_fcExportModal(\x27supplier\x27)" style="font-size:11px">↓ Export</button>'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table class="fcb-sup-table">'
+    +'<thead><tr><th style="min-width:90px">Kode</th><th style="min-width:160px">Deskripsi</th><th style="width:60px">Baris</th>'+hdrCols+'</tr></thead>'
+    +'<tbody>';
+
+  fcItems.forEach(function(code, ii) {
+    var fc=fcData[code], m=STATE.masterData[code]||{};
+    var iType=/^3/.test(code)?'RM':'PM';
+    var name=(_isAdmin&&(STATE.realNameData||{})[code])?(STATE.realNameData[code]):(m.desc||'—');
+    var badge='<span class="fcb-type '+iType+'">'+iType+'</span>';
+    var isLast = ii === fcItems.length - 1;
+
+    function supCell(vals, cls) {
+      return vals.map(function(v){
+        return '<td class="'+(v>0?cls:'v-zero')+'">'+(v>0?n_id(Math.round(v)):'—')+'</td>';
+      }).join('');
+    }
+
+    html += '<tr>'
+      + '<td class="row-label" rowspan="3" style="vertical-align:top;padding-top:8px">'+code+' '+badge+'</td>'
+      + '<td style="vertical-align:top;padding-top:8px;font-size:12px;font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" rowspan="3">'+name+'</td>'
+      + '<td class="row-label">OSPO</td>'
+      + supCell(fc.ospo, 'v-ospo') + '</tr>';
+    html += '<tr><td class="row-label">OSPR</td>' + supCell(fc.ospr, 'v-ospr') + '</tr>';
+    html += '<tr class="'+(isLast?'':'item-sep')+'"><td class="row-label">Propose PR</td>' + supCell(fc.propose, 'v-prop') + '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+  window._fcSupplierItems = fcItems;
+  window._fcSupplierData  = fcData;
+}
+
+
