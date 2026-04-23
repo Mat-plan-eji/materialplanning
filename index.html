@@ -717,6 +717,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <option value="ok">Oke</option>
     </select>
 
+    <!-- SOH Date picker -->
+    <select id="fc-soh-date" onchange="renderForecast()" style="font-size:12px;padding:5px 10px;max-width:180px" title="Pilih tanggal snapshot SOH">
+      <option value="">SOH Live (SAP)</option>
+    </select>
+
     <!-- Search -->
     <div style="position:relative;flex:1;min-width:160px;max-width:280px">
       <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);pointer-events:none">⌕</span>
@@ -5965,22 +5970,55 @@ function _buildOSPOIndex() {
 //   stock[m] = stock[m-1] + ospo[m] + propose[m] - forecast[m]
 //   propose col = delivery month (PR issued LT_days before = first day of month - LT_days)
 // ────────────────────────────────────────────────────────────────────────────
+// ── Populate SOH date picker from stockHistory ───────────────────────────
+function _fcPopulateDatePicker() {
+  var sel = document.getElementById('fc-soh-date');
+  if(!sel) return;
+  var hist = STATE.stockHistory || {};
+  var dates = Object.keys(hist).sort().reverse();
+  sel.innerHTML = '<option value="">SOH Live (SAP)</option>';
+  dates.forEach(function(d) {
+    var p = d.split('-');
+    var lbl = p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
+    var opt = document.createElement('option');
+    opt.value = d; opt.textContent = 'Snapshot '+lbl;
+    sel.appendChild(opt);
+  });
+}
+
 function _calcForecast(code, ospoIdx) {
-  var now     = new Date(); now.setHours(0,0,0,0);
+  // ── Snapshot date ─────────────────────────────────────────────────────────
+  var snapSel  = (document.getElementById('fc-soh-date') || {}).value || '';
+  var todayISO = new Date().toISOString().split('T')[0];
+  var snapDate = snapSel || todayISO;
+
+  var snapD   = new Date(snapDate + 'T00:00:00'); snapD.setHours(0,0,0,0);
+  var snapYear= snapD.getFullYear();
+  var snapMon = snapD.getMonth() + 1; // 1-12
+  var nowReal = new Date(); nowReal.setHours(0,0,0,0);
+
   var maxDOI  = _fcGetDOI();
   var master  = (STATE.masterData || {})[code] || {};
   var mrp     = (STATE.mrpData    || {})[code] || {};
-  var stockD  = (STATE.stockData  || {})[code] || {};
 
   var lt_days  = master.lt || 30;
-  var lt_mo    = Math.ceil(lt_days / 30);   // months to add for delivery
+  var lt_mo    = Math.ceil(lt_days / 30);
   var moq      = master.moq || 0;
   var multiple = master.multiple || 1;
-  var soh      = (stockD.btg || 0) + (stockD.sng || 0);
-  // OSPR = total open purchase requests, counted in first available month
-  var ospr_total = (STATE.osprByItem || {})[code] || 0;
 
-  var curYear  = now.getFullYear();
+  // ── SOH dari snapshot ─────────────────────────────────────────────────────
+  var stockRaw;
+  if(!snapSel) {
+    stockRaw = (STATE.stockData || {})[code] || {};
+  } else {
+    var histSnap = (STATE.stockHistory || {})[snapDate];
+    if(!histSnap) { stockRaw = {}; }
+    else { stockRaw = histSnap[code] || {}; }
+  }
+  var soh = (stockRaw.btg || 0) + (stockRaw.sng || 0);
+
+  var curYear = snapYear;
+  var ospr_total = (STATE.osprByItem || {})[code] || 0;
 
   // Forecast per month
   var forecast = FC_MONTHS.map(function(m) { return (mrp.months && mrp.months[m]) || 0; });
@@ -5991,11 +6029,11 @@ function _calcForecast(code, ospoIdx) {
     return ((ospoIdx[code] || {})[yyyymm]) || 0;
   });
 
-  // OSPR per month — put total in first non-zero forecast month
+  // OSPR per month
   var ospr = new Array(9).fill(0);
   if(ospr_total > 0) ospr[0] = ospr_total;
 
-  // confQty by month (already confirmed by supplier)
+  // confQty by month
   var confByMonth = new Array(9).fill(0);
   Object.keys(STATE.poOverrides || {}).forEach(function(key) {
     var ovr = STATE.poOverrides[key];
@@ -6009,13 +6047,48 @@ function _calcForecast(code, ospoIdx) {
     }
   });
 
-  // ── Initial stock projection (no propose yet) ─────────────────────────────
-  // April: remaining days of month
-  var daysRemain = FC_DAYS[0] - now.getDate() + 1;
-  var fcApr = forecast[0] > 0 ? forecast[0] * (daysRemain / FC_DAYS[0]) : 0;
+  // ── Snapshot month index di FC_MONTHS ─────────────────────────────────────
+  var snapMoIdx = FC_MONTH_NUMS.indexOf(snapMon);
+  if(snapMoIdx < 0) snapMoIdx = 0;
+
+  // ── Stock awal bulan snapshot ─────────────────────────────────────────────
+  var stockAwalM = 0;
+  if(snapMon === 4 && snapYear === nowReal.getFullYear()) {
+    // April: pakai STOCK_AWAL_APR yang hardcoded
+    var sa = (typeof STOCK_AWAL_APR !== 'undefined' && STOCK_AWAL_APR[code]) ? STOCK_AWAL_APR[code] : null;
+    stockAwalM = sa ? (sa.btg||0)+(sa.sng||0) : soh;
+  } else {
+    // Bulan lain: cari snapshot paling awal di bulan itu dari stockHistory
+    var moPrefix = snapYear+'-'+String(snapMon).padStart(2,'0');
+    var histKeys = Object.keys(STATE.stockHistory||{}).filter(function(d){ return d.slice(0,7)===moPrefix; }).sort();
+    if(histKeys.length > 0) {
+      var ea = ((STATE.stockHistory[histKeys[0]]||{})[code]) || {};
+      stockAwalM = (ea.btg||0)+(ea.sng||0);
+    } else {
+      stockAwalM = soh; // tidak ada data awal bulan, gunakan SOH saja
+    }
+  }
+
+  // ── GRPO item ini dari tgl 1 bulan snapshot sampai snapDate ──────────────
+  var grpoToD = 0;
+  var snapMonPfx = snapDate.slice(0,7);
+  (STATE.grpoData||[]).forEach(function(g) {
+    if(g.itemCode !== code || !g.grpoDate) return;
+    var gp = g.grpoDate.split('/');
+    var gISO = gp.length===3 ? gp[2]+'-'+String(gp[1]).padStart(2,'0')+'-'+String(gp[0]).padStart(2,'0') : g.grpoDate;
+    if(gISO.slice(0,7)===snapMonPfx && gISO<=snapDate) grpoToD += (g.qty||0);
+  });
+
+  // ── Remaining MRP bulan snapshot ─────────────────────────────────────────
+  var mrpSnapMo    = (mrp.months && mrp.months[FC_MONTHS[snapMoIdx]]) || 0;
+  var usageToD     = Math.max(0, stockAwalM + grpoToD - soh);
+  var remainingMRP = Math.max(0, mrpSnapMo - usageToD);
+
+  // ── Stock projection ──────────────────────────────────────────────────────
   var stockProj = new Array(9).fill(0);
-  stockProj[0] = soh + ospr[0] + confByMonth[0] + ospo[0] - fcApr;
-  for(var m = 1; m < 9; m++) {
+  for(var pre=0; pre<snapMoIdx; pre++) { stockProj[pre] = 0; }
+  stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] + confByMonth[snapMoIdx] - remainingMRP;
+  for(var m = snapMoIdx+1; m < 9; m++) {
     stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] + confByMonth[m] - forecast[m];
   }
 
@@ -6111,6 +6184,7 @@ function generateProposePR() {
 
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
+  _fcPopulateDatePicker(); // refresh date picker options from stockHistory
   var el = document.getElementById('fc-table');
   if(!el) return;
   if(!STATE.masterData || !STATE.mrpData) {
@@ -6149,8 +6223,11 @@ function renderForecast(isGenerate) {
 
   var info = document.getElementById('fc-table-info');
   var syncTs = localStorage.getItem('last_sync') || '';
-  var syncLabel = syncTs ? 'Stock per: <b>' + syncTs + '</b>' : 'Stock belum disync';
-  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + syncLabel + '</span>'
+  var snapSelVal = (document.getElementById('fc-soh-date')||{}).value||'';
+  var snapLabel = snapSelVal
+    ? 'SOH: <b>Snapshot '+snapSelVal.split('-').reverse().join('/')+'</b>'
+    : (syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)');
+  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + '</span>'
     + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
 
   if(!allItems.length) {
