@@ -718,9 +718,14 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </select>
 
     <!-- SOH Date picker -->
-    <select id="fc-soh-date" onchange="renderForecast()" style="font-size:12px;padding:5px 10px;max-width:180px" title="Pilih tanggal snapshot SOH">
-      <option value="">SOH Live (SAP)</option>
-    </select>
+    <div style="display:flex;align-items:center;gap:6px">
+      <input type="date" id="fc-soh-date" onchange="_fcDateChange()" title="Pilih tanggal snapshot SOH"
+        style="font-size:12px;padding:5px 8px;background:var(--bg4);border:1.5px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;font-family:var(--font)">
+      <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;margin:0;white-space:nowrap">
+        <input type="checkbox" id="fc-soh-realtime" checked onchange="_fcRealtimeToggle()" style="cursor:pointer">
+        SOH Realtime
+      </label>
+    </div>
 
     <!-- Search -->
     <div style="position:relative;flex:1;min-width:160px;max-width:280px">
@@ -1796,7 +1801,7 @@ function showPage(name, el) {
   var handlers = {
     dashboard: function(){updateDashStats();setTimeout(_matchDashColumns,100)},
     projection: function(){setUrgentCutoff();renderProjection();},
-    forecast: function(){renderForecast();},
+    forecast: function(){_fcPopulateDatePicker();_fcRealtimeToggle();renderForecast();},
     po: function(){if(!STATE.poData.length)loadPO();else renderPO()},
     schedule: renderSchedule,
     'daily-list': function(){initDailyList();renderDailyList()},
@@ -5970,26 +5975,55 @@ function _buildOSPOIndex() {
 //   stock[m] = stock[m-1] + ospo[m] + propose[m] - forecast[m]
 //   propose col = delivery month (PR issued LT_days before = first day of month - LT_days)
 // ────────────────────────────────────────────────────────────────────────────
-// ── Populate SOH date picker from stockHistory ───────────────────────────
+// ── SOH date picker helpers ───────────────────────────────────────────────
 function _fcPopulateDatePicker() {
-  var sel = document.getElementById('fc-soh-date');
-  if(!sel) return;
+  // Populate datalist with available snapshot dates
+  var inp = document.getElementById('fc-soh-date');
+  if(!inp) return;
   var hist = STATE.stockHistory || {};
-  var dates = Object.keys(hist).sort().reverse();
-  sel.innerHTML = '<option value="">SOH Live (SAP)</option>';
-  dates.forEach(function(d) {
-    var p = d.split('-');
-    var lbl = p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
-    var opt = document.createElement('option');
-    opt.value = d; opt.textContent = 'Snapshot '+lbl;
-    sel.appendChild(opt);
-  });
+  var dates = Object.keys(hist).sort();
+  // Set min/max from available history
+  if(dates.length > 0) {
+    inp.min = dates[0];
+    inp.max = dates[dates.length-1];
+  }
+  // Attach datalist for suggestion
+  var dlId = 'fc-soh-datelist';
+  var dl = document.getElementById(dlId);
+  if(!dl) {
+    dl = document.createElement('datalist');
+    dl.id = dlId;
+    document.body.appendChild(dl);
+    inp.setAttribute('list', dlId);
+  }
+  dl.innerHTML = dates.map(function(d){ return '<option value="'+d+'">'; }).join('');
+}
+
+function _fcDateChange() {
+  // When user picks a date, uncheck Realtime
+  var cb = document.getElementById('fc-soh-realtime');
+  if(cb) cb.checked = false;
+  renderForecast();
+}
+
+function _fcRealtimeToggle() {
+  var cb = document.getElementById('fc-soh-realtime');
+  var inp = document.getElementById('fc-soh-date');
+  if(cb && cb.checked) {
+    // Realtime mode: clear date input, disable it
+    if(inp) { inp.value = ''; inp.disabled = true; inp.style.opacity = '0.4'; }
+  } else {
+    if(inp) { inp.disabled = false; inp.style.opacity = '1'; }
+  }
+  renderForecast();
 }
 
 function _calcForecast(code, ospoIdx) {
   // ── Snapshot date ─────────────────────────────────────────────────────────
-  var snapSel  = (document.getElementById('fc-soh-date') || {}).value || '';
+  var realtimeCb = document.getElementById('fc-soh-realtime');
+  var isRealtime = !realtimeCb || realtimeCb.checked;  // default realtime
   var todayISO = new Date().toISOString().split('T')[0];
+  var snapSel  = (!isRealtime && (document.getElementById('fc-soh-date')||{}).value) || '';
   var snapDate = snapSel || todayISO;
 
   var snapD   = new Date(snapDate + 'T00:00:00'); snapD.setHours(0,0,0,0);
@@ -6008,11 +6042,11 @@ function _calcForecast(code, ospoIdx) {
 
   // ── SOH dari snapshot ─────────────────────────────────────────────────────
   var stockRaw;
-  if(!snapSel) {
+  if(isRealtime || !snapSel) {
     stockRaw = (STATE.stockData || {})[code] || {};
   } else {
     var histSnap = (STATE.stockHistory || {})[snapDate];
-    if(!histSnap) { stockRaw = {}; }
+    if(!histSnap) { stockRaw = {}; /* snapshot tgl ini tidak ada */ }
     else { stockRaw = histSnap[code] || {}; }
   }
   var soh = (stockRaw.btg || 0) + (stockRaw.sng || 0);
@@ -6184,7 +6218,6 @@ function generateProposePR() {
 
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
-  _fcPopulateDatePicker(); // refresh date picker options from stockHistory
   var el = document.getElementById('fc-table');
   if(!el) return;
   if(!STATE.masterData || !STATE.mrpData) {
@@ -6223,8 +6256,8 @@ function renderForecast(isGenerate) {
 
   var info = document.getElementById('fc-table-info');
   var syncTs = localStorage.getItem('last_sync') || '';
-  var snapSelVal = (document.getElementById('fc-soh-date')||{}).value||'';
-  var snapLabel = snapSelVal
+  var snapSelVal = (!isRealtime && (document.getElementById('fc-soh-date')||{}).value)||'';
+  var snapLabel = (!isRealtime && snapSelVal)
     ? 'SOH: <b>Snapshot '+snapSelVal.split('-').reverse().join('/')+'</b>'
     : (syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)');
   if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + '</span>'
