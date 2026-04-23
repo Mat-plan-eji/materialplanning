@@ -319,6 +319,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="nav-section">Planning</div>
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span>Material Planner Dashboard</div>
   <div class="ni" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
+  <div class="ni" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
   <div class="nav-divider"></div>
   <div class="nav-section">Delivery</div>
   <div class="ni" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
@@ -627,6 +628,34 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 
 
 <!-- DATA SOURCE -->
+
+<!-- FORECAST & PROPOSE PR -->
+<div class="page" id="pg-forecast">
+<div class="page-inner">
+  <div class="ph">
+    <div class="ph-l"><h2>Forecast & Propose PR</h2><p id="forecast-sub">Proyeksi stock & kebutuhan PR bulan Apr–Des 2026</p></div>
+    <div class="ph-r">
+      <select id="f-fc-type" onchange="renderForecast()" style="width:90px"><option value="">RM+PM</option><option value="RM">RM</option><option value="PM">PM</option></select>
+      <select id="f-fc-site" onchange="renderForecast()"><option value="">Semua Site</option><option>BTG</option><option>SNG</option><option>BTG&SNG</option></select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);margin:0;cursor:pointer">
+        <input type="checkbox" id="f-fc-propose-only" onchange="renderForecast()"> Propose saja
+      </label>
+      <input type="text" id="srch-fc" placeholder="Cari kode / nama..." oninput="renderForecast()" style="width:180px">
+      <button class="btn btn-primary" onclick="generateProposePR()">⚡ Generate Propose PR</button>
+      <button class="btn btn-sm btn-amber" onclick="exportForecastCSV()">↓ Export CSV</button>
+    </div>
+  </div>
+  <div id="fc-alert"></div>
+  <div id="fc-legend" style="display:flex;gap:16px;align-items:center;font-size:10.5px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap">
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red-bg);border:1px solid rgba(239,68,68,.3);display:inline-block"></span>Stock &lt; Min</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);display:inline-block"></span>DOI &lt; 14 hari</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--green-bg);border:1px solid rgba(16,185,129,.3);display:inline-block"></span>Propose PR</span>
+    <span style="margin-left:auto;color:var(--muted);font-size:10px">Max DOI target: <strong id="fc-maxdoi-lbl">30</strong> hari &nbsp;|&nbsp; Edit di Settings</span>
+  </div>
+  <div id="fc-table"><div class="empty"><div class="empty-ico">📅</div><h3>Belum ada data</h3><p>Muat Master Data & MRP dari Sheets lalu klik Generate Propose PR</p></div></div>
+</div>
+</div>
+
 <div class="page" id="pg-upload">
 <div class="page-inner">
   <div class="ph">
@@ -841,6 +870,9 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div class="frow">
           <div class="fg"><label>W+N (hari cutoff filter urgent)</label><input id="cfg-wn" type="number" value="14" style="width:100%"></div>
           <div class="fg"><label>Jumlah hari kerja untuk leveling</label><input id="cfg-workdays" type="number" value="5" style="width:100%"></div>
+        </div>
+        <div class="fg frow">
+          <div><label style="font-size:11px">Max DOI Target (hari)</label><input id="cfg-maxdoi" type="number" value="30" min="1" max="90" style="width:100%;font-size:11px" title="Target maksimum hari stock untuk Forecast & Propose PR"></div>
         </div>
         <button class="btn btn-primary" onclick="saveSettings()">Simpan Parameter</button>
       </div>
@@ -1654,6 +1686,7 @@ function showPage(name, el) {
   var handlers = {
     dashboard: function(){updateDashStats();setTimeout(_matchDashColumns,100)},
     projection: function(){setUrgentCutoff();renderProjection();},
+    forecast: function(){renderForecast();},
     po: function(){if(!STATE.poData.length)loadPO();else renderPO()},
     schedule: renderSchedule,
     'daily-list': function(){initDailyList();renderDailyList()},
@@ -2680,7 +2713,8 @@ function processMasterData(rows) {
     var multiple = parseIDNum(row['Multiple'] || row['Multipel'] || row['Order Multiple'] || row['multiple'] || '0');
     var uom = String(row['Inventory Uom'] || row['Inventory UoM'] || row['UoM'] || row['UOM'] || '').trim();
     var supplier = String(row['Supplier'] || row['Supplier Name'] || row['Vendor'] || '').trim();
-    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier };
+    var lt = parseIDNum(row['L.T'] || row['LT'] || row['Lead Time'] || row['LeadTime'] || row['Leadtime'] || '0');
+    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt };
   });
   return result;
 }
@@ -4795,6 +4829,9 @@ function saveSup() {
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function loadSettingsForm() {
+  // Load MaxDOI for forecast
+  var maxDoiEl = document.getElementById('cfg-maxdoi');
+  if(maxDoiEl) maxDoiEl.value = localStorage.getItem('fc_maxdoi') || '30';
   document.getElementById('cfg-url').value    = CFG.url;
   document.getElementById('cfg-user').value   = CFG.user;
   document.getElementById('cfg-pass').value   = CFG.pass;
@@ -4827,6 +4864,11 @@ function saveSettings() {
   localStorage.setItem('fonnte',CFG.fonnte);
   localStorage.setItem('wn',CFG.wn);
   localStorage.setItem('workdays',CFG.workdays);
+  var maxDoiInput = document.getElementById('cfg-maxdoi');
+  if(maxDoiInput) {
+    var md = parseInt(maxDoiInput.value)||30;
+    localStorage.setItem('fc_maxdoi', String(md));
+  }
   toast('Settings disimpan ✓','ok');
 }
 
@@ -5764,6 +5806,381 @@ function _appInit() {
     var activeRadio = document.querySelector('input[name="rm-display"][value="'+_rmDisplayMode+'"]');
     if(activeRadio) activeRadio.checked = true;
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📅 FORECAST & PROPOSE PR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var FC_MONTHS = ['April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+var FC_DAYS   = [30, 31, 30, 31, 31, 30, 31, 30, 31]; // days in each month Apr-Des
+var FC_MONTH_NUMS = [4,5,6,7,8,9,10,11,12]; // month numbers
+var _fcPropose = {}; // { itemCode: [9 values] } — generated propose values
+
+// ─── Build OSPO index by item+month ──────────────────────────────────────────
+function _buildOSPOIndex() {
+  var idx = {}; // { itemCode: { yyyymm: qty } }
+  (STATE.ospoData || []).forEach(function(o) {
+    var code = o.itemCode; if(!code) return;
+    if(!idx[code]) idx[code] = {};
+    if(o.prReqDate) {
+      var parts = o.prReqDate.split('/');
+      if(parts.length === 3) {
+        var yyyymm = parseInt(parts[2]) * 100 + parseInt(parts[1]);
+        idx[code][yyyymm] = (idx[code][yyyymm] || 0) + (o.openQty || 0);
+      }
+    }
+  });
+  return idx;
+}
+
+// ─── Core: calculate stock projection + propose PR for one item ───────────────
+function _calcForecast(code, ospoIdx) {
+  var master = (STATE.masterData || {})[code] || {};
+  var mrp    = (STATE.mrpData    || {})[code] || {};
+  var stock  = (STATE.stockData  || {})[code] || {};
+  var maxDOI = parseInt(localStorage.getItem('fc_maxdoi') || '30');
+  var now    = new Date();
+
+  var lt_days   = master.lt || 30;
+  var lt_months = Math.max(1, Math.round(lt_days / 30));
+  var moq       = master.moq || 0;
+  var multiple  = master.multiple || 1;
+  var soh       = (stock.btg || 0) + (stock.sng || 0);
+
+  // OSPR = all open purchase requests (not month-specific)
+  var ospr = (STATE.osprByItem || {})[code] || 0;
+
+  // Forecast per month
+  var forecast = FC_MONTHS.map(function(m) { return (mrp.months && mrp.months[m]) || 0; });
+
+  // OSPO per month
+  var ospo = FC_MONTHS.map(function(m, i) {
+    var yyyymm = FC_MONTH_NUMS[i] + now.getFullYear() * 100;
+    // Correct year: Apr=4, if current month > 4, those are next year - but all in 2026 here
+    yyyymm = now.getFullYear() * 100 + FC_MONTH_NUMS[i];
+    return ((ospoIdx[code] || {})[yyyymm]) || 0;
+  });
+
+  // Current month: remaining days of April
+  var remainingDays = FC_DAYS[0] - now.getDate();
+  var dailyApr = forecast[0] > 0 ? forecast[0] / FC_DAYS[0] : 0;
+
+  // Stock end of each month (initial pass — no propose yet)
+  var stockProj = new Array(9).fill(0);
+  // April: SOH + OSPR (arriving this month) + OSPO[Apr] - remaining forecast this month
+  stockProj[0] = soh + ospr + ospo[0] - (dailyApr * remainingDays);
+  for (var m = 1; m < 9; m++) {
+    stockProj[m] = stockProj[m-1] + ospo[m] - forecast[m];
+  }
+
+  // Pre-existing manual propose (from _fcPropose)
+  var manualPropose = (_fcPropose[code] || new Array(9).fill(0)).slice();
+
+  // Add manual propose arrivals to stock
+  var stockWithManual = stockProj.slice();
+  for (var pm = 0; pm < 9; pm++) {
+    if(manualPropose[pm] > 0) {
+      var arrM = Math.min(8, pm + lt_months);
+      for (var n = arrM; n < 9; n++) stockWithManual[n] += manualPropose[pm];
+    }
+  }
+
+  // Generate auto-propose on top of manual
+  var autoProp = new Array(9).fill(0);
+  var stockFinal = stockWithManual.slice();
+
+  for (var m = 0; m < 9; m++) {
+    var daily = forecast[m] > 0 ? forecast[m] / FC_DAYS[m] : 0;
+    var minStock = maxDOI * daily;
+    if(stockFinal[m] < minStock) {
+      var proposeM = Math.max(0, m - lt_months);
+      // Don't double-propose: skip if already proposed for this trigger month
+      var shortage = minStock - stockFinal[m];
+      var qty = shortage;
+      if(multiple > 0) qty = Math.ceil(qty / multiple) * multiple;
+      if(moq > 0 && qty < moq) qty = moq;
+      if(qty <= 0) continue;
+      autoProp[proposeM] += qty;
+      var arr = Math.min(8, proposeM + lt_months);
+      for (var n = arr; n < 9; n++) stockFinal[n] += qty;
+    }
+  }
+
+  // Merge: total propose = manual + auto
+  var totalPropose = FC_MONTHS.map(function(_, i) { return manualPropose[i] + autoProp[i]; });
+
+  // DOI per month
+  var doi = FC_MONTHS.map(function(m, i) {
+    var daily = forecast[i] > 0 ? forecast[i] / FC_DAYS[i] : 0;
+    return daily > 0 ? Math.round(stockFinal[i] / daily) : (stockFinal[i] > 0 ? 999 : 0);
+  });
+
+  return {
+    forecast: forecast,
+    ospo: ospo,
+    stock: stockFinal,
+    doi: doi,
+    propose: totalPropose,
+    lt_months: lt_months,
+    moq: moq,
+    multiple: multiple,
+    maxDOI: maxDOI
+  };
+}
+
+// ─── Generate Propose PR for all items ───────────────────────────────────────
+function generateProposePR() {
+  if(!STATE.masterData) { toast('Muat Master Data terlebih dahulu', 'err'); return; }
+  if(!STATE.mrpData)    { toast('Muat MRP terlebih dahulu', 'err'); return; }
+  _fcPropose = {};
+  renderForecast(true);
+  toast('Propose PR di-generate ✓', 'ok');
+}
+
+// ─── Render forecast table ────────────────────────────────────────────────────
+function renderForecast(isGenerate) {
+  var el = document.getElementById('fc-table');
+  if(!el) return;
+  if(!STATE.masterData || !STATE.mrpData) {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">📅</div><h3>Belum ada data</h3><p>Muat Master Data & MRP dari Sheets lalu klik Generate Propose PR</p></div>';
+    return;
+  }
+
+  var maxDOI = parseInt(localStorage.getItem('fc_maxdoi') || '30');
+  var lbl = document.getElementById('fc-maxdoi-lbl'); if(lbl) lbl.textContent = maxDOI;
+
+  var srch       = (document.getElementById('srch-fc')         ||{value:''}).value.toLowerCase();
+  var fType      = (document.getElementById('f-fc-type')       ||{value:''}).value;
+  var fSite      = (document.getElementById('f-fc-site')       ||{value:''}).value;
+  var proposeOnly= (document.getElementById('f-fc-propose-only')||{checked:false}).checked;
+
+  var ospoIdx = _buildOSPOIndex();
+
+  // Build item list
+  var items = Object.keys(STATE.masterData).map(function(code) {
+    var master = STATE.masterData[code];
+    var mrp    = STATE.mrpData[code] || {};
+    var stock  = STATE.stockData[code] || {};
+    var itemType = /^3/.test(code) ? 'RM' : (/^4/.test(code) ? 'PM' : 'FG');
+    var site = (stock.btg > 0 && stock.sng > 0) ? 'BTG&SNG' : (stock.btg > 0 ? 'BTG' : (stock.sng > 0 ? 'SNG' : ''));
+    return {
+      code: code,
+      desc: master.desc || mrp.desc || '',
+      realName: (STATE.realNameData || {})[code] || '',
+      supplier: master.supplier || '',
+      uom: master.uom || mrp.uom || '',
+      moq: master.moq || 0,
+      multiple: master.multiple || 1,
+      lt: master.lt || 0,
+      itemType: itemType,
+      site: site
+    };
+  }).filter(function(p) {
+    if(fType && p.itemType !== fType) return false;
+    if(fSite && p.site !== fSite) return false;
+    if(srch && !p.code.toLowerCase().includes(srch) && !p.desc.toLowerCase().includes(srch) && !p.realName.toLowerCase().includes(srch) && !p.supplier.toLowerCase().includes(srch)) return false;
+    // Only RM and PM
+    if(p.itemType === 'FG') return false;
+    return true;
+  });
+
+  // Calculate projections
+  var fcData = {};
+  items.forEach(function(p) { fcData[p.code] = _calcForecast(p.code, ospoIdx); });
+
+  // Filter propose only
+  if(proposeOnly) {
+    items = items.filter(function(p) {
+      return fcData[p.code].propose.some(function(v){ return v > 0; });
+    });
+  }
+
+  if(!items.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Semua terpenuhi atau ubah filter</p></div>';
+    return;
+  }
+
+  // ── Build table ─────────────────────────────────────────────────────────────
+  var now = new Date();
+  var header = '<thead><tr>'
+    + '<th style="min-width:90px;position:sticky;left:0;z-index:3;background:var(--bg3)">Kode</th>'
+    + '<th style="min-width:140px;position:sticky;left:90px;z-index:3;background:var(--bg3)">Deskripsi</th>'
+    + '<th style="min-width:110px">Supplier</th>'
+    + '<th style="min-width:40px">UoM</th>'
+    + '<th style="min-width:40px">LT</th>'
+    + '<th style="min-width:50px">MOQ</th>'
+    + '<th style="min-width:50px">Mltpl</th>'
+    + '<th style="min-width:50px">SOH</th>'
+    + FC_MONTHS.map(function(m) {
+        return '<th style="min-width:80px;text-align:center" colspan="1">' + m.slice(0,3) + ' '' + String(now.getFullYear()).slice(-2) + '</th>';
+      }).join('')
+    + '</tr>'
+    + '<tr style="background:var(--bg4);font-size:9.5px;color:var(--muted)">'
+    + '<th style="position:sticky;left:0;z-index:3;background:var(--bg4)"></th>'
+    + '<th style="position:sticky;left:90px;z-index:3;background:var(--bg4)">Row</th>'
+    + '<th></th><th></th><th></th><th></th><th></th><th></th>'
+    + FC_MONTHS.map(function(){ return '<th style="text-align:right;color:var(--muted)">qty</th>'; }).join('')
+    + '</tr></thead>';
+
+  var maxDOI_cfg = parseInt(localStorage.getItem('fc_maxdoi') || '30');
+
+  var rows = items.map(function(p, idx) {
+    var fc = fcData[p.code];
+    var soh = ((STATE.stockData||{})[p.code]||{});
+    var sohTotal = (soh.btg||0) + (soh.sng||0);
+    var bg = idx % 2 === 0 ? '' : 'background:rgba(30,37,53,.4)';
+    var rowStyle = 'style="' + bg + '"';
+
+    function cell(val, extraStyle) {
+      return '<td class="mono td-right" style="font-size:10.5px;' + (extraStyle||'') + '">' + (val !== undefined && val !== null && val !== '' ? n_id(Math.round(val)) : '—') + '</td>';
+    }
+    function cellRaw(val, extraStyle) {
+      return '<td class="mono td-right" style="font-size:10.5px;' + (extraStyle||'') + '">' + (val || '—') + '</td>';
+    }
+
+    var dispName = (_isAdmin && p.realName) ? '<span style="color:var(--teal)">' + p.realName + '</span>' : p.desc;
+    var typeBadge = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:8px">RM</span>' : '<span class="badge b-purple" style="font-size:8px">PM</span>';
+
+    // Info cell (spans first columns)
+    var infoTd = '<td class="mono" style="font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1;' + bg + '">'
+      + p.code + ' ' + typeBadge
+      + '</td>';
+    var nameTd = '<td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">' + dispName + '</td>';
+    var supTd  = '<td style="font-size:10.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;' + bg + '">' + (p.supplier||'—') + '</td>';
+    var uomTd  = '<td style="font-size:10.5px;' + bg + '">' + p.uom + '</td>';
+    var ltTd   = '<td class="mono" style="font-size:10.5px;color:var(--muted);' + bg + '">' + (p.lt||'—') + '</td>';
+    var moqTd  = '<td class="mono" style="font-size:10.5px;color:var(--muted);' + bg + '">' + n_id(p.moq) + '</td>';
+    var mltTd  = '<td class="mono" style="font-size:10.5px;color:var(--muted);' + bg + '">' + n_id(p.multiple) + '</td>';
+    var sohTd  = '<td class="mono td-right" style="font-size:10.5px;font-weight:500;' + bg + '">' + n_id(Math.round(sohTotal)) + '</td>';
+
+    var fixedCells = infoTd + nameTd + supTd + uomTd + ltTd + moqTd + mltTd + sohTd;
+    var emptyCells = '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>';
+
+    // ── Forecast row ──
+    var fcRow = '<tr ' + rowStyle + '>'
+      + infoTd
+      + '<td style="font-size:10px;color:var(--muted);position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">Forecast</td>'
+      + supTd + uomTd + ltTd + moqTd + mltTd + sohTd
+      + fc.forecast.map(function(v) { return cell(v); }).join('')
+      + '</tr>';
+
+    // ── OSPO row ──
+    var ospoRow = '<tr ' + rowStyle + '>'
+      + '<td style="position:sticky;left:0;background:var(--bg2);z-index:1;' + bg + '"></td>'
+      + '<td style="font-size:10px;color:var(--teal);position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">OSPO</td>'
+      + '<td></td><td></td><td></td><td></td><td></td><td></td>'
+      + fc.ospo.map(function(v) { return cell(v > 0 ? v : null, 'color:var(--teal)'); }).join('')
+      + '</tr>';
+
+    // ── Stock row ──
+    var stockRow = '<tr ' + rowStyle + '>'
+      + '<td style="position:sticky;left:0;background:var(--bg2);z-index:1;' + bg + '"></td>'
+      + '<td style="font-size:10px;color:var(--text);font-weight:500;position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">Stock EOMonth</td>'
+      + '<td></td><td></td><td></td><td></td><td></td><td></td>'
+      + fc.stock.map(function(v, i) {
+          var daily = fc.forecast[i] > 0 ? fc.forecast[i] / FC_DAYS[i] : 0;
+          var minStock = maxDOI_cfg * daily;
+          var style = v < 0 ? 'color:var(--red);font-weight:600' : (v < minStock ? 'color:var(--amber);font-weight:500' : '');
+          return cell(v, style);
+        }).join('')
+      + '</tr>';
+
+    // ── DOI row ──
+    var doiRow = '<tr ' + rowStyle + '>'
+      + '<td style="position:sticky;left:0;background:var(--bg2);z-index:1;' + bg + '"></td>'
+      + '<td style="font-size:10px;color:var(--muted);position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">DOI</td>'
+      + '<td></td><td></td><td></td><td></td><td></td><td></td>'
+      + fc.doi.map(function(v) {
+          var style = v < 0 ? 'color:var(--red)' : (v < 14 ? 'color:var(--amber)' : (v > 60 ? 'color:var(--muted)' : 'color:var(--green)'));
+          return '<td class="mono td-right" style="font-size:10.5px;' + style + '">' + (v === 999 ? '∞' : v) + '</td>';
+        }).join('')
+      + '</tr>';
+
+    // ── Propose PR row ──
+    var proposeRow = '<tr ' + rowStyle + '>'
+      + '<td style="position:sticky;left:0;background:var(--bg2);z-index:1;' + bg + '"></td>'
+      + '<td style="font-size:10px;color:var(--green);font-weight:600;position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">Propose PR</td>'
+      + '<td></td><td></td><td></td><td></td><td></td><td></td>'
+      + fc.propose.map(function(v, mi) {
+          if(!v || v <= 0) return '<td></td>';
+          return '<td class="mono td-right" style="font-size:10.5px;background:var(--green-bg);color:var(--green);font-weight:600;border-radius:3px;cursor:pointer" '
+            + 'onclick="_editPropose('' + p.code + '',' + mi + ',' + Math.round(v) + ')" title="Klik untuk edit">'
+            + n_id(Math.round(v)) + '</td>';
+        }).join('')
+      + '</tr>';
+
+    // ── Divider row ──
+    var divRow = '<tr><td colspan="' + (8 + 9) + '" style="height:1px;padding:0;background:var(--border)"></td></tr>';
+
+    // First row = item header with desc+supplier
+    var headerRow = '<tr ' + rowStyle + '>'
+      + infoTd
+      + '<td style="font-size:11px;font-weight:500;position:sticky;left:90px;background:var(--bg2);z-index:1;' + bg + '">' + dispName + '</td>'
+      + supTd + uomTd + ltTd + moqTd + mltTd + sohTd
+      + new Array(9).fill('<td></td>').join('')
+      + '</tr>';
+
+    return headerRow + fcRow + ospoRow + stockRow + doiRow + proposeRow + divRow;
+  }).join('');
+
+  el.innerHTML = '<div class="card"><div class="tbl-wrap" style="max-height:650px">'
+    + '<table style="border-collapse:collapse;font-size:12px;width:max-content;min-width:100%">'
+    + header
+    + '<tbody>' + rows + '</tbody>'
+    + '</table></div></div>'
+    + '<div style="padding:8px 0;font-size:11px;color:var(--muted)">' + items.length + ' item</div>';
+
+  document.getElementById('forecast-sub').textContent =
+    'Proyeksi stock & kebutuhan PR bulan Apr–Des ' + new Date().getFullYear() + ' · ' + items.length + ' item';
+}
+
+// ─── Edit propose cell ────────────────────────────────────────────────────────
+function _editPropose(code, monthIdx, currentVal) {
+  if(!_requireAdmin('edit propose')) return;
+  var newVal = prompt('Propose PR ' + code + ' ' + FC_MONTHS[monthIdx] + ' (ketik 0 untuk hapus):', currentVal);
+  if(newVal === null) return;
+  var qty = parseFloat(newVal) || 0;
+  if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
+  _fcPropose[code][monthIdx] = qty;
+  renderForecast();
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+function exportForecastCSV() {
+  if(!STATE.masterData || !STATE.mrpData) { toast('Belum ada data forecast', 'err'); return; }
+  var ospoIdx = _buildOSPOIndex();
+  var rows = ['Item No.,Description,Supplier,UoM,LT,MOQ,Multiple,SOH,'
+    + FC_MONTHS.map(function(m){ return 'FC '+m+',OSPO '+m+',Stock '+m+',DOI '+m+',Propose '+m; }).join(',')];
+
+  Object.keys(STATE.masterData).forEach(function(code) {
+    var master = STATE.masterData[code] || {};
+    var mrp    = STATE.mrpData[code]    || {};
+    var stockD = STATE.stockData[code]  || {};
+    var fc     = _calcForecast(code, ospoIdx);
+    var soh    = (stockD.btg||0) + (stockD.sng||0);
+    var itemType = /^3/.test(code) ? 'RM' : (/^4/.test(code) ? 'PM' : 'FG');
+    if(itemType === 'FG') return;
+    var line = [code, '"'+(master.desc||mrp.desc||'')+'"', '"'+(master.supplier||'')+'"',
+      master.uom||'', master.lt||0, master.moq||0, master.multiple||1, Math.round(soh)];
+    for(var i=0;i<9;i++) {
+      line.push(Math.round(fc.forecast[i]||0));
+      line.push(Math.round(fc.ospo[i]||0));
+      line.push(Math.round(fc.stock[i]||0));
+      line.push(fc.doi[i]||0);
+      line.push(Math.round(fc.propose[i]||0));
+    }
+    rows.push(line.join(','));
+  });
+
+  var csv = rows.join('\n');
+  var blob = new Blob([csv], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'forecast_propose_pr_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  toast('CSV di-export ✓', 'ok');
 }
 
 // Kick off — tries Firebase first, falls back to localStorage
