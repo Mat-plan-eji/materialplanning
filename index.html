@@ -6414,21 +6414,26 @@ function _fcDetailRow(code, fc, master) {
   function gRow(label, vals, clsFn, editable, fieldCode) {
     var cells = vals.map(function(v, i) {
       if(editable) {
-        var moqV = fc.moq || fc.multiple || 1;
-        var cur  = Math.round(v) || 0;
+        var moqV  = fc.moq || fc.multiple || 1;
+        var cur   = Math.round(v) || 0;
         var haVal = cur > 0;
-        var borderClr = haVal ? 'rgba(245,158,11,.4)' : 'var(--border)';
-        var stepDown = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + (-moqV) + ')';
-        var stepUp   = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + moqV   + ')';
-        // Input + stacked arrows on right
-        return '<td style="padding:2px 4px;text-align:center" onclick="event.stopPropagation()">'
-          + '<div style="display:inline-flex;align-items:center;border:1px solid ' + borderClr + ';border-radius:4px;overflow:hidden;background:' + (haVal?'var(--amber-bg)':'var(--bg3)') + '">'
-          + '<input type="number" value="' + cur + '" data-code="' + fieldCode + '" data-mi="' + i + '" data-moq="' + moqV + '"'
-          + ' oninput="_fcProposeEdit(this)"'
-          + ' style="width:64px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:' + (haVal?'700':'400') + ';color:' + (haVal?'var(--amber)':'var(--muted)') + ';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none">'
-          + '<div style="display:flex;flex-direction:column;border-left:1px solid ' + borderClr + ';width:14px">'
-          + '<span onclick="' + stepUp   + '" style="cursor:pointer;font-size:7px;color:var(--muted);line-height:1;padding:2px 3px;user-select:none;flex:1;display:flex;align-items:flex-end;justify-content:center">▲</span>'
-          + '<span onclick="' + stepDown + '" style="cursor:pointer;font-size:7px;color:var(--muted);line-height:1;padding:2px 3px;user-select:none;flex:1;display:flex;align-items:flex-start;justify-content:center;border-top:1px solid ' + borderClr + '">▼</span>'
+        var amberBdr = 'rgba(245,158,11,.4)';
+        var normBdr  = 'var(--border2)';
+        var bdr = haVal ? amberBdr : normBdr;
+        var inp_color = haVal ? 'var(--amber)' : 'var(--muted)';
+        var inp_weight = haVal ? '700' : '400';
+        var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
+        var codeJ = JSON.stringify(fieldCode);
+        return '<td style="padding:2px 3px" onclick="event.stopPropagation()">'
+          + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
+          + '<input type="number" value="'+cur+'" data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
+          +   ' oninput="_fcProposeEdit(this)"'
+          +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none;-moz-appearance:textfield">'
+          + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
+          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+moqV+')" tabindex="-1"'
+          +     ' style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
+          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+(-moqV)+')" tabindex="-1"'
+          +     ' style="flex:1;border:none;border-top:1px solid '+bdr+';background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9660;</button>'
           + '</div>'
           + '</div></td>'
       }
