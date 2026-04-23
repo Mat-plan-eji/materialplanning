@@ -496,7 +496,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">Tampilkan Kolom</div>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('kode',this)"> Kode</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('desc',this)"> Deskripsi</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('realname',this)"> Real Name</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0" id="col-menu-realname"><input type="checkbox" checked onchange="toggleProjCol('realname',this)"> Real Name 🔒</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('uom',this)"> UOM</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('supplier',this)"> Supplier</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('site',this)"> Site</label>
@@ -1037,6 +1037,11 @@ function _updateLoginUI() {
     if(lockS) lockS.textContent = '🔒';
     if(lockU) lockU.textContent = '🔒';
   }
+  // Sembunyikan kolom Real Name dari col menu kalau tidak login
+  var colMenuRealname = document.getElementById('col-menu-realname');
+  if(colMenuRealname) colMenuRealname.style.display = _isAdmin ? '' : 'none';
+  // Re-render projection kalau sudah ada data (agar 🔒 muncul/hilang)
+  if(STATE.projectionData && STATE.projectionData.length) renderProjectionRAF();
 }
 
 function _setRMDisplay(mode) {
@@ -1381,6 +1386,12 @@ function appStart() {
     Object.keys(cloudData||{}).forEach(function(k){
       var v=cloudData[k]; if(v!=null){ try{ _origSetItem.call(localStorage, k, v); }catch(e){console.warn('[boot] setItem fail:',k,e.message);} }
     });
+    // Update _adminCreds dari localStorage yg sudah ter-update dari cloud
+    // Tanpa ini, laptop baru selalu pakai credentials default meski cloud sudah punya yg baru
+    var cloudUser = localStorage.getItem('admin_user');
+    var cloudPass = localStorage.getItem('admin_pass');
+    if(cloudUser) _adminCreds.user = cloudUser;
+    if(cloudPass) _adminCreds.pass = cloudPass;
     setMsg('Menyiapkan tampilan...');
     try {
       _appInit();
@@ -3081,7 +3092,7 @@ function renderProjection() {
     return '<tr>' +
       td('<span class="mono" style="font-size:10.5px">' + p.productCode + ' ' + typeBadge + '</span>','kode') +
       td((p.description||''),'desc','max-width:140px;overflow:hidden;text-overflow:ellipsis') +
-      td((p.realName||'—'),'realname','max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--teal);font-size:11px') +
+      td(_isAdmin ? (p.realName||'—') : '🔒','realname','max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--teal);font-size:11px') +
       td((p.uom||''),'uom') +
       td((p.supplier||'—'),'supplier','max-width:130px;overflow:hidden;text-overflow:ellipsis') +
       td((p.site||'—'),'site') +
@@ -3126,7 +3137,7 @@ function renderProjection() {
   var filterRow = colFilter ? '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" oninput="projColFilters.kode=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.kode||'') + '"></th>' +
     '<th><input class="th-filter" oninput="projColFilters.desc=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.desc||'') + '"></th>' +
-    '<th><input class="th-filter" oninput="projColFilters.realname=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.realname||'') + '"></th>' +
+    '<th>' + (_isAdmin ? '<input class="th-filter" oninput="projColFilters.realname=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.realname||'') + '">' : '') + '</th>' +
     '<th></th>' +
     '<th><input class="th-filter" oninput="projColFilters.supplier=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.supplier||'') + '"></th>' +
     '<th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>' +
