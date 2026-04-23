@@ -5957,6 +5957,9 @@ function _fcSetView(v) {
 // ─── Build OSPO index { itemCode: { yyyymm: qty } } ─────────────────────────
 function _buildOSPOIndex() {
   var idx = {};
+  var now2 = new Date(); now2.setHours(0,0,0,0);
+  var firstFcYYMM = now2.getFullYear() * 100 + 4; // April = bulan pertama forecast (hardcoded Apr-Des)
+
   (STATE.ospoData || []).forEach(function(o) {
     var code = o.itemCode; if(!code) return;
     if(!idx[code]) idx[code] = {};
@@ -5964,8 +5967,13 @@ function _buildOSPOIndex() {
       var parts = o.prReqDate.split('/');
       if(parts.length === 3) {
         var yyyymm = parseInt(parts[2]) * 100 + parseInt(parts[1]);
+        // PR Req Date sudah lewat dari bulan pertama forecast → masuk bulan pertama
+        if(yyyymm < firstFcYYMM) yyyymm = firstFcYYMM;
         idx[code][yyyymm] = (idx[code][yyyymm] || 0) + (o.openQty || 0);
       }
+    } else {
+      // PR Req Date kosong → masuk bulan pertama (daripada hilang)
+      idx[code][firstFcYYMM] = (idx[code][firstFcYYMM] || 0) + (o.openQty || 0);
     }
   });
   return idx;
