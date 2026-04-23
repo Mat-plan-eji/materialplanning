@@ -737,6 +737,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
       <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
       <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
+      <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
       <button class="btn btn-sm" onclick="_fcExportModal('detail')" style="font-size:11px">↓ Export</button>
     </div>
   </div>
@@ -6424,22 +6425,18 @@ function _fcDetailRow(code, fc, master) {
       if(editable) {
         var mlt = fc.multiple || 1;
         var cur = Math.round(v) || 0;
-        var inputStyle = cur > 0
-          ? 'color:var(--amber);background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);'
-          : 'color:var(--muted);background:transparent;border:1px solid var(--border);';
+        var haVal = cur > 0;
+        var borderClr = haVal ? 'rgba(245,158,11,.4)' : 'var(--border)';
         var stepDown = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + (-mlt) + ')';
         var stepUp   = '_fcProposeStep(' + JSON.stringify(fieldCode) + ',' + i + ',' + mlt    + ')';
-        return '<td style="padding:3px 4px">'
-          + '<div style="display:flex;align-items:center;gap:2px" onclick="event.stopPropagation()">'
-          + '<span onclick="' + stepDown + '" title="-' + mlt + '" '
-          + 'style="cursor:pointer;font-size:10px;color:var(--muted);padding:2px 4px;border-radius:2px;user-select:none;background:var(--bg4);line-height:1">'
-          + '▼</span>'
+        // Compact design: arrows inside the input wrapper box
+        return '<td style="padding:2px 4px;text-align:center" onclick="event.stopPropagation()">'
+          + '<div style="display:inline-flex;align-items:center;border:1px solid ' + borderClr + ';border-radius:4px;overflow:hidden;background:' + (haVal?'var(--amber-bg)':'var(--bg3)') + '">'
+          + '<span onclick="' + stepDown + '" title="-' + mlt + '" style="cursor:pointer;font-size:8px;color:var(--muted);padding:0 5px;user-select:none;align-self:stretch;display:flex;align-items:center;border-right:1px solid ' + borderClr + '">▼</span>'
           + '<input type="number" value="' + cur + '" data-code="' + fieldCode + '" data-mi="' + i + '" data-mlt="' + mlt + '"'
           + ' oninput="_fcProposeEdit(this)"'
-          + ' style="width:70px;text-align:right;font-family:var(--mono);font-size:11.5px;font-weight:700;' + inputStyle + 'border-radius:3px;padding:3px 5px;outline:none">'
-          + '<span onclick="' + stepUp + '" title="+' + mlt + '" '
-          + 'style="cursor:pointer;font-size:10px;color:var(--muted);padding:2px 4px;border-radius:2px;user-select:none;background:var(--bg4);line-height:1">'
-          + '▲</span>'
+          + ' style="width:58px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:' + (haVal?'700':'400') + ';color:' + (haVal?'var(--amber)':'var(--muted)') + ';background:transparent;border:none;padding:3px 2px;outline:none">'
+          + '<span onclick="' + stepUp + '" title="+' + mlt + '" style="cursor:pointer;font-size:8px;color:var(--muted);padding:0 5px;user-select:none;align-self:stretch;display:flex;align-items:center;border-left:1px solid ' + borderClr + '">▲</span>'
           + '</div></td>'
       }
       var style = clsFn ? clsFn(v, i) : 'color:var(--text)';
@@ -6701,6 +6698,14 @@ function _fcToggle(code) {
 }
 
 // ─── Inline propose edit ──────────────────────────────────────────────────────
+// ─── Reset semua propose PR ──────────────────────────────────────────────────
+function _fcResetPropose() {
+  if(!Object.keys(_fcPropose).length && !confirm('Reset semua nilai Propose PR ke hasil kalkulasi otomatis?')) return;
+  _fcPropose = {};
+  renderForecast();
+  toast('Propose PR direset ✓', 'ok');
+}
+
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
 function _fcProposeStep(code, mi, delta) {
   var detEl = document.getElementById('fc-detail-'+code);
