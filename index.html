@@ -5981,6 +5981,7 @@ var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
 var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
 var _fcView      = 'detail';
 var _fcExpanded  = {};
+var _fcGridView  = {};  // { code: 'forecast' } — default 'ringkas'
 var _fcPropose     = (function(){ try{ return JSON.parse(localStorage.getItem('fc_propose')||'{}'); }catch(e){return {};} })();
 var _fcAutoPropose = localStorage.getItem('fc_autopropose') === '1';
 var _fcDOI       = 30;
@@ -6532,29 +6533,43 @@ function _fcDetailRow(code, fc, master) {
       + cells + '</tr>';
   }
 
+  var isFcView = (_fcGridView[code] === 'forecast');
+  var stockClsFn = function(v,i){
+    var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
+    return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+  };
+  var doiClsFn = function(v){
+    return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+  };
+  var codeAttr = code.replace(/'/g, "\\'");
+  var toggleBtn = '<button onclick="_fcToggleGridView(\''+ codeAttr +'\')" '
+    + 'style="font-size:10px;padding:2px 10px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid;font-family:var(--font);'
+    + (isFcView
+      ? 'background:rgba(20,184,166,.12);color:var(--teal);border-color:rgba(20,184,166,.3)">'
+      : 'background:var(--bg4);color:var(--muted);border-color:var(--border)">')
+    + (isFcView ? '⇄ Forecast' : '⇄ Ringkas')
+    + '</button>';
+
   var grid = '<div style="overflow-x:auto;margin-top:10px">'
     + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
-    + '<thead><tr><th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'+mhdr+'</tr></thead>'
+    + '<thead><tr>'
+    + '<th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'
+    + mhdr
+    + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right">' + toggleBtn + '</th>'
+    + '</tr></thead>'
     + '<tbody>'
-    + gRow('Requirement',     fc.forecast, function(){ return 'color:var(--text)'; })
-    + gRow('OSPO',             fc.ospo,     function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
-    + gRow('OSPR',             fc.ospr,     function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
-    + gRow('Forecast OSPO',   fc.forecastOspo, function(v){ return v>0?'color:var(--teal);font-weight:600':'color:var(--hint)'; })
-    + gRow('Stock (Ending)',   fc.stock,    function(v,i){
-        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
-        return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
-      })
-    + gRow('DOI',              fc.doi,      function(v){
-        return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-      })
-    + gRow('Stock (Forecast)', fc.stockFc,  function(v,i){
-        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
-        return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
-      })
-    + gRow('DOI Forecast',     fc.doiFc,    function(v){
-        return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-      })
-    + gRow('Propose PR',       fc.propose,  null, true, code)
+    + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
+    + (isFcView
+        ? gRow('Forecast OSPO', fc.forecastOspo, function(v){ return v>0?'color:var(--teal);font-weight:600':'color:var(--hint)'; })
+        : gRow('OSPO', fc.ospo, function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
+      )
+    + (isFcView
+        ? ''
+        : gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
+      )
+    + gRow('Stock (Ending)', isFcView ? fc.stockFc : fc.stock, stockClsFn)
+    + gRow('DOI (hari)',     isFcView ? fc.doiFc   : fc.doi,   doiClsFn)
+    + gRow('Propose PR', fc.propose, null, true, code)
     + '</tbody></table></div>';
 
   // DOI override render — rewrite last row cells as text not inputs
@@ -6787,6 +6802,11 @@ function _fcToggle(code) {
     var row = document.querySelector('[data-code="'+code+'"]');
     if(row) row.scrollIntoView({behavior:'smooth', block:'nearest'});
   }, 50);
+}
+function _fcToggleDetail(code) { _fcToggle(code); }
+function _fcToggleGridView(code) {
+  _fcGridView[code] = (_fcGridView[code] === 'forecast') ? 'ringkas' : 'forecast';
+  renderForecast();
 }
 
 // ─── Inline propose edit ──────────────────────────────────────────────────────
