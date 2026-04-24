@@ -717,15 +717,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <option value="ok">Oke</option>
     </select>
 
-    <!-- SOH Date picker -->
-    <div style="display:flex;align-items:center;gap:6px">
-      <input type="date" id="fc-soh-date" onchange="_fcDateChange()" title="Pilih tanggal snapshot SOH"
-        style="font-size:12px;padding:5px 8px;background:var(--bg4);border:1.5px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;font-family:var(--font)">
-      <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;margin:0;white-space:nowrap">
-        <input type="checkbox" id="fc-soh-realtime" checked onchange="_fcRealtimeToggle()" style="cursor:pointer">
-        SOH Realtime
-      </label>
-    </div>
+<!-- SOH always realtime -->
 
     <!-- Search -->
     <div style="position:relative;flex:1;min-width:160px;max-width:280px">
@@ -735,6 +727,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
 
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <button class="btn btn-sm" onclick="loadMatcomSAP()" style="font-size:11px" title="Tarik Material Consumption dari SAP (Apr–Des 2026)">↺ Sync Matcom</button>
       <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
       <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
       <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
@@ -1747,6 +1740,7 @@ var CFG = {
 var STATE = {
   mrpData: JSON.parse(localStorage.getItem('mrp_data') || 'null'),
   matcomData: JSON.parse(localStorage.getItem('matcom_data') || 'null'),
+  matcomMonthly: JSON.parse(localStorage.getItem('matcom_monthly') || 'null'),
   realNameData: JSON.parse(localStorage.getItem('realname_data') || '{}'),
   masterData: JSON.parse(localStorage.getItem('master_data') || 'null'),
   projectionData: [],
@@ -2019,6 +2013,48 @@ async function loadGRPO() {
     _setSyncItem('grpo', 'err');
     if(tbl) tbl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
     toast('GRPO gagal: ' + e.message, 'err');
+  }
+}
+
+// ─── Load Matcom dari SAP (Report 80) ────────────────────────────────────────
+async function loadMatcomSAP() {
+  _setSyncItem('matcom', 'loading');
+  try {
+    var startDate = '2026-04-01T00:00:00.000Z';
+    var endDate   = '2026-12-31T00:00:00.000Z';
+    var raw = await sapFetchTO(80, { '[%0]': startDate, '[%1]': endDate });
+    if(!Array.isArray(raw)) throw new Error('Format data tidak valid');
+
+    // raw: [{ItemCode, DocDate, Quantity, ...}]
+    // Group by ItemCode → per month sum
+    var byItem = {};
+    raw.forEach(function(r) {
+      var code = (r.ItemCode || r.itemCode || '').toString().trim();
+      if(!code || !/^\d/.test(code)) return;
+      var qty  = parseFloat(r.Quantity || r.quantity || 0) || 0;
+      var dateStr = r.DocDate || r.docDate || r.Date || '';
+      // Parse month from date (various formats)
+      var mo = 0;
+      if(dateStr) {
+        var d = new Date(dateStr);
+        if(!isNaN(d)) mo = d.getMonth() + 1;  // 1-12
+      }
+      if(!mo) return;
+      if(!byItem[code]) byItem[code] = {};
+      byItem[code][mo] = (byItem[code][mo] || 0) + qty;
+    });
+
+    // Store as matcomMonthly: { itemCode: { 4: qty, 5: qty, ... } }
+    STATE.matcomMonthly = byItem;
+    localStorage.setItem('matcom_monthly', JSON.stringify(byItem));
+    var cnt = Object.keys(byItem).length;
+    toast('Matcom ' + cnt + ' item ✓', 'ok');
+    _setSyncItem('matcom', 'ok');
+    renderForecast();
+  } catch(e) {
+    _setSyncItem('matcom', 'err');
+    toast('Matcom gagal: ' + e.message, 'err');
+    throw e;
   }
 }
 
@@ -6029,17 +6065,13 @@ function _fcRealtimeToggle() {
 }
 
 function _calcForecast(code, ospoIdx) {
-  // ── Snapshot date ─────────────────────────────────────────────────────────
-  var realtimeCb = document.getElementById('fc-soh-realtime');
-  var isRealtime = !realtimeCb || realtimeCb.checked;  // default realtime
-  var todayISO = new Date().toISOString().split('T')[0];
-  var snapSel  = (!isRealtime && (document.getElementById('fc-soh-date')||{}).value) || '';
-  var snapDate = snapSel || todayISO;
-
-  var snapD   = new Date(snapDate + 'T00:00:00'); snapD.setHours(0,0,0,0);
-  var snapYear= snapD.getFullYear();
-  var snapMon = snapD.getMonth() + 1; // 1-12
-  var nowReal = new Date(); nowReal.setHours(0,0,0,0);
+  // ── Always realtime SOH ──────────────────────────────────────────────────
+  var isRealtime = true;
+  var nowReal  = new Date(); nowReal.setHours(0,0,0,0);
+  var snapDate = nowReal.toISOString().split('T')[0];
+  var snapD    = nowReal;
+  var snapYear = nowReal.getFullYear();
+  var snapMon  = nowReal.getMonth() + 1; // 1-12
 
   var maxDOI  = _fcGetDOI();
   var master  = (STATE.masterData || {})[code] || {};
@@ -6051,21 +6083,22 @@ function _calcForecast(code, ospoIdx) {
   var multiple = master.multiple || 1;
 
   // ── SOH dari snapshot ─────────────────────────────────────────────────────
-  var stockRaw;
-  if(isRealtime || !snapSel) {
-    stockRaw = (STATE.stockData || {})[code] || {};
-  } else {
-    var histSnap = (STATE.stockHistory || {})[snapDate];
-    if(!histSnap) { stockRaw = {}; /* snapshot tgl ini tidak ada */ }
-    else { stockRaw = histSnap[code] || {}; }
-  }
+  var stockRaw = (STATE.stockData || {})[code] || {};
   var soh = (stockRaw.btg || 0) + (stockRaw.sng || 0);
 
   var curYear = snapYear;
   var ospr_total = (STATE.osprByItem || {})[code] || 0;
 
-  // Forecast per month
-  var forecast = FC_MONTHS.map(function(m) { return (mrp.months && mrp.months[m]) || 0; });
+  // Forecast per month = MRP - matcom already consumed
+  // For snapshot month: subtract matcom up to snapDate; past months: skip (already consumed)
+  var matcomM = (STATE.matcomMonthly || {})[code] || {};
+  var forecast = FC_MONTHS.map(function(m, i) {
+    var mrpVal = (mrp.months && mrp.months[m]) || 0;
+    var moNum  = FC_MONTH_NUMS[i];
+    // Subtract actual matcom for this month
+    var consumed = matcomM[moNum] || 0;
+    return Math.max(0, mrpVal - consumed);
+  });
 
   // OSPO per month
   var ospo = FC_MONTHS.map(function(_, i) {
@@ -6260,11 +6293,9 @@ function renderForecast(isGenerate) {
 
   var info = document.getElementById('fc-table-info');
   var syncTs = localStorage.getItem('last_sync') || '';
-  var snapSelVal = (!isRealtime && (document.getElementById('fc-soh-date')||{}).value)||'';
-  var snapLabel = (!isRealtime && snapSelVal)
-    ? 'SOH: <b>Snapshot '+snapSelVal.split('-').reverse().join('/')+'</b>'
-    : (syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)');
-  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + '</span>'
+  var snapLabel = syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)';
+  var matcomTs  = STATE.matcomMonthly ? ' &nbsp;·&nbsp; Matcom: <b>'+Object.keys(STATE.matcomMonthly).length+' item</b>' : ' &nbsp;·&nbsp; <span style="color:var(--amber)">Matcom belum dimuat</span>';
+  if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + matcomTs + '</span>'
     + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
 
   if(!allItems.length) {
@@ -6708,15 +6739,25 @@ function _fcResetPropose() {
 
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
 function _fcProposeStep(code, mi, delta) {
-  var detEl = document.getElementById('fc-detail-'+code);
-  if(!detEl) return;
-  var inputs = detEl.querySelectorAll('input[data-code="'+code+'"][data-mi="'+mi+'"]');
-  if(!inputs.length) return;
-  var inp = inputs[0];
+  // Find input anywhere in the document for this code+mi
+  var inp = document.querySelector('input[data-code="'+code+'"][data-mi="'+mi+'"]');
+  if(!inp) return;
+  var multiple = parseFloat(inp.getAttribute('data-moq')) || 1;
   var cur = parseFloat(inp.value) || 0;
-  var newVal = Math.max(0, cur + delta);
+  // Snap to nearest multiple before stepping
+  var snapped = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
+  var newVal = Math.max(0, snapped + delta);
   inp.value = newVal;
   _fcProposeEdit(inp);
+  // Update visual border on wrapper
+  var wrap = inp.closest ? inp.closest('div[style*="inline-flex"]') : inp.parentNode && inp.parentNode.parentNode;
+  if(wrap) {
+    var bdr = newVal > 0 ? 'rgba(245,158,11,.4)' : 'var(--border2)';
+    wrap.style.borderColor = bdr;
+    wrap.style.background  = newVal > 0 ? 'var(--amber-bg)' : 'var(--bg3)';
+    var arrows = wrap.querySelector('div');
+    if(arrows) arrows.style.borderColor = bdr;
+  }
 }
 
 function _fcProposeEdit(input) {
@@ -6726,14 +6767,13 @@ function _fcProposeEdit(input) {
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
   _fcPropose[code][mi] = qty;
-  // MOQ validation — notif kalau tidak kelipatan MOQ
-  if(qty > 0 && moqV > 1 && qty % moqV !== 0) {
-    input.style.border = '1.5px solid var(--red)';
-    input.title = 'Qty harus kelipatan MOQ (' + n_id(moqV) + ')';
-    // show small toast hint
-    toast('Qty ' + n_id(qty) + ' bukan kelipatan MOQ ' + n_id(moqV), 'err');
+  // Multiple validation
+  if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
+    input.style.outline = '1.5px solid var(--red)';
+    input.title = 'Qty harus kelipatan ' + n_id(moqV);
+    toast('Qty ' + n_id(qty) + ' bukan kelipatan ' + n_id(moqV), 'err');
   } else {
-    input.style.border = 'none';
+    input.style.outline = 'none';
     input.title = '';
   }
   // Update input style based on value
