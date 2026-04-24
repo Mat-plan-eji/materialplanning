@@ -731,6 +731,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <span id="fc-matcom-badge" style="display:none;font-size:10.5px;background:var(--teal-bg,rgba(20,184,166,.1));color:var(--teal);border:1px solid rgba(20,184,166,.25);border-radius:var(--r);padding:3px 9px;font-weight:600"></span>
       <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
       <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
+      <button id="fc-view-toggle" class="btn btn-sm" onclick="_fcToggleGridView()" style="font-size:11px" title="Switch tampilan Aktual / Forecast">⇄ Aktual</button>
       <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
       <button class="btn btn-sm" onclick="_fcExportModal('detail')" style="font-size:11px">↓ Export</button>
     </div>
@@ -5981,9 +5982,10 @@ var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
 var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
 var _fcView      = 'detail';
 var _fcExpanded  = {};
-var _fcGridView  = {};  // { code: 'forecast' } — default 'ringkas'
-var _fcPropose     = (function(){ try{ return JSON.parse(localStorage.getItem('fc_propose')||'{}'); }catch(e){return {};} })();
-var _fcAutoPropose = localStorage.getItem('fc_autopropose') === '1';
+var _fcGridViewMode = 'aktual'; // 'aktual' | 'forecast' — global
+var _fcPropose       = (function(){ try{ return JSON.parse(localStorage.getItem('fc_propose')||'{}'); }catch(e){return {};} })();
+var _fcAutoPropose   = localStorage.getItem('fc_autopropose') === '1';
+var _fcOspoOverride  = (function(){ try{ return JSON.parse(localStorage.getItem('fc_ospo_ovr')||'{}'); }catch(e){return {};} })();
 var _fcDOI       = 30;
 
 function _fcGetDOI() {
@@ -6112,10 +6114,14 @@ function _calcForecast(code, ospoIdx) {
     return Math.max(0, mrpVal - consumed);
   });
 
-  // OSPO per month
-  var ospo = FC_MONTHS.map(function(_, i) {
+  // OSPO per month — manual override jika ada
+  var ospoBase = FC_MONTHS.map(function(_, i) {
     var yyyymm = curYear * 100 + FC_MONTH_NUMS[i];
     return ((ospoIdx[code] || {})[yyyymm]) || 0;
+  });
+  var ospoOvr = _fcOspoOverride[code] || null;
+  var ospo = ospoBase.map(function(v, i) {
+    return (ospoOvr && ospoOvr[i] != null) ? ospoOvr[i] : v;
   });
 
   // OSPR per month
@@ -6263,7 +6269,7 @@ function _calcForecast(code, ospoIdx) {
   }
 
   return {
-    forecast: forecast, ospo: ospo, ospr: ospr,
+    forecast: forecast, ospo: ospo, ospoBase: ospoBase, ospr: ospr,
     stock: stockProj, doi: doi,
     forecastOspo: forecastOspo, stockFc: stockFc, doiFc: doiFc,
     propose: totalProp,
@@ -6293,6 +6299,9 @@ function generateProposePR() {
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
   var isRealtime = true;
+  // Sync view toggle button label
+  var _vtBtn = document.getElementById('fc-view-toggle');
+  if(_vtBtn) _vtBtn.textContent = '⇄ ' + (_fcGridViewMode === 'forecast' ? 'Forecast' : 'Aktual');
   // Restore matcom badge
   var _mcnt = localStorage.getItem('matcom_count');
   var _mbadge = document.getElementById('fc-matcom-badge');
@@ -6494,6 +6503,36 @@ function _fcDetailRow(code, fc, master) {
     return '<th style="text-align:right;padding:6px 5px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap">'+m.slice(0,3)+" '"+yr2+'</th>';
   }).join('');
 
+  // Editable OSPO row — shows different color when manually edited
+  function gRowOspo(label, vals, baseVals, itemCode) {
+    var cells = vals.map(function(v, i) {
+      var base    = baseVals[i] || 0;
+      var isEdited = (_fcOspoOverride[itemCode] && _fcOspoOverride[itemCode][i] != null);
+      var cur     = Math.round(v) || 0;
+      var haVal   = cur > 0;
+      // Colors: teal = SAP original, purple = manually edited
+      var bdr      = isEdited ? 'rgba(139,92,246,.4)' : (haVal ? 'rgba(20,184,166,.3)' : 'var(--border2)');
+      var inp_clr  = isEdited ? 'var(--purple,#8b5cf6)' : (haVal ? 'var(--teal)' : 'var(--muted)');
+      var inp_wt   = haVal ? '600' : '400';
+      var inp_bg   = isEdited ? 'rgba(139,92,246,.08)' : (haVal ? 'rgba(20,184,166,.06)' : 'var(--bg3)');
+      var step     = fc.multiple || 1;
+      return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
+        + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
+        + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'"'
+        +   ' data-code="'+itemCode+'" data-mi="'+i+'" data-step="'+step+'" data-base="'+base+'"'
+        +   ' oninput="_fcOspoEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+        +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_wt+';color:'+inp_clr+';background:transparent;border:none;padding:3px 4px;outline:none"'
+        +   ' title="'+(isEdited ? 'SAP: '+n_id(Math.round(base))+' (diedit manual)' : 'Klik untuk edit')+'">'
+        + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
+        + '<button type="button" tabindex="-1" data-code="'+itemCode+'" data-mi="'+i+'" data-step="'+step+'" onclick="event.stopPropagation();_fcOspoStep(this)" onmousedown="event.stopPropagation()" style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
+        + '<button type="button" tabindex="-1" data-code="'+itemCode+'" data-mi="'+i+'" data-step="'+(-step)+'" onclick="event.stopPropagation();_fcOspoStep(this)" onmousedown="event.stopPropagation()" style="flex:1;border:none;border-top:1px solid '+bdr+';background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9660;</button>'
+        + '</div></div></td>';
+    }).join('');
+    return '<tr style="border-bottom:1px dotted var(--border)">'
+      + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
+      + cells + '</tr>';
+  }
+
   function gRow(label, vals, clsFn, editable, fieldCode) {
     var cells = vals.map(function(v, i) {
       if(editable) {
@@ -6506,20 +6545,20 @@ function _fcDetailRow(code, fc, master) {
         var inp_color = haVal ? 'var(--amber)' : 'var(--muted)';
         var inp_weight = haVal ? '700' : '400';
         var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
-        return '<td style="padding:2px 3px" onclick="event.stopPropagation()">'
+        return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
           + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'"'
           +   ' data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
-          +   ' oninput="_fcProposeEdit(this)"'
+          +   ' oninput="_fcProposeEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
           +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
           + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
           +   '<button type="button" tabindex="-1"'
           +     ' data-code="'+fieldCode+'" data-mi="'+i+'" data-step="'+moqV+'"'
-          +     ' onclick="_fcStepBtn(this)"'
+          +     ' onclick="event.stopPropagation();_fcStepBtn(this)" onmousedown="event.stopPropagation()"'
           +     ' style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
           +   '<button type="button" tabindex="-1"'
           +     ' data-code="'+fieldCode+'" data-mi="'+i+'" data-step="'+(-moqV)+'"'
-          +     ' onclick="_fcStepBtn(this)"'
+          +     ' onclick="event.stopPropagation();_fcStepBtn(this)" onmousedown="event.stopPropagation()"'
           +     ' style="flex:1;border:none;border-top:1px solid '+bdr+';background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9660;</button>'
           + '</div>'
           + '</div></td>'
@@ -6533,7 +6572,7 @@ function _fcDetailRow(code, fc, master) {
       + cells + '</tr>';
   }
 
-  var isFcView = (_fcGridView[code] === 'forecast');
+  var isFcView = (_fcGridViewMode === 'forecast');
   var stockClsFn = function(v,i){
     var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
     return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
@@ -6547,7 +6586,7 @@ function _fcDetailRow(code, fc, master) {
     + (isFcView
       ? 'background:rgba(20,184,166,.12);color:var(--teal);border-color:rgba(20,184,166,.3)">'
       : 'background:var(--bg4);color:var(--muted);border-color:var(--border)">')
-    + (isFcView ? '⇄ Forecast' : '⇄ Ringkas')
+    + (isFcView ? '⇄ Forecast' : '⇄ Aktual')
     + '</button>';
 
   var grid = '<div style="overflow-x:auto;margin-top:10px">'
@@ -6561,12 +6600,9 @@ function _fcDetailRow(code, fc, master) {
     + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
     + (isFcView
         ? gRow('Forecast OSPO', fc.forecastOspo, function(v){ return v>0?'color:var(--teal);font-weight:600':'color:var(--hint)'; })
-        : gRow('OSPO', fc.ospo, function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
+        : gRowOspo('OSPO', fc.ospo, fc.ospoBase, code)
       )
-    + (isFcView
-        ? ''
-        : gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
-      )
+    + gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
     + gRow('Stock (Ending)', isFcView ? fc.stockFc : fc.stock, stockClsFn)
     + gRow('DOI (hari)',     isFcView ? fc.doiFc   : fc.doi,   doiClsFn)
     + gRow('Propose PR', fc.propose, null, true, code)
@@ -6804,8 +6840,8 @@ function _fcToggle(code) {
   }, 50);
 }
 function _fcToggleDetail(code) { _fcToggle(code); }
-function _fcToggleGridView(code) {
-  _fcGridView[code] = (_fcGridView[code] === 'forecast') ? 'ringkas' : 'forecast';
+function _fcToggleGridView() {
+  _fcGridViewMode = (_fcGridViewMode === 'forecast') ? 'aktual' : 'forecast';
   renderForecast();
 }
 
@@ -6820,6 +6856,35 @@ function _fcResetPropose() {
 }
 
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
+// ─── OSPO override edit ──────────────────────────────────────────────────────
+function _fcOspoEdit(input) {
+  var code = input.getAttribute('data-code');
+  var mi   = parseInt(input.getAttribute('data-mi'));
+  var base = parseFloat(input.getAttribute('data-base')) || 0;
+  var qty  = parseFloat(input.value) || 0;
+  if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(9).fill(null);
+  // If same as base, clear override
+  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
+  try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
+  // Update input style
+  var isEdited = (_fcOspoOverride[code][mi] != null);
+  input.style.color  = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
+  input.style.fontWeight = qty > 0 ? '600' : '400';
+}
+
+function _fcOspoStep(btn) {
+  var wrap = btn.parentNode && btn.parentNode.parentNode;
+  var inp  = wrap ? wrap.querySelector('input[data-code][data-mi]') : null;
+  if(!inp) return;
+  var step    = parseFloat(btn.getAttribute('data-step')) || 1;
+  var multiple = Math.abs(step);
+  var cur     = parseFloat(inp.value) || 0;
+  var snapped = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
+  var newVal  = Math.max(0, snapped + step);
+  inp.value   = newVal;
+  _fcOspoEdit(inp);
+}
+
 // ─── Arrow button click handler — safe, uses data-* attrs ───────────────────
 function _fcStepBtn(btn) {
   var code  = btn.getAttribute('data-code');
