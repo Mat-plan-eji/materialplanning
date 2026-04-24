@@ -727,7 +727,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
 
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-      <button class="btn btn-sm" onclick="loadMatcomSAP()" style="font-size:11px" title="Tarik Material Consumption dari SAP (Apr–Des 2026)">↺ Sync Matcom</button>
+      <button class="btn btn-sm" id="fc-matcom-btn" onclick="loadMatcomSAP()" style="font-size:11px" title="Tarik Material Consumption dari SAP (Apr–Des 2026)">↺ Sync Matcom</button>
+      <span id="fc-matcom-badge" style="display:none;font-size:10.5px;background:var(--teal-bg,rgba(20,184,166,.1));color:var(--teal);border:1px solid rgba(20,184,166,.25);border-radius:var(--r);padding:3px 9px;font-weight:600"></span>
       <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
       <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
       <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
@@ -2048,6 +2049,12 @@ async function loadMatcomSAP() {
     STATE.matcomMonthly = byItem;
     localStorage.setItem('matcom_monthly', JSON.stringify(byItem));
     var cnt = Object.keys(byItem).length;
+    // Show badge
+    var badge = document.getElementById('fc-matcom-badge');
+    if(badge) { badge.textContent = '✓ Matcom '+cnt+' item'; badge.style.display='inline'; }
+    var btn2 = document.getElementById('fc-matcom-btn');
+    if(btn2) btn2.textContent = '✓ Matcom';
+    localStorage.setItem('matcom_count', cnt);
     toast('Matcom ' + cnt + ' item ✓', 'ok');
     _setSyncItem('matcom', 'ok');
     renderForecast();
@@ -6252,9 +6259,14 @@ function generateProposePR() {
 
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
-  // isRealtime must be defined here too (also used in info label + _calcForecast)
-  var _rtCb = document.getElementById('fc-soh-realtime');
-  var isRealtime = !_rtCb || _rtCb.checked;
+  var isRealtime = true;
+  // Restore matcom badge
+  var _mcnt = localStorage.getItem('matcom_count');
+  var _mbadge = document.getElementById('fc-matcom-badge');
+  if(_mbadge && STATE.matcomMonthly && _mcnt) {
+    _mbadge.textContent = '✓ Matcom '+_mcnt+' item'; _mbadge.style.display='inline';
+    var _mbtn = document.getElementById('fc-matcom-btn'); if(_mbtn) _mbtn.textContent='✓ Matcom';
+  }
   var el = document.getElementById('fc-table');
   if(!el) return;
   if(!STATE.masterData || !STATE.mrpData) {
@@ -6408,9 +6420,15 @@ function _fcDetailRow(code, fc, master) {
 
   // Meta panel
   var meta = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">';
+  var matcomM = (STATE.matcomMonthly || {})[code] || {};
+  var matcomApril = matcomM[4] || 0; // bulan berjalan (April)
+  var matcomRow = matcomApril > 0
+    ? ['Matcom Apr','<span style="color:var(--teal);font-weight:600">'+n_id(Math.round(matcomApril))+'</span> <small style="color:var(--muted)">'+(master.uom||'')+'</small>']
+    : null;
   var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
     ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
     ['SOH',n_id(Math.round(fc.soh))],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
+  if(matcomRow) mRows.splice(mRows.length-1, 0, matcomRow);
   if(rn && _isAdmin) mRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
   mRows.forEach(function(r){
     meta += '<dt style="color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:2px">'+r[0]+'</dt>'
@@ -6455,16 +6473,20 @@ function _fcDetailRow(code, fc, master) {
         var inp_color = haVal ? 'var(--amber)' : 'var(--muted)';
         var inp_weight = haVal ? '700' : '400';
         var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
-        var codeJ = JSON.stringify(fieldCode);
         return '<td style="padding:2px 3px" onclick="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'" data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
+          + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'"'
+          +   ' data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
           +   ' oninput="_fcProposeEdit(this)"'
           +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
           + '<div style="display:flex;flex-direction:column;width:14px;border-left:1px solid '+bdr+'">'
-          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+moqV+')" tabindex="-1"'
+          +   '<button type="button" tabindex="-1"'
+          +     ' data-code="'+fieldCode+'" data-mi="'+i+'" data-step="'+moqV+'"'
+          +     ' onclick="_fcStepBtn(this)"'
           +     ' style="flex:1;border:none;background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9650;</button>'
-          +   '<button type="button" onclick="_fcProposeStep('+codeJ+','+i+','+(-moqV)+')" tabindex="-1"'
+          +   '<button type="button" tabindex="-1"'
+          +     ' data-code="'+fieldCode+'" data-mi="'+i+'" data-step="'+(-moqV)+'"'
+          +     ' onclick="_fcStepBtn(this)"'
           +     ' style="flex:1;border:none;border-top:1px solid '+bdr+';background:transparent;cursor:pointer;padding:0;color:var(--muted);font-size:8px;line-height:1;display:flex;align-items:center;justify-content:center">&#9660;</button>'
           + '</div>'
           + '</div></td>'
@@ -6738,6 +6760,24 @@ function _fcResetPropose() {
 }
 
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
+// ─── Arrow button click handler — safe, uses data-* attrs ───────────────────
+function _fcStepBtn(btn) {
+  var code  = btn.getAttribute('data-code');
+  var mi    = parseInt(btn.getAttribute('data-mi'));
+  var delta = parseFloat(btn.getAttribute('data-step')) || 0;
+  // Find the sibling input in the same wrapper
+  var wrap  = btn.parentNode && btn.parentNode.parentNode; // div.arrows → div.wrapper
+  var inp   = wrap ? wrap.querySelector('input[data-code][data-mi]') : null;
+  if(!inp) return;
+  var multiple = parseFloat(inp.getAttribute('data-moq')) || 1;
+  var cur      = parseFloat(inp.value) || 0;
+  // Snap to nearest multiple before stepping
+  var snapped  = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
+  var newVal   = Math.max(0, snapped + delta);
+  inp.value    = newVal;
+  _fcProposeEdit(inp);
+}
+
 function _fcProposeStep(code, mi, delta) {
   // Find input anywhere in the document for this code+mi
   var inp = document.querySelector('input[data-code="'+code+'"][data-mi="'+mi+'"]');
