@@ -2026,24 +2026,53 @@ async function loadMatcomSAP() {
     var raw = await sapFetchTO(80, { '[%0]': startDate, '[%1]': endDate });
     if(!Array.isArray(raw)) throw new Error('Format data tidak valid');
 
-    // raw: [{ItemCode, DocDate, Quantity, ...}]
+    // Debug: log first 2 rows to see field names
+    if(raw.length > 0) {
+      console.log('[Matcom] total rows:', raw.length);
+      console.log('[Matcom] sample row 0:', JSON.stringify(raw[0]));
+      if(raw.length > 1) console.log('[Matcom] sample row 1:', JSON.stringify(raw[1]));
+    } else {
+      console.warn('[Matcom] API returned empty array');
+    }
+
     // Group by ItemCode → per month sum
+    // Try all possible field names from SAP
     var byItem = {};
     raw.forEach(function(r) {
-      var code = (r.ItemCode || r.itemCode || '').toString().trim();
+      // Find item code — try many field names
+      var code = (r.ItemCode || r.itemCode || r.Item_Code || r.item_code
+               || r.MaterialCode || r.material_code || r.Code || r.code || '').toString().trim();
       if(!code || !/^\d/.test(code)) return;
-      var qty  = parseFloat(r.Quantity || r.quantity || 0) || 0;
-      var dateStr = r.DocDate || r.docDate || r.Date || '';
-      // Parse month from date (various formats)
+
+      // Find qty — try many field names
+      var qty = parseFloat(
+        r.Quantity != null ? r.Quantity :
+        r.quantity != null ? r.quantity :
+        r.Qty      != null ? r.Qty      :
+        r.qty      != null ? r.qty      :
+        r.ActualQty!= null ? r.ActualQty:
+        r.ConsumptionQty != null ? r.ConsumptionQty : 0
+      ) || 0;
+
+      // Find date — try many field names
+      var dateStr = r.DocDate || r.docDate || r.PostingDate || r.postingDate
+                 || r.Date || r.date || r.TransDate || '';
       var mo = 0;
       if(dateStr) {
         var d = new Date(dateStr);
-        if(!isNaN(d)) mo = d.getMonth() + 1;  // 1-12
+        if(!isNaN(d)) mo = d.getMonth() + 1;
       }
-      if(!mo) return;
+      if(!mo) {
+        // Try parse dd/mm/yyyy or mm/yyyy
+        var parts = String(dateStr).split(/[-\/]/);
+        if(parts.length >= 2) mo = parseInt(parts[1]) || parseInt(parts[0]);
+      }
+      if(!mo || mo < 4 || mo > 12) return; // hanya Apr-Des
+
       if(!byItem[code]) byItem[code] = {};
       byItem[code][mo] = (byItem[code][mo] || 0) + qty;
     });
+    console.log('[Matcom] parsed items:', Object.keys(byItem).length, 'sample:', JSON.stringify(Object.entries(byItem).slice(0,2)));
 
     // Store as matcomMonthly: { itemCode: { 4: qty, 5: qty, ... } }
     STATE.matcomMonthly = byItem;
