@@ -2019,6 +2019,8 @@ async function loadGRPO() {
 
 // ─── Load Matcom dari SAP (Report 80) ────────────────────────────────────────
 async function loadMatcomSAP() {
+  var _mbtn = document.getElementById('fc-matcom-btn');
+  if(_mbtn) { _mbtn.disabled = true; _mbtn.textContent = '⏳ Loading...'; }
   _setSyncItem('matcom', 'loading');
   try {
     var startDate = '2026-04-01T00:00:00.000Z';
@@ -2080,14 +2082,14 @@ async function loadMatcomSAP() {
     var cnt = Object.keys(byItem).length;
     // Show badge
     var badge = document.getElementById('fc-matcom-badge');
-    if(badge) { badge.textContent = '✓ Matcom '+cnt+' item'; badge.style.display='inline'; }
-    var btn2 = document.getElementById('fc-matcom-btn');
-    if(btn2) btn2.textContent = '✓ Matcom';
+    if(badge) { badge.textContent = '✓ '+cnt+' item'; badge.style.display='inline'; }
     localStorage.setItem('matcom_count', cnt);
     toast('Matcom ' + cnt + ' item ✓', 'ok');
+    if(_mbtn) { _mbtn.disabled = false; _mbtn.textContent = '↺ Sync Matcom'; }
     _setSyncItem('matcom', 'ok');
     renderForecast();
   } catch(e) {
+    if(_mbtn) { _mbtn.disabled = false; _mbtn.textContent = '↺ Sync Matcom'; }
     _setSyncItem('matcom', 'err');
     toast('Matcom gagal: ' + e.message, 'err');
     throw e;
@@ -6294,7 +6296,7 @@ function renderForecast(isGenerate) {
   var _mbadge = document.getElementById('fc-matcom-badge');
   if(_mbadge && STATE.matcomMonthly && _mcnt) {
     _mbadge.textContent = '✓ Matcom '+_mcnt+' item'; _mbadge.style.display='inline';
-    var _mbtn = document.getElementById('fc-matcom-btn'); if(_mbtn) _mbtn.textContent='✓ Matcom';
+    // button text stays as "↺ Sync Matcom" always
   }
   var el = document.getElementById('fc-table');
   if(!el) return;
