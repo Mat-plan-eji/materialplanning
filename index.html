@@ -6160,7 +6160,7 @@ function _calcForecast(code, ospoIdx) {
   var usageToD     = Math.max(0, stockAwalM + grpoToD - soh);
   var remainingMRP = Math.max(0, mrpSnapMo - usageToD);
 
-  // ── Stock projection ──────────────────────────────────────────────────────
+  // ── Stock projection (pakai OSPO asli) ───────────────────────────────────
   var stockProj = new Array(9).fill(0);
   for(var pre=0; pre<snapMoIdx; pre++) { stockProj[pre] = 0; }
   stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] - remainingMRP;
@@ -6168,77 +6168,105 @@ function _calcForecast(code, ospoIdx) {
     stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] - forecast[m];
   }
 
-  // ── Manual propose overrides ───────────────────────────────────────────────
-  var manProp = (_fcPropose[code] || new Array(9).fill(0)).slice();
-
-  // Apply manual propose (delivery in same month as propose col)
-  var stockM = stockProj.slice();
-  for(var pm = 0; pm < 9; pm++) {
-    if(manProp[pm] > 0) {
-      for(var n = pm; n < 9; n++) stockM[n] += manProp[pm];
-    }
+  var WD = 25; // hari kerja per bulan
+  function calcDOI(stockArr) {
+    return FC_MONTHS.map(function(_, i) {
+      var s  = stockArr[i]; if(s <= 0) return 0;
+      var r0 = forecast[i]   || 0;
+      var r1 = forecast[i+1] || 0;
+      var r2 = forecast[i+2] || 0;
+      if(r0 <= 0 && r1 <= 0) return s > 0 ? 999 : 0;
+      if(r0 > 0 && s < r0)   return Math.round(s / r0 * WD);
+      var s1 = s - r0;
+      if(r1 > 0 && s1 < r1)  return Math.round(WD + s1 / r1 * WD);
+      var s2 = s1 - r1;
+      if(r2 > 0)              return Math.round(WD + WD + s2 / r2 * WD);
+      return s2 > 0 ? 999 : WD + WD;
+    });
   }
 
-  // ── Auto propose (hanya kalau _fcAutoPropose = true) ────────────────────────
-  var autoProp = new Array(9).fill(0);
-  var stockF   = stockM.slice();
-  if(_fcAutoPropose) {
-    for(var m2 = 0; m2 < 9; m2++) {
-      var daily   = forecast[m2] > 0 ? forecast[m2] / FC_DAYS[m2] : 0;
-      var minSt   = maxDOI * daily;
-      if(stockF[m2] < minSt) {
-        var shortage = minSt - stockF[m2];
-        var qty = shortage;
-        // Step by MOQ (bukan multiple)
-        if(moq > 0) qty = Math.ceil(qty / moq) * moq;
-        else if(multiple > 0) qty = Math.ceil(qty / multiple) * multiple;
-        if(qty <= 0) continue;
-        autoProp[m2] += qty;
-        for(var n2 = m2; n2 < 9; n2++) stockF[n2] += qty;
+  // DOI dari OSPO asli (baris DOI existing)
+  var doi = calcDOI(stockProj);
+
+  // ── Forecast OSPO — realokasi pool OSPO untuk jaga DOI target ────────────
+  // Pool = total semua OSPO yang ada
+  var ospoPool = ospo.reduce(function(a,v){ return a+v; }, 0);
+  var forecastOspo  = new Array(9).fill(0);
+  var stockFc       = new Array(9).fill(0);
+  var proposeAuto   = new Array(9).fill(0); // propose setelah pool habis
+
+  // Bulan paling awal yang bisa di-deliver (hari ini + LT)
+  var earliestDelivIdx = 8;
+  for(var ei = 0; ei < 9; ei++) {
+    var ed = new Date(curYear, FC_MONTH_NUMS[ei]-1, 1);
+    var prDate = new Date(ed); prDate.setDate(prDate.getDate() - lt_days);
+    if(prDate >= nowReal) { earliestDelivIdx = ei; break; }
+  }
+
+  var prevStFc = soh;
+  for(var fm = snapMoIdx; fm < 9; fm++) {
+    var req_m  = forecast[fm];
+    var ospr_m = ospr[fm];
+    var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
+    // Berapa yg harus datang bulan ini agar stock ending >= minSt
+    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m);
+    var step   = multiple > 0 ? multiple : 1;
+    var neededR = needed > 0 ? Math.ceil(needed / step) * step : 0;
+
+    // Ambil dari pool OSPO
+    var fromPool = Math.min(neededR, ospoPool);
+    ospoPool -= fromPool;
+    forecastOspo[fm] = fromPool;
+
+    // Sisa shortage setelah pool → propose PR di bulan paling awal feasible
+    var remainShort = needed - fromPool;
+    if(remainShort > 0 && _fcAutoPropose) {
+      var propIdx = Math.max(fm, earliestDelivIdx);
+      if(propIdx < 9) {
+        var propQty = Math.ceil(remainShort / step) * step;
+        proposeAuto[propIdx] += propQty;
       }
     }
+
+    stockFc[fm] = prevStFc + forecastOspo[fm] + ospr_m - req_m;
+    prevStFc = stockFc[fm];
   }
 
-  // Total propose (delivery month)
-  var totalProp = FC_MONTHS.map(function(_, i) { return manProp[i] + autoProp[i]; });
+  // DOI dari Forecast OSPO (baris DOI Forecast)
+  var doiFc = calcDOI(stockFc);
 
-  // DOI
-  var doi = FC_MONTHS.map(function(_, i) {
-    var daily2 = forecast[i] > 0 ? forecast[i] / FC_DAYS[i] : 0;
-    return daily2 > 0 ? Math.round(stockF[i] / daily2) : (stockF[i] > 0 ? 999 : 0);
+  // ── Manual propose overrides ──────────────────────────────────────────────
+  var manProp = (_fcPropose[code] || new Array(9).fill(0)).slice();
+
+  // Total propose: manual override prioritas, lalu auto
+  var totalProp = FC_MONTHS.map(function(_, i) {
+    if(manProp[i] > 0) return manProp[i];
+    return _fcAutoPropose ? proposeAuto[i] : 0;
   });
 
-  // ── Tgl Create PR for each propose month ─────────────────────────────────
-  // PR issued = first day of delivery month - lt_days
+  // ── Tgl Create PR ─────────────────────────────────────────────────────────
   var suggestions = [];
   for(var si = 0; si < 9; si++) {
     if(totalProp[si] <= 0) continue;
-    // Delivery = 1st of month si
-    var delivYr = curYear;
-    var delivMo = FC_MONTH_NUMS[si];
-    var delivDate = new Date(delivYr, delivMo - 1, 1);
-    // Create PR = delivDate - lt_days
-    var createPR = new Date(delivDate);
+    var delivDate = new Date(curYear, FC_MONTH_NUMS[si]-1, 1);
+    var createPR  = new Date(delivDate);
     createPR.setDate(createPR.getDate() - lt_days);
     var daysLeft = Math.round((createPR - nowReal) / 86400000);
     suggestions.push({
-      proposeIdx: si,
-      proposeMonth: FC_MONTHS[si],
-      delivDate: delivDate,
-      qty: totalProp[si],
-      createPRBy: createPR,
-      daysLeft: daysLeft,
-      isUrgent: daysLeft >= 0 && daysLeft <= 7,
+      proposeIdx: si, proposeMonth: FC_MONTHS[si],
+      delivDate: delivDate, qty: totalProp[si],
+      createPRBy: createPR, daysLeft: daysLeft,
+      isUrgent:  daysLeft >= 0 && daysLeft <= 7,
       isOverdue: daysLeft < 0
     });
   }
 
   return {
     forecast: forecast, ospo: ospo, ospr: ospr,
-    stock: stockF, stockBase: stockProj,
-    doi: doi, propose: totalProp,
-    lt_days: lt_days, lt_mo: lt_mo,
-    moq: moq, multiple: multiple, maxDOI: maxDOI,
+    stock: stockProj, doi: doi,
+    forecastOspo: forecastOspo, stockFc: stockFc, doiFc: doiFc,
+    propose: totalProp,
+    lt_days: lt_days, moq: moq, multiple: multiple, maxDOI: maxDOI,
     soh: soh, suggestions: suggestions
   };
 }
@@ -6508,17 +6536,25 @@ function _fcDetailRow(code, fc, master) {
     + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<thead><tr><th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'+mhdr+'</tr></thead>'
     + '<tbody>'
-    + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
-    + gRow('OSPO', fc.ospo, function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
-    + gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
-    + gRow('Stock (Ending)', fc.stock, function(v,i){
-        var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0, minS=_fcGetDOI()*daily;
+    + gRow('Requirement',     fc.forecast, function(){ return 'color:var(--text)'; })
+    + gRow('OSPO',             fc.ospo,     function(v){ return v>0?'color:var(--teal)':'color:var(--hint)'; })
+    + gRow('OSPR',             fc.ospr,     function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
+    + gRow('Forecast OSPO',   fc.forecastOspo, function(v){ return v>0?'color:var(--teal);font-weight:600':'color:var(--hint)'; })
+    + gRow('Stock (Ending)',   fc.stock,    function(v,i){
+        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
         return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
       })
-    + gRow('DOI (hari)', fc.doi, function(v){
+    + gRow('DOI',              fc.doi,      function(v){
         return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-      }, false, null)
-    + gRow('Propose PR', fc.propose, null, true, code)
+      })
+    + gRow('Stock (Forecast)', fc.stockFc,  function(v,i){
+        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
+        return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+      })
+    + gRow('DOI Forecast',     fc.doiFc,    function(v){
+        return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+      })
+    + gRow('Propose PR',       fc.propose,  null, true, code)
     + '</tbody></table></div>';
 
   // DOI override render — rewrite last row cells as text not inputs
