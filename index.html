@@ -1808,7 +1808,7 @@ function showPage(name, el) {
   var handlers = {
     dashboard: function(){updateDashStats();setTimeout(_matchDashColumns,100)},
     projection: function(){setUrgentCutoff();renderProjection();},
-    forecast: function(){_fcPopulateDatePicker();_fcRealtimeToggle();renderForecast();},
+    forecast: function(){_fcPopulateDatePicker();renderForecast();},
     po: function(){if(!STATE.poData.length)loadPO();else renderPO()},
     schedule: renderSchedule,
     'daily-list': function(){initDailyList();renderDailyList()},
@@ -3158,7 +3158,7 @@ function _doBuildProjection() {
       mrpNextMonth: mrpNextMonth,
       endStockNext: Math.round(endStock - mrpNextMonth),
       itemType: itemType, isUrgent: isUrgent,
-      abc: (STATE.masterData && STATE.masterData[code] ? STATE.masterData[code].abc || '' : '')
+      abc: ((STATE.masterData||{})[code] ? ((STATE.masterData||{})[code].abc||'') : '')
     });
   });
 
@@ -5904,6 +5904,7 @@ function _appInit() {
   STATE.poOverrides      = JSON.parse(localStorage.getItem('po_overrides')    || '{}');
   STATE.projectionSnapshots = JSON.parse(localStorage.getItem('proj_snapshots')|| '{}');
   STATE.projComments     = JSON.parse(localStorage.getItem('proj_comments')   || '{}');
+  STATE.matcomMonthly    = JSON.parse(localStorage.getItem('matcom_monthly')   || 'null');
   console.log('[_appInit] STATE restored');
   } catch(e) { console.error('[_appInit] STATE restore FAIL:', e.message); }
 
@@ -6113,22 +6114,21 @@ function _fcPopulateDatePicker() {
 }
 
 function _fcDateChange() {
-  // When user picks a date, uncheck Realtime
   var cb = document.getElementById('fc-soh-realtime');
   if(cb) cb.checked = false;
-  renderForecast();
+  if(document.getElementById('fc-table')) renderForecast();
 }
 
 function _fcRealtimeToggle() {
-  var cb = document.getElementById('fc-soh-realtime');
+  // SOH date picker elements may not be present in this version
+  var cb  = document.getElementById('fc-soh-realtime');
   var inp = document.getElementById('fc-soh-date');
-  if(cb && cb.checked) {
-    // Realtime mode: clear date input, disable it
-    if(inp) { inp.value = ''; inp.disabled = true; inp.style.opacity = '0.4'; }
-  } else {
-    if(inp) { inp.disabled = false; inp.style.opacity = '1'; }
+  if(inp) {
+    if(cb && cb.checked) { inp.value = ''; inp.disabled = true; inp.style.opacity = '0.4'; }
+    else { inp.disabled = false; inp.style.opacity = '1'; }
   }
-  renderForecast();
+  // Only renderForecast if already on forecast page
+  if(document.getElementById('fc-table')) renderForecast();
 }
 
 function _calcForecast(code, ospoIdx) {
