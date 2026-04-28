@@ -2054,9 +2054,11 @@ async function loadMatcomSAP() {
     STATE.matcomMonthly = byItem;
     localStorage.setItem('matcom_monthly', JSON.stringify(byItem));
     var cnt = Object.keys(byItem).length;
+    var matcomSyncTime = new Date().toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    localStorage.setItem('last_matcom_sync', matcomSyncTime);
     // Show badge
     var badge = document.getElementById('fc-matcom-badge');
-    if(badge) { badge.textContent = '✓ '+cnt+' item'; badge.style.display='inline'; }
+    if(badge) { badge.textContent = '✓ '+cnt+' item · '+matcomSyncTime; badge.style.display='inline'; }
     localStorage.setItem('matcom_count', cnt);
     toast('Matcom ' + cnt + ' item ✓', 'ok');
     if(_mbtn) { _mbtn.disabled = false; _mbtn.textContent = '↺ Sync Matcom'; }
@@ -6221,8 +6223,10 @@ function _calcForecast(code, ospoIdx) {
     var req_m  = forecast[fm];
     var ospr_m = ospr[fm];
     var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
-    // Berapa yg harus datang bulan ini agar stock ending >= minSt
-    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m);
+    // Include propose already placed in previous months into running stock
+    var propSoFar = 0;
+    for(var pp = snapMoIdx; pp <= fm; pp++) propSoFar += (proposeAuto[pp] || 0);
+    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m - propSoFar);
     var step   = multiple > 0 ? multiple : 1;
     var neededR = needed > 0 ? Math.ceil(needed / step) * step : 0;
 
@@ -6232,12 +6236,12 @@ function _calcForecast(code, ospoIdx) {
     forecastOspo[fm] = fromPool;
 
     // Sisa shortage setelah pool → propose PR di bulan paling awal feasible
-    var remainShort = needed - fromPool;
+    var remainShort = Math.max(0, needed - fromPool);
     if(remainShort > 0 && _fcAutoPropose) {
       var propIdx = Math.max(fm, earliestDelivIdx);
       if(propIdx < 9) {
         var propQty = Math.ceil(remainShort / step) * step;
-        proposeAuto[propIdx] += propQty;
+        proposeAuto[propIdx] = (proposeAuto[propIdx] || 0) + propQty;
       }
     }
 
@@ -6369,7 +6373,8 @@ function renderForecast(isGenerate) {
   var _mcnt = localStorage.getItem('matcom_count');
   var _mbadge = document.getElementById('fc-matcom-badge');
   if(_mbadge && STATE.matcomMonthly && _mcnt) {
-    _mbadge.textContent = '✓ Matcom '+_mcnt+' item'; _mbadge.style.display='inline';
+    var _mts = localStorage.getItem('last_matcom_sync') || '';
+    _mbadge.textContent = '✓ '+_mcnt+' item' + (_mts ? ' · '+_mts : ''); _mbadge.style.display='inline';
     // button text stays as "↺ Sync Matcom" always
   }
   var el = document.getElementById('fc-table');
@@ -6541,13 +6546,7 @@ function _fcDetailRow(code, fc, master) {
   });
   meta += '</div>';
 
-  // Per-item reset button — only show if edits exist
-  var hasOspoEdit = _fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){return v!=null;});
-  var hasOsprEdit = _fcOsprOverride[code] && _fcOsprOverride[code].some(function(v){return v!=null;});
-  if(hasOspoEdit || hasOsprEdit) {
-    meta += '<button class="btn btn-sm" onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" '
-      + 'style="font-size:11px;border-color:var(--teal);color:var(--teal);width:100%;margin-top:6px">↺ Reset OSPO/OSPR item ini</button>';
-  }
+
 
   // Suggestions
   var sug = '';
@@ -6666,7 +6665,13 @@ function _fcDetailRow(code, fc, master) {
     + '<thead><tr>'
     + '<th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'
     + mhdr
-    + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right">' + toggleBtn + '</th>'
+    + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right;white-space:nowrap">'
+    + toggleBtn
+    + ((_fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){return v!=null;}))
+       || (_fcOsprOverride[code] && _fcOsprOverride[code].some(function(v){return v!=null;}))
+      ? ' <button onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" style="font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid var(--teal);color:var(--teal);background:transparent;font-family:var(--font);margin-left:4px">↺ Reset</button>'
+      : '')
+    + '</th>'
     + '</tr></thead>'
     + '<tbody>'
     + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
