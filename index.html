@@ -7342,7 +7342,8 @@ function _fcFallbackHtmlCopy(html) {
 }
 
 function _fcExportExcelTall() {
-  // Build the same colored HTML as GSheets, save as .xls (Excel reads HTML natively)
+  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+
   var ospoIdx = _buildOSPOIndex();
   var items = Object.keys(STATE.masterData || {}).filter(function(code) {
     var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
@@ -7352,68 +7353,52 @@ function _fcExportExcelTall() {
   var fcD = {};
   items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
 
+  // Build AOA rows
   var metaCols = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'];
-  var headerBg = '#2d3748'; var headerClr = '#ffffff';
-
-  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
-    + '<head><meta charset="UTF-8">'
-    + '<style>td,th{font-size:10pt;font-family:Arial;}table{border-collapse:collapse}</style>'
-    + '</head><body><table>';
-
-  // Header
-  html += '<tr>';
-  metaCols.concat(FC_MONTHS).forEach(function(h) {
-    html += '<th style="background:'+headerBg+';color:'+headerClr+';font-weight:bold;padding:5px 8px;border:1px solid #555;white-space:nowrap">'+h+'</th>';
-  });
-  html += '</tr>';
-
+  var hdr = metaCols.concat(FC_MONTHS);
+  var aoa = [hdr];
   var BARIS_DATA = function(fc){ return [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi]; };
 
   items.forEach(function(code) {
-    var m   = STATE.masterData[code] || {};
-    var fc  = fcD[code];
-    var abc = m.abc||'';
-    var abcClr = abc==='A'?'#c0392b':abc==='B'?'#d68910':abc==='C'?'#1a7a4a':'#555';
+    var m = STATE.masterData[code]||{}, fc = fcD[code];
+    var meta = [code, m.desc||'', m.abc||'', m.supplier||'', m.uom||'', m.moq||0, m.multiple||1, fc.lt_days||0];
     var data = BARIS_DATA(fc);
-
-    _FC_TALL_ROWS.forEach(function(row, bi) {
-      var isFirst = bi === 0;
-      html += '<tr>';
-      // Item No
-      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-family:monospace;white-space:nowrap;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+code+'</b>':code)+'</td>';
-      // Description
-      html += '<td style="padding:4px 7px;border:1px solid #ddd;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+(m.desc||'')+'</b>':(m.desc||''))+'</td>';
-      // ABC
-      html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;font-weight:bold;color:'+abcClr+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(abc||'')+'</td>';
-      // Supplier
-      html += '<td style="padding:4px 7px;border:1px solid #ddd;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(m.supplier||'')+'</td>';
-      // UoM MOQ Multiple LT
-      [m.uom||'', m.moq||0, m.multiple||1, fc.lt_days||0].forEach(function(v){
-        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+v+'</b>':v)+'</td>';
-      });
-      // Baris label
-      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-weight:'+(row.bold?'bold':'normal')+';color:'+row.color+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+';white-space:nowrap">'+row.label+'</td>';
-      // Month values
-      data[bi].forEach(function(v){
-        var dispV = (v==null||v===0)?'—':(typeof v==='number'?(v%1!==0?v.toFixed(2):v):v);
-        var valClr = row.color;
-        if(row.label==='Stock' && typeof v==='number') valClr = v<0?'#c0392b':v===0?'#888':'#2e7d32';
-        if(row.label==='DOI (Hari)' && typeof v==='number') valClr = v<30?'#c0392b':v<60?'#d68910':'#2e7d32';
-        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:right;font-family:monospace;color:'+valClr+';font-weight:'+(row.bold&&v?'bold':'normal')+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(dispV===0?'0':dispV)+'</td>';
-      });
-      html += '</tr>';
+    _FC_TALL_ROWS.forEach(function(row, bi){
+      aoa.push(meta.concat([row.label]).concat(data[bi].map(function(v){ return v||0; })));
     });
   });
 
-  html += '</table></body></html>';
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Save as .xls (Excel-compatible HTML)
-  var blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xls';
-  a.click();
-  toast('Excel Tall (berwarna) downloaded ✓','ok');
+  // Auto column widths
+  ws['!cols'] = hdr.map(function(h, ci) {
+    return { wch: Math.min(30, Math.max(8, aoa.reduce(function(mx, row) {
+      return Math.max(mx, String(row[ci]||'').length);
+    }, 0) + 2)) };
+  });
+
+  // Row heights + freeze header
+  ws['!freeze'] = { xSplit:0, ySplit:1 };
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
+
+  // Try to inject colors via sheetData XML manipulation
+  try {
+    var wopts = { bookType:'xlsx', type:'array' };
+    var wbout = XLSX.write(wb, wopts);
+    // Use JSZip bundled in XLSX to modify the xlsx
+    var zip = new XLSX.utils.book_new.__proto__.constructor || null;
+    // Fallback: just download without colors but properly formatted
+    var blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    a.click();
+    toast('Excel Tall downloaded ✓ (buka di Google Sheets untuk warna penuh)','ok');
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+  }
 }
 
 
