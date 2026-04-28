@@ -2059,7 +2059,9 @@ async function loadGRPO() {
       return true;
     }).map(function(r){
       return { grpoDate: fmtSAPDate(r.GRPO_Date), itemCode: r.ItemCode,
-        itemName: r.Dscription, supplierName: r.CardName, qty: r.Quantity, uom: r.unitMsr };
+        itemName: r.Dscription, supplierName: r.CardName, qty: r.Quantity, uom: r.unitMsr,
+        baseRef: String(r.BaseRef||r.BaseEntry||r.PO_DocNum||r.PoNum||''),
+        grpoDocNum: String(r.DocNum||r.DocEntry||'') };
     });
     var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
     renderGRPO();
