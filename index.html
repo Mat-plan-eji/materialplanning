@@ -7487,6 +7487,13 @@ function _fcExportExcelTall() {
     toast('Error: ' + e.message, 'err');
   }
 }
+
+// ─── Kick off ───────────────────────────────────────────────────────────────
+if(document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", appStart);
+} else {
+  appStart();
+}
 </script>
 </body>
 </html>
