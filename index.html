@@ -534,7 +534,18 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <select id="f-proj-type" onchange="renderProjection()"><option value="">RM + PM + FG</option><option value="RM">RM (3xxx)</option><option value="PM">PM (4xxx)</option><option value="FG">FG (1xxx)</option></select>
     <select id="f-proj-site" onchange="renderProjection()"><option value="">Semua Site</option><option>BTG</option><option>SNG</option><option>BTG&SNG</option></select>
     <select id="f-proj-cat" onchange="renderProjection()"><option value="">Semua Kategori</option><option>UNDER</option><option>GOOD</option><option>OVER</option></select>
-    <select id="f-proj-abc" onchange="renderProjection()" style="font-size:12px"><option value="">Semua Class</option><option value="A">Class A</option><option value="B">Class B</option><option value="C">Class C</option></select>
+    <div id="f-proj-abc-wrap" style="position:relative;display:inline-block">
+      <button id="f-proj-abc-btn" onclick="_toggleAbcDropdown()" style="font-size:12px;padding:5px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);cursor:pointer;white-space:nowrap">
+        Class: <span id="f-proj-abc-label">Semua</span> ▾
+      </button>
+      <div id="f-proj-abc-menu" style="display:none;position:absolute;top:calc(100%+4px);left:0;z-index:100;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:8px 12px;box-shadow:0 4px 16px rgba(0,0,0,.25);min-width:140px">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:3px 0;margin:0;white-space:nowrap"><input type="checkbox" value="A" onchange="_onAbcChange()" class="proj-abc-cb"> <span style="color:var(--red);font-weight:700">A</span> Class A</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:3px 0;margin:0;white-space:nowrap"><input type="checkbox" value="B" onchange="_onAbcChange()" class="proj-abc-cb"> <span style="color:var(--amber);font-weight:700">B</span> Class B</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:3px 0;margin:0;white-space:nowrap"><input type="checkbox" value="C" onchange="_onAbcChange()" class="proj-abc-cb"> <span style="color:var(--teal);font-weight:700">C</span> Class C</label>
+        <hr style="border:none;border-top:1px solid var(--border);margin:5px 0">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:3px 0;margin:0;white-space:nowrap"><input type="checkbox" value="OBSOLET" onchange="_onAbcChange()" class="proj-abc-cb"> <span style="color:var(--muted);font-weight:700">⊘</span> Obsolet</label>
+      </div>
+    </div>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
       Coverage s/d: <input type="date" id="f-proj-coverage" onchange="renderProjection()" style="width:130px" title="Filter tampilan dan generate jadwal: tampilkan item coverage ≤ tanggal ini. Kosong = otomatis (hari ini + W+N)">
       <button class="btn btn-xs" onclick="document.getElementById('f-proj-coverage').value='';renderProjection()" title="Reset ke default">✕</button>
@@ -2984,7 +2995,10 @@ function processMasterData(rows) {
     var supplier = String(row['Supplier'] || row['Supplier Name'] || row['Vendor'] || '').trim();
     var lt  = parseIDNum(row['L.T'] || row['LT'] || row['Lead Time'] || row['LeadTime'] || row['Leadtime'] || '0');
     var abc = String(row['ABC'] || row['Abc'] || row['Class'] || row['ABC Class'] || '').trim().toUpperCase();
-    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt, abc: abc };
+    var status  = String(row['Status'] || row['status'] || '').trim();
+    var phase   = String(row['Phase'] || row['phase'] || row['Phase Code'] || '').trim();
+    var isObs   = /obsolet/i.test(status) || /obsolet/i.test(phase);
+    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt, abc: abc, status: status, phase: phase, obsolet: isObs };
   });
   return result;
 }
@@ -3245,7 +3259,8 @@ function _doBuildProjection() {
       mrpNextMonth: mrpNextMonth,
       endStockNext: Math.round(endStock - mrpNextMonth),
       itemType: itemType, isUrgent: isUrgent,
-      abc: ((STATE.masterData||{})[code] ? ((STATE.masterData||{})[code].abc||'') : '')
+      abc: ((STATE.masterData||{})[code] ? ((STATE.masterData||{})[code].abc||'') : ''),
+      obsolet: ((STATE.masterData||{})[code] ? !!((STATE.masterData||{})[code].obsolet) : false)
     });
   });
 
@@ -3312,6 +3327,30 @@ function clearHistoryView() {
   renderProjection();
 }
 
+function _toggleAbcDropdown() {
+  var menu = document.getElementById('f-proj-abc-menu');
+  if(!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function _onAbcChange() {
+  // Update label
+  var cbs = document.querySelectorAll('.proj-abc-cb:checked');
+  var lbl = document.getElementById('f-proj-abc-label');
+  if(lbl) {
+    if(!cbs.length) lbl.textContent = 'Semua';
+    else lbl.textContent = Array.prototype.map.call(cbs, function(c){ return c.value === 'OBSOLET' ? 'Obs' : c.value; }).join('+');
+  }
+  renderProjection();
+}
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('f-proj-abc-wrap');
+  if(wrap && !wrap.contains(e.target)) {
+    var menu = document.getElementById('f-proj-abc-menu');
+    if(menu) menu.style.display = 'none';
+  }
+});
+
 function renderProjection() {
   var srch = (document.getElementById('srch-proj')||{value:''}).value.toLowerCase();
   var ftype = (document.getElementById('f-proj-type')||{value:''}).value;
@@ -3340,8 +3379,15 @@ function renderProjection() {
     if(ftype && p.itemType !== ftype) return false;
     if(fsite && !(p.site||'').includes(fsite)) return false;
     if(fcat && p.category !== fcat) return false;
-    var fprjabc = (document.getElementById('f-proj-abc')||{value:''}).value;
-    if(fprjabc && (p.abc||'') !== fprjabc) return false;
+    var _abcSel = document.querySelectorAll('.proj-abc-cb:checked');
+    if(_abcSel.length > 0) {
+      var _abcVals = Array.prototype.map.call(_abcSel, function(cb){ return cb.value; });
+      var _matchAbc = _abcVals.some(function(v){
+        if(v === 'OBSOLET') return !!p.obsolet;
+        return (p.abc||'') === v && !p.obsolet;
+      });
+      if(!_matchAbc) return false;
+    }
     if(fMrpNonzero && (p.max3MRP||0) === 0) return false;
     // Coverage filter — pakai f-proj-coverage (satu input untuk display + jadwal)
     if(fCoverage) {
