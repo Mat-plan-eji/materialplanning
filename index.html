@@ -6304,9 +6304,13 @@ function _calcForecast(code, ospoIdx) {
   var manProp = (_fcPropose[code] || new Array(9).fill(0)).slice();
 
   // Total propose: manual override prioritas, lalu auto (hanya setelah pool habis)
+  // Ensure manual values are also rounded to multiple/moq
+  var _step = multiple > 0 ? multiple : 1;
   var totalProp = FC_MONTHS.map(function(_, i) {
-    if(manProp[i] > 0) return manProp[i];
-    return _fcAutoPropose ? proposeAuto[i] : 0;
+    var v = (manProp[i] > 0) ? manProp[i] : (_fcAutoPropose ? proposeAuto[i] : 0);
+    if(v <= 0) return 0;
+    // Re-round to multiple and enforce MOQ
+    return Math.max(moq, Math.ceil(v / _step) * _step);
   });
 
   // ── Tgl Create PR ─────────────────────────────────────────────────────────
