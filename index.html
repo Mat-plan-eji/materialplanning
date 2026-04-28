@@ -7349,10 +7349,11 @@ var _fcExportTarget = 'detail';
 
 function _fcExportModal(target) {
   _fcExportTarget = target;
+  var isFcMod = (_fcGridViewMode === 'forecast');
   var descs = {
-    detail:   'Export semua item + Requirement, OSPO, OSPR, Stock, DOI, Propose PR per bulan.',
+    detail:   'Export semua item + ' + (isFcMod ? 'Forecast OSPO, Stock & DOI Forecast' : 'OSPO, OSPR, Stock, DOI') + ', Propose PR per bulan. Mode: <b>' + (isFcMod ? 'Forecast' : 'Aktual') + '</b>.',
     rekap:    'Export rekap Propose PR: Item, Qty, Required Date, Tgl Create PR.',
-    supplier: 'Export Forecast Supplier: Requirement, OSPO, OSPR per bulan.'
+    supplier: 'Export Forecast Supplier: OSPO, OSPR, Propose PR per bulan.'
   };
   var d = document.getElementById('fc-export-desc');
   if(d) d.textContent = descs[target] || '';
@@ -7379,6 +7380,128 @@ var _FC_TALL_ROWS = [
   { label:'DOI (Hari)',  bg:'#f1f8e9', color:'#558b2f', bold:false }
 ];
 
+
+// ─── Unified export functions ────────────────────────────────────────────────
+
+function _fcBuildRows(target) {
+  var ospoIdx = _buildOSPOIndex();
+  var isFcV   = (_fcGridViewMode === 'forecast');
+  var items = Object.keys(STATE.masterData || {}).filter(function(code) {
+    var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
+    return iT !== 'FG';
+  });
+  var fcD = {};
+  items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
+
+  if(target === 'rekap') {
+    var fmt = function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
+    var rows = [['Item No.','Item Description','ABC','Whse','Required Qty','UoM','Required Date','Tgl Create PR','Tipe','Status']];
+    items.forEach(function(code) {
+      var m=STATE.masterData[code]||{}, fc=fcD[code];
+      var iT=/^3/.test(code)?'RM':'PM';
+      var site=(STATE.stockData&&STATE.stockData[code])
+        ? ((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):'')) : '';
+      fc.suggestions.forEach(function(s){
+        rows.push([code,m.desc||'',m.abc||'',site,s.qty,m.uom||'',fmt(s.delivDate),fmt(s.createPRBy),iT,
+          s.isOverdue?'Terlambat':s.isUrgent?'Segera':'Oke']);
+      });
+    });
+    rows.sort(function(a,b){ return (a[7]||'').localeCompare(b[7]||''); });
+    return rows;
+  }
+
+  if(target === 'supplier') {
+    var hdr = ['Item No','Description','Baris'].concat(FC_MONTHS);
+    var rows = [hdr];
+    items.forEach(function(code) {
+      var m=STATE.masterData[code]||{}, fc=fcD[code];
+      if(!fc.ospo.some(function(v){return v>0;}) && !fc.ospr.some(function(v){return v>0;}) && !fc.propose.some(function(v){return v>0;})) return;
+      var desc=m.desc||'';
+      rows.push([code,desc,'OSPO'      ].concat(fc.ospo.map(function(v){return v||0;})));
+      rows.push([code,desc,'OSPR'      ].concat(fc.ospr.map(function(v){return v||0;})));
+      rows.push([code,desc,'Propose PR'].concat(fc.propose.map(function(v){return v||0;})));
+    });
+    return rows;
+  }
+
+  // detail (default) — respect view mode
+  var hdr2 = ['Item No','Description','ABC','Supplier','UoM','LT','MOQ','Multiple','SOH'];
+  FC_MONTHS.forEach(function(m){hdr2.push('Req '+m,'OSPO '+m,'OSPR '+m,'Stock '+m,'DOI '+m,'Propose '+m);});
+  var rows2 = [hdr2];
+  items.forEach(function(code) {
+    var m2=STATE.masterData[code]||{}, fc2=fcD[code];
+    var ospoVals  = isFcV ? fc2.forecastOspo : fc2.ospo;
+    var stockVals = isFcV ? fc2.stockFc      : fc2.stock;
+    var doiVals   = isFcV ? fc2.doiFc        : fc2.doi;
+    var line=[code,m2.desc||'',m2.abc||'',m2.supplier||'',m2.uom||'',fc2.lt_days||0,m2.moq||0,m2.multiple||1,fc2.soh||0];
+    for(var i=0;i<9;i++) line.push(fc2.forecast[i]||0, ospoVals[i]||0, fc2.ospr[i]||0, stockVals[i]||0, doiVals[i]||0, fc2.propose[i]||0);
+    rows2.push(line);
+  });
+  return rows2;
+}
+
+function _fcExportExcel(target) {
+  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+  var rows = _fcBuildRows(target);
+  if(!rows || !rows.length) { toast('Tidak ada data','err'); return; }
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = rows[0].map(function(_, ci) {
+    return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
+      return Math.max(mx, String(row[ci]||'').length);
+    }, 0) + 2)) };
+  });
+  var wb = XLSX.utils.book_new();
+  var names = { detail:'Forecast Detail', rekap:'Rekap PR', supplier:'Forecast Supplier' };
+  XLSX.utils.book_append_sheet(wb, ws, names[target] || 'Forecast');
+  var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
+  XLSX.writeFile(wb, (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  toast('Excel downloaded ✓','ok');
+}
+
+function _fcExportGSheets(target) {
+  var rows = _fcBuildRows(target);
+  if(!rows || !rows.length) { toast('Tidak ada data','err'); return; }
+  var tsv = rows.map(function(row) {
+    return row.map(function(v) {
+      var s = String(v == null ? '' : v);
+      return s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0 ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join('\t');
+  }).join('\n');
+  if(navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(tsv).then(function() {
+      window.open('https://sheets.new','_blank');
+      toast('Data disalin! Buka Sheets → klik A1 → Ctrl+V','ok');
+    }).catch(function(){ _fcFallbackCopy(tsv); });
+  } else { _fcFallbackCopy(tsv); }
+}
+
+function _fcFallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('Data disalin! Buka sheets.new lalu paste','ok'); }
+  catch(e) { toast('Gagal copy, coba download CSV','err'); }
+  document.body.removeChild(ta);
+  window.open('https://sheets.new','_blank');
+}
+
+function _fcExportCSVDirect(target) {
+  var rows = _fcBuildRows(target);
+  if(!rows || !rows.length) { toast('Tidak ada data','err'); return; }
+  var csv = rows.map(function(row) {
+    return row.map(function(v) {
+      var s = String(v == null ? '' : v);
+      return (s.indexOf(',')>=0||s.indexOf('"')>=0) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(',');
+  }).join('\n');
+  var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); toast('CSV downloaded ✓','ok');
+}
+
 // ── GSheets tall export: build colored HTML table, copy to clipboard ─────────
 function _fcExportGSheetsTall() {
   var ospoIdx = _buildOSPOIndex();
@@ -7400,7 +7523,15 @@ function _fcExportGSheetsTall() {
   });
   html += '</tr>';
 
-  var BARIS_DATA = function(fc) { return [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi]; };
+  var isFcExp = (_fcGridViewMode === 'forecast');
+  var BARIS_DATA = function(fc) {
+    return isFcExp
+      ? [fc.forecast, fc.forecastOspo, fc.ospr, fc.propose, fc.stockFc, fc.doiFc]
+      : [fc.forecast, fc.ospo,         fc.ospr, fc.propose, fc.stock,   fc.doi  ];
+  };
+  var BARIS_LABELS_EXP = isFcExp
+    ? _FC_TALL_ROWS.map(function(r,i){ return i===1 ? {label:'Forecast OSPO',bg:r.bg,color:r.color,bold:r.bold} : r; })
+    : _FC_TALL_ROWS;
 
   items.forEach(function(code) {
     var m   = STATE.masterData[code] || {};
@@ -7409,7 +7540,7 @@ function _fcExportGSheetsTall() {
     var abcClr = abc==='A'?'#c0392b':abc==='B'?'#d68910':abc==='C'?'#1a7a4a':'#555';
     var data = BARIS_DATA(fc);
 
-    _FC_TALL_ROWS.forEach(function(row, bi) {
+    BARIS_LABELS_EXP.forEach(function(row, bi) {
       var isFirstRow = bi === 0;
       html += '<tr style="border-bottom:1px solid #ddd">';
       // Item No
@@ -7486,18 +7617,26 @@ function _fcExportExcelTall() {
   var fcD = {};
   items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
 
-  // Build AOA rows
+  // Build AOA rows — respect view mode (Aktual vs Forecast)
+  var isFcXls  = (_fcGridViewMode === 'forecast');
   var metaCols = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'];
   var hdr = metaCols.concat(FC_MONTHS);
   var aoa = [hdr];
-  var BARIS_DATA = function(fc){ return [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi]; };
+  var BARIS_DATA_XLS = function(fc) {
+    return isFcXls
+      ? [fc.forecast, fc.forecastOspo, fc.ospr, fc.propose, fc.stockFc, fc.doiFc]
+      : [fc.forecast, fc.ospo,         fc.ospr, fc.propose, fc.stock,   fc.doi  ];
+  };
+  var BARIS_NAMES = isFcXls
+    ? ['Requirement','Forecast OSPO','OSPR','Propose PR','Stock Forecast','DOI Forecast']
+    : _FC_TALL_ROWS.map(function(r){ return r.label; });
 
   items.forEach(function(code) {
     var m = STATE.masterData[code]||{}, fc = fcD[code];
     var meta = [code, m.desc||'', m.abc||'', m.supplier||'', m.uom||'', m.moq||0, m.multiple||1, fc.lt_days||0];
-    var data = BARIS_DATA(fc);
-    _FC_TALL_ROWS.forEach(function(row, bi){
-      aoa.push(meta.concat([row.label]).concat(data[bi].map(function(v){ return v||0; })));
+    var data = BARIS_DATA_XLS(fc);
+    BARIS_NAMES.forEach(function(label, bi){
+      aoa.push(meta.concat([label]).concat(data[bi].map(function(v){ return v||0; })));
     });
   });
 
