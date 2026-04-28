@@ -937,9 +937,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <option value="thismonth">Bulan Ini</option>
       </select>
       <select id="perf-view" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
-        <option value="supplier">Per Supplier</option>
-        <option value="item">Per Item</option>
         <option value="detail">Detail PO</option>
+        <option value="supplier">Rekap Per Supplier</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="loadGRPO(true).then(renderPerformance)" style="font-size:11.5px">↺ Refresh GRPO</button>
     </div>
@@ -7295,7 +7294,6 @@ function renderPerformance() {
   }
 
   if(view === 'supplier') _perfRenderSupplier(tblEl, rows);
-  else if(view === 'item') _perfRenderItem(tblEl, rows);
   else _perfRenderDetail(tblEl, rows);
 }
 
@@ -7310,15 +7308,25 @@ function _perfRenderSupplier(el, rows) {
 
   var supRows = Object.keys(bySupplier).map(function(sup) {
     var rs = bySupplier[sup];
-    var grpoRs  = rs.filter(function(r){ return r.grpoDate; });
-    var otdRs   = grpoRs.filter(function(r){ return r.otd !== null; });
-    var otdOk   = otdRs.filter(function(r){ return r.otd; }).length;
-    var otdPct  = otdRs.length ? Math.round(otdOk/otdRs.length*100) : null;
-    var lateRs  = grpoRs.filter(function(r){ return r.gapConfGrpo>0; });
-    var avgLate = lateRs.length ? Math.round(lateRs.reduce(function(s,r){return s+r.gapConfGrpo;},0)/lateRs.length) : 0;
-    var qRs     = rs.filter(function(r){ return r.qtyAccGrpo!==null; });
-    var qAvg    = qRs.length ? Math.round(qRs.reduce(function(s,r){return s+r.qtyAccGrpo;},0)/qRs.length) : null;
-    return { sup, total:rs.length, delivered:grpoRs.length, otdPct, avgLate, qAvg };
+    var grpoRs = rs.filter(function(r){ return r.grpoDate; });
+    function ltScore(lt) { return lt<=1?100:lt===2?75:(lt>=3&&lt<=4)?50:lt===5?25:0; }
+    var otScores=[], ifScores=[], caScores=[], ltVals=[];
+    rs.forEach(function(r) {
+      var lt  = (r.grpoDate && r.confDate) ? daysDiff(r.grpoDate, r.confDate) : null;
+      var ref = r.confQty || r.reqQty;
+      var onT = !r.grpoDate ? 0 : (lt!==null ? ltScore(lt) : null);
+      if(onT !== null) otScores.push(onT);
+      if(ref>0 && r.grpoDate) { ifScores.push(r.grpoQty>=ref?100:Math.round(r.grpoQty/ref*100)); }
+      if(lt!==null && ref>0) {
+        var absLT=Math.abs(lt);
+        var otC=ltScore(absLT), qtC=Math.max(0,Math.round((1-Math.abs(r.grpoQty-ref)/ref)*100));
+        caScores.push(Math.round((otC+qtC)/2));
+      }
+      if(lt!==null && lt>0) ltVals.push(lt);
+    });
+    var avg=function(arr){ return arr.length?Math.round(arr.reduce(function(s,v){return s+v;},0)/arr.length):null; };
+    return { sup, total:rs.length, delivered:grpoRs.length,
+      otdPct:avg(otScores), avgLate:avg(ltVals)||0, qAvg:avg(ifScores), caAvg:avg(caScores) };
   }).sort(function(a,b){ return (a.otdPct||0)-(b.otdPct||0); });
 
   var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
@@ -7328,7 +7336,8 @@ function _perfRenderSupplier(el, rows) {
     + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Diterima</th>'
     + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">OTD %</th>'
     + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Avg Terlambat</th>'
-    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Qty Accuracy</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">% In Full</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">% Confirm Accuracy</th>'
     + '</tr></thead><tbody>';
 
   supRows.forEach(function(r, i) {
@@ -7342,6 +7351,7 @@ function _perfRenderSupplier(el, rows) {
       + '<td style="text-align:center;padding:10px 6px"><span style="font-weight:700;font-family:var(--mono);color:'+otdClr+'">'+(r.otdPct!==null?r.otdPct+'%':'—')+'</span></td>'
       + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono);color:'+lClr+'">'+(r.avgLate?r.avgLate+'h':'—')+'</td>'
       + '<td style="text-align:center;padding:10px 6px"><span style="font-weight:700;font-family:var(--mono);color:'+qClr+'">'+(r.qAvg!==null?r.qAvg+'%':'—')+'</span></td>'
+      + '<td style="text-align:center;padding:10px 6px"><span style="font-weight:700;font-family:var(--mono);color:'+(r.caAvg>=90?'var(--green)':r.caAvg>=75?'var(--amber)':'var(--red)')+'">'+(r.caAvg!==null?r.caAvg+'%':'—')+'</span></td>'
       + '</tr>';
   });
   el.innerHTML = html + '</tbody></table>';
@@ -7433,18 +7443,31 @@ function _perfRenderDetail(el, rows) {
     var uom     = m.uom || r.uom || '—';
     var site    = r.site || '—';
 
-    // % On Time: GRPO Date ≤ Conf Date (or Req Date if no conf)
-    var benchmark = r.confDate || r.reqDate;
-    var onTime = r.grpoDate && benchmark ? (r.grpoDate <= benchmark ? 100 : 0) : null;
-    // LT = GRPO Date - Conf Date (days late, positive = late)
+    // LT = Tgl Kirim - Tgl Konfirmasi (hari, positif = terlambat)
     var lt = (r.grpoDate && r.confDate) ? daysDiff(r.grpoDate, r.confDate) : null;
-    // % In Full = GRPO Qty / Conf Qty (or Req Qty)
-    var inFull = pct(r.grpoQty, r.confQty || r.reqQty);
-    // Kekurangan
     var ref = r.confQty || r.reqQty;
     var kekurangan = ref > 0 ? Math.max(0, ref - r.grpoQty) : 0;
-    // % Confirm Accuracy = Conf Qty / Req Qty
-    var confAcc = r.confQty && r.reqQty ? pct(r.confQty, r.reqQty) : null;
+
+    // % On Time: tiered scoring berdasarkan LT
+    // Tgl Kirim kosong → 0%; LT kosong → null; LT≤1→100%; LT=2→75%; LT 3-4→50%; LT=5→25%; LT>5→0%
+    var onTime = null;
+    if(!r.grpoDate) { onTime = 0; }
+    else if(lt !== null) {
+      onTime = lt<=1 ? 100 : lt===2 ? 75 : (lt>=3&&lt<=4) ? 50 : lt===5 ? 25 : 0;
+    }
+
+    // % In Full: Actual/Qty (100% jika Actual ≥ Qty)
+    var inFull = null;
+    if(ref > 0) inFull = r.grpoQty >= ref ? 100 : Math.round(r.grpoQty / ref * 100);
+
+    // % Confirm Accuracy: AVERAGE(OTD score by |LT|, qty accuracy)
+    var confAcc = null;
+    if(lt !== null && ref > 0) {
+      var absLT  = Math.abs(lt);
+      var otComp = absLT<=1 ? 100 : absLT===2 ? 75 : (absLT>=3&&absLT<=4) ? 50 : absLT===5 ? 25 : 0;
+      var qtComp = Math.max(0, Math.round((1 - Math.abs(r.grpoQty - ref) / ref) * 100));
+      confAcc    = Math.round((otComp + qtComp) / 2);
+    }
 
     var rowBg = i%2 ? 'background:var(--bg3)' : '';
     var notRecv = !r.grpoDate;
