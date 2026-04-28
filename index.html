@@ -6600,7 +6600,7 @@ function _fcDetailRow(code, fc, master) {
       var isOspr   = (rowType === 'ospr');
       var ovrStore = isOspr ? _fcOsprOverride : _fcOspoOverride;
       var isEdited = (ovrStore[itemCode] && ovrStore[itemCode][i] != null);
-      var cur     = Math.round(v) || 0;
+      var cur     = (v != null && v !== 0) ? v : 0;
       var haVal   = cur > 0;
       // Colors: teal = SAP original, purple = manually edited
       var bdr      = isEdited ? 'rgba(139,92,246,.4)' : (haVal ? 'rgba(20,184,166,.3)' : 'var(--border2)');
@@ -6609,7 +6609,7 @@ function _fcDetailRow(code, fc, master) {
       var inp_bg   = isEdited ? 'rgba(139,92,246,.08)' : (haVal ? 'rgba(20,184,166,.06)' : 'var(--bg3)');
       return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
         + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-        + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'"'
+        + '<input type="text" inputmode="numeric" value="'+(cur%1!==0?parseFloat(cur).toFixed(2):cur)+'"'
         +   ' data-code="'+itemCode+'" data-mi="'+i+'" data-base="'+base+'" data-rowtype="'+(rowType||'ospo')+'"'
         +   ' oninput="_fcOspoRowEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
         +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_wt+';color:'+inp_clr+';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none"'
@@ -6627,7 +6627,7 @@ function _fcDetailRow(code, fc, master) {
     var cells = vals.map(function(v, i) {
       if(editable) {
         var moqV  = fc.multiple || 1;  // step by multiple
-        var cur   = Math.round(v) || 0;
+        var cur   = (v != null && v !== 0) ? v : 0;
         var haVal = cur > 0;
         var amberBdr = 'rgba(245,158,11,.4)';
         var normBdr  = 'var(--border2)';
@@ -6637,7 +6637,7 @@ function _fcDetailRow(code, fc, master) {
         var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
         return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="text" inputmode="numeric" pattern="[0-9]*" value="'+cur+'"'
+          + '<input type="text" inputmode="numeric" value="'+(cur%1!==0?cur.toFixed(2):cur)+'"'
           +   ' data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
           +   ' oninput="_fcProposeEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
           +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
