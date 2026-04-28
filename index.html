@@ -732,6 +732,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <button class="btn btn-primary" id="fc-gen-btn" onclick="generateProposePR()" style="font-size:11.5px">⚡ Generate Propose PR</button>
       <span id="fc-gen-badge" style="display:none;font-size:10.5px;background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);border-radius:var(--r);padding:3px 9px;font-weight:600">✓ Generated</span>
       <button id="fc-view-toggle" class="btn btn-sm" onclick="_fcToggleGridView()" style="font-size:11px" title="Switch tampilan Aktual / Forecast">⇄ Aktual</button>
+      <button class="btn btn-sm" onclick="_fcResetOspoOspr()" style="font-size:11px;border-color:var(--teal);color:var(--teal)" title="Kembalikan semua edit OSPO & OSPR ke data SAP">↺ Reset OSPO/OSPR</button>
       <button class="btn btn-sm btn-red" onclick="_fcResetPropose()" style="font-size:11px" title="Hapus semua propose PR yang sudah di-generate">↺ Reset Propose</button>
       <button class="btn btn-sm" onclick="_fcExportModal('detail')" style="font-size:11px">↓ Export</button>
     </div>
@@ -6312,13 +6313,28 @@ function _calcForecast(code, ospoIdx) {
     });
   }
 
-  // Use stockAktualFw for Aktual view stock (includes pull-forwards)
-  var doiAktual = calcDOI(stockAktualFw);
+  // Add propose into stock for display (stock + propose rolling forward)
+  var stockWithProp = stockAktualFw.slice();
+  for(var wp = snapMoIdx; wp < 9; wp++) {
+    if(totalProp[wp] > 0) {
+      for(var wn = wp; wn < 9; wn++) stockWithProp[wn] += totalProp[wp];
+    }
+  }
+  var doiAktual = calcDOI(stockWithProp);
+
+  // Forecast view: also add propose into stockFc
+  var stockFcWithProp = stockFc.slice();
+  for(var fp = snapMoIdx; fp < 9; fp++) {
+    if(totalProp[fp] > 0) {
+      for(var fn2 = fp; fn2 < 9; fn2++) stockFcWithProp[fn2] += totalProp[fp];
+    }
+  }
+  var doiFc = calcDOI(stockFcWithProp);
 
   return {
     forecast: forecast, ospo: ospo, ospoBase: ospoBase, ospr: ospr, ospr_base: ospr_base,
-    stock: stockAktualFw, doi: doiAktual, stockBase: stockProj,
-    forecastOspo: forecastOspo, stockFc: stockFc, doiFc: doiFc,
+    stock: stockWithProp, doi: doiAktual, stockBase: stockProj,
+    forecastOspo: forecastOspo, stockFc: stockFcWithProp, doiFc: doiFc,
     propose: totalProp, pullNotifs: pullNotifs,
     lt_days: lt_days, moq: moq, multiple: multiple, maxDOI: maxDOI,
     soh: soh, suggestions: suggestions
@@ -6525,6 +6541,14 @@ function _fcDetailRow(code, fc, master) {
   });
   meta += '</div>';
 
+  // Per-item reset button — only show if edits exist
+  var hasOspoEdit = _fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){return v!=null;});
+  var hasOsprEdit = _fcOsprOverride[code] && _fcOsprOverride[code].some(function(v){return v!=null;});
+  if(hasOspoEdit || hasOsprEdit) {
+    meta += '<button class="btn btn-sm" onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" '
+      + 'style="font-size:11px;border-color:var(--teal);color:var(--teal);width:100%;margin-top:6px">↺ Reset OSPO/OSPR item ini</button>';
+  }
+
   // Suggestions
   var sug = '';
   if(fc.suggestions.length) {
@@ -6573,7 +6597,9 @@ function _fcDetailRow(code, fc, master) {
         +   ' title="'+(isEdited ? 'SAP: '+n_id(Math.round(base))+' (diedit manual)' : 'Klik untuk edit')+'">'
         + '</div></td>';
     }).join('');
-    return '<tr style="border-bottom:1px dotted var(--border)">'
+    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
+    var rowAttr  = rowLabel ? ' data-rowlabel="'+rowLabel+'"' : '';
+    return '<tr style="border-bottom:1px dotted var(--border)"'+rowAttr+'>'
       + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
       + cells + '</tr>';
   }
@@ -6612,7 +6638,9 @@ function _fcDetailRow(code, fc, master) {
       var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
       return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</td>';
     }).join('');
-    return '<tr style="border-bottom:1px dotted var(--border)">'
+    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
+    var rowAttr  = rowLabel ? ' data-rowlabel="'+rowLabel+'"' : '';
+    return '<tr style="border-bottom:1px dotted var(--border)"'+rowAttr+'>'
       + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
       + cells + '</tr>';
   }
@@ -6913,6 +6941,25 @@ function _fcToggleGridView() {
 
 // ─── Inline propose edit ──────────────────────────────────────────────────────
 // ─── Reset semua propose PR ──────────────────────────────────────────────────
+function _fcResetOspoOspr(code) {
+  if(code) {
+    // Per-item reset
+    delete _fcOspoOverride[code];
+    delete _fcOsprOverride[code];
+    try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
+    try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
+    renderForecast();
+    toast('OSPO & OSPR item ' + code + ' direset ✓', 'ok');
+  } else {
+    // Global reset
+    _fcOspoOverride = {};
+    _fcOsprOverride = {};
+    try { localStorage.removeItem('fc_ospo_ovr'); localStorage.removeItem('fc_ospr_ovr'); } catch(e){}
+    renderForecast();
+    toast('Semua OSPO & OSPR dikembalikan ke data SAP ✓', 'ok');
+  }
+}
+
 function _fcResetPropose() {
   _fcPropose = {};
   _fcAutoPropose = false;
@@ -6937,7 +6984,48 @@ function _fcOsprEdit(input) {
   if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(9).fill(null);
   _fcOsprOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
-  renderForecast();
+  var isEd = (_fcOsprOverride[code][mi] != null);
+  input.style.color      = isEd ? '#8b5cf6' : (qty > 0 ? 'var(--accent)' : 'var(--muted)');
+  input.style.fontWeight = qty > 0 ? '600' : '400';
+  _fcLiveRecalc(code);
+}
+
+// ─── Live recalc: update Stock/DOI rows in-place after any edit ─────────────
+function _fcLiveRecalc(code) {
+  var ospoIdx = _buildOSPOIndex();
+  var fc      = _calcForecast(code, ospoIdx);
+  var detEl   = document.getElementById('fc-detail-' + code);
+  if(!detEl) return;
+  var tbody = detEl.querySelector('tbody');
+  if(!tbody) return;
+  var trs = tbody.querySelectorAll('tr');
+  var isFcV = (_fcGridViewMode === 'forecast');
+
+  // Find Stock and DOI rows by data-rowlabel attr (set during render)
+  var stockVals = isFcV ? fc.stockFc : fc.stock;
+  var doiVals   = isFcV ? fc.doiFc   : fc.doi;
+  var doi_t     = _fcGetDOI();
+
+  trs.forEach(function(tr) {
+    var lbl = tr.getAttribute('data-rowlabel');
+    if(!lbl) return;
+    var tds = tr.querySelectorAll('td:not(:first-child)');
+    if(lbl === 'stock') {
+      stockVals.forEach(function(v, i) {
+        if(i >= tds.length) return;
+        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(doi_t/25) : 0;
+        var cls  = v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(Math.round(v))+'</span>';
+      });
+    } else if(lbl === 'doi') {
+      doiVals.forEach(function(v, i) {
+        if(i >= tds.length) return;
+        var cls = v<0?'color:var(--red)':v<doi_t?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+        var txt = v>0 ? (v>=999?'∞':String(Math.round(v))) : '—';
+        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
+      });
+    }
+  });
 }
 
 function _fcOspoEdit(input) {
@@ -6946,13 +7034,12 @@ function _fcOspoEdit(input) {
   var base = parseFloat(input.getAttribute('data-base')) || 0;
   var qty  = parseFloat(input.value) || 0;
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(9).fill(null);
-  // If same as base, clear override
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
-  // Update input style
   var isEdited = (_fcOspoOverride[code][mi] != null);
-  input.style.color  = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
+  input.style.color      = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
   input.style.fontWeight = qty > 0 ? '600' : '400';
+  _fcLiveRecalc(code);
 }
 
 function _fcOspoStep(btn) {
@@ -7029,32 +7116,7 @@ function _fcProposeEdit(input) {
   input.style.fontWeight = qty > 0 ? '700' : '400';
   // Persist to localStorage
   try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
-  // Recalc and update stock/DOI cells in-place
-  var ospoIdx = _buildOSPOIndex();
-  var fc = _calcForecast(code, ospoIdx);
-  var detEl = document.getElementById('fc-detail-'+code);
-  if(!detEl) return;
-  var tbody = detEl.querySelector('tbody');
-  if(!tbody) return;
-  var trs = tbody.querySelectorAll('tr');
-  // Row order: Requirement(0), OSPO(1), OSPR(2), Stock(3), DOI(4), Propose(5)
-  function updateRow(tr, vals, clsFn) {
-    if(!tr) return;
-    var tds = tr.querySelectorAll('td:not(:first-child)');
-    vals.forEach(function(v, i) {
-      if(i >= tds.length) return;
-      var disp = (v===0||!v) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
-      var style = clsFn ? clsFn(v, i) : '';
-      tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</span>';
-    });
-  }
-  updateRow(trs[3], fc.stock, function(v,i){
-    var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0, minS=_fcGetDOI()*daily;
-    return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber)':'color:var(--green)';
-  });
-  updateRow(trs[4], fc.doi, function(v){
-    return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-  });
+  _fcLiveRecalc(code);
 }
 
 // ─── Export full forecast CSV ─────────────────────────────────────────────────
