@@ -497,6 +497,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div id="col-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:8px;z-index:50;min-width:200px;max-height:340px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">
           <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">Tampilkan Kolom</div>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('kode',this)"> Kode</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('abc',this)"> ABC Class</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('desc',this)"> Deskripsi</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0" id="col-menu-realname"><input type="checkbox" checked onchange="toggleProjCol('realname',this)"> Real Name 🔒</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;cursor:pointer;color:var(--text);margin:0"><input type="checkbox" checked onchange="toggleProjCol('uom',this)"> UOM</label>
@@ -533,6 +534,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <select id="f-proj-type" onchange="renderProjection()"><option value="">RM + PM + FG</option><option value="RM">RM (3xxx)</option><option value="PM">PM (4xxx)</option><option value="FG">FG (1xxx)</option></select>
     <select id="f-proj-site" onchange="renderProjection()"><option value="">Semua Site</option><option>BTG</option><option>SNG</option><option>BTG&SNG</option></select>
     <select id="f-proj-cat" onchange="renderProjection()"><option value="">Semua Kategori</option><option>UNDER</option><option>GOOD</option><option>OVER</option></select>
+    <select id="f-proj-abc" onchange="renderProjection()" style="font-size:12px"><option value="">Semua Class</option><option value="A">Class A</option><option value="B">Class B</option><option value="C">Class C</option></select>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
       Coverage s/d: <input type="date" id="f-proj-coverage" onchange="renderProjection()" style="width:130px" title="Filter tampilan dan generate jadwal: tampilkan item coverage ≤ tanggal ini. Kosong = otomatis (hari ini + W+N)">
       <button class="btn btn-xs" onclick="document.getElementById('f-proj-coverage').value='';renderProjection()" title="Reset ke default">✕</button>
@@ -755,6 +757,9 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div style="display:flex;flex-direction:column;gap:8px">
       <button class="btn btn-primary" onclick="_fcDoExport('excel')" style="justify-content:center;gap:8px;padding:9px">
         📊 Download Excel (.xlsx)
+      </button>
+      <button class="btn" onclick="_fcDoExport('excel-tall')" style="justify-content:center;gap:8px;padding:9px">
+        📊 Excel Format Tall (multi-baris per item)
       </button>
       <button class="btn" onclick="_fcDoExport('gsheets')" style="justify-content:center;gap:8px;padding:9px">
         <img src="https://www.gstatic.com/images/branding/product/1x/sheets_2020q4_48dp.png" style="width:16px;height:16px;vertical-align:middle"> Buka di Google Sheets
@@ -3148,7 +3153,8 @@ function _doBuildProjection() {
       pctUsageVsForecast: pctUsageVsForecast,
       mrpNextMonth: mrpNextMonth,
       endStockNext: Math.round(endStock - mrpNextMonth),
-      itemType: itemType, isUrgent: isUrgent
+      itemType: itemType, isUrgent: isUrgent,
+      abc: (STATE.masterData && STATE.masterData[code] ? STATE.masterData[code].abc || '' : '')
     });
   });
 
@@ -3243,6 +3249,8 @@ function renderProjection() {
     if(ftype && p.itemType !== ftype) return false;
     if(fsite && !(p.site||'').includes(fsite)) return false;
     if(fcat && p.category !== fcat) return false;
+    var fprjabc = (document.getElementById('f-proj-abc')||{value:''}).value;
+    if(fprjabc && (p.abc||'') !== fprjabc) return false;
     if(fMrpNonzero && (p.max3MRP||0) === 0) return false;
     // Coverage filter — pakai f-proj-coverage (satu input untuk display + jadwal)
     if(fCoverage) {
@@ -3299,6 +3307,10 @@ function renderProjection() {
     var typeBadge = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:9px">RM</span>' : (p.itemType === 'PM' ? '<span class="badge b-purple" style="font-size:9px">PM</span>' : (p.itemType === 'FG' ? '<span class="badge b-green" style="font-size:9px">FG</span>' : ''));
     return '<tr>' +
       td('<span class="mono" style="font-size:10.5px">' + p.productCode + ' ' + typeBadge + '</span>','kode') +
+      (function(){
+        var a=p.abc||''; var ac=a==='A'?'var(--red)':a==='B'?'var(--amber)':a==='C'?'var(--teal)':'var(--muted)';
+        return td('<span style="font-weight:700;font-size:11px;color:'+ac+'">'+(a||'—')+'</span>','abc','text-align:center');
+      })() +
       td((p.description||''),'desc','max-width:140px;overflow:hidden;text-overflow:ellipsis') +
       td(_isAdmin ? (p.realName||'—') : '🔒','realname','max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--teal);font-size:11px') +
       td((p.uom||''),'uom') +
@@ -3344,6 +3356,7 @@ function renderProjection() {
 
   var filterRow = colFilter ? '<tr style="background:var(--bg4)">' +
     '<th><input class="th-filter" oninput="projColFilters.kode=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.kode||'') + '"></th>' +
+    (colHidden('abc') ? '' : '<th></th>') +
     '<th><input class="th-filter" oninput="projColFilters.desc=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.desc||'') + '"></th>' +
     '<th>' + (_isAdmin ? '<input class="th-filter" oninput="projColFilters.realname=this.value.toLowerCase();renderProjectionRAF()" placeholder="filter..." value="' + (projColFilters.realname||'') + '">' : '') + '</th>' +
     '<th></th>' +
@@ -3364,6 +3377,7 @@ function renderProjection() {
     '<thead>' +
     '<tr>' +
     th('Kode','kode') +
+    th('ABC','abc') +
     th('Deskripsi','desc') +
     th('Real Name','realname') +
     th('UOM','uom') +
@@ -3746,7 +3760,8 @@ function renderDashboard() {
         var dateDisp = o.confDate.split('-').reverse().join('/');
         return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--border)">' +
           '<div style="flex:1;min-width:0;overflow:hidden">' +
-            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + o.itemName + '</div>' +
+            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">' + o.itemName + '</div>' +
+            '<div style="font-size:9px;color:var(--muted);font-family:var(--mono)">' + o.itemCode + '</div>' +
             '<div style="font-size:9px;color:var(--muted)">' + o.supplier + ' · PO ' + o.docNum + '</div>' +
           '</div>' +
           '<div style="flex-shrink:0;text-align:right">' +
@@ -3802,7 +3817,9 @@ function _poName(itemCode, itemName) {
 
 function renderDashSchedule() {
   var el = document.getElementById('dash-schedule-week'); if(!el) return;
-  var now=new Date(); var dow=now.getDay(); var daysToMon=dow===0?1:(8-dow);
+  var now=new Date(); var dow=now.getDay();
+  // daysToMon: mundur ke Senin minggu ini (bukan maju ke minggu depan)
+  var daysToMon = dow===0 ? -6 : (1-dow); // 0=Sun→-6, 1=Mon→0, 2=Tue→-1, dst
   var monDate=new Date(now); monDate.setDate(now.getDate()+daysToMon);
   var weekISOs=[]; for(var i=0;i<5;i++){ var d=new Date(monDate); d.setDate(monDate.getDate()+i); weekISOs.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
   var dayNames=['Sen','Sel','Rab','Kam','Jum'];
@@ -6697,7 +6714,10 @@ function _fcDetailRow(code, fc, master) {
         ? gRow('Forecast OSPO', fc.forecastOspo, function(v){ return v>0?'color:var(--teal);font-weight:600':'color:var(--hint)'; })
         : gRowOspo('OSPO', fc.ospo, fc.ospoBase, code, 'ospo')
       )
-    + gRowOspo('OSPR', fc.ospr, fc.ospr_base || fc.ospr, code, 'ospr')
+    + (isFcView
+        ? gRow('OSPR', fc.ospr, function(v){ return v>0?'color:var(--accent)':'color:var(--hint)'; })
+        : gRowOspo('OSPR', fc.ospr, fc.ospr_base || fc.ospr, code, 'ospr')
+      )
     + gRow('Stock (Ending)', isFcView ? fc.stockFc : fc.stock, stockClsFn)
     + gRow('DOI (hari)',     isFcView ? fc.doiFc   : fc.doi,   doiClsFn)
     + gRow('Propose PR', fc.propose, null, true, code)
@@ -7019,35 +7039,34 @@ function _fcLiveRecalc(code) {
   var fc      = _calcForecast(code, ospoIdx);
   var detEl   = document.getElementById('fc-detail-' + code);
   if(!detEl) return;
-  var tbody = detEl.querySelector('tbody');
-  if(!tbody) return;
-  var trs = tbody.querySelectorAll('tr');
-  var isFcV = (_fcGridViewMode === 'forecast');
-
-  // Find Stock and DOI rows by data-rowlabel attr (set during render)
+  var isFcV   = (_fcGridViewMode === 'forecast');
+  var doi_t   = _fcGetDOI();
   var stockVals = isFcV ? fc.stockFc : fc.stock;
   var doiVals   = isFcV ? fc.doiFc   : fc.doi;
-  var doi_t     = _fcGetDOI();
 
-  trs.forEach(function(tr) {
-    var lbl = tr.getAttribute('data-rowlabel');
-    if(!lbl) return;
-    var tds = tr.querySelectorAll('td:not(:first-child)');
-    if(lbl === 'stock') {
-      stockVals.forEach(function(v, i) {
-        if(i >= tds.length) return;
-        var minS = fc.forecast[i]>0 ? fc.forecast[i]*(doi_t/25) : 0;
-        var cls  = v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
-        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
-      });
-    } else if(lbl === 'doi') {
-      doiVals.forEach(function(v, i) {
-        if(i >= tds.length) return;
-        var cls = v<0?'color:var(--red)':v<doi_t?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-        var txt = v>0 ? (v>=999?'∞':String(Math.round(v))) : '—';
-        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
-      });
-    }
+  // Find all tbodies in the detail row (there's one for the grid)
+  var tbodies = detEl.querySelectorAll('table tbody');
+  tbodies.forEach(function(tbody) {
+    var trs = tbody.querySelectorAll('tr[data-rowlabel]');
+    trs.forEach(function(tr) {
+      var lbl = tr.getAttribute('data-rowlabel');
+      var tds = tr.querySelectorAll('td:not(:first-child)');
+      if(lbl === 'stock') {
+        stockVals.forEach(function(v, i) {
+          if(!tds[i]) return;
+          var minS = fc.forecast[i]>0 ? fc.forecast[i]*(doi_t/25) : 0;
+          var cls  = v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+          tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
+        });
+      } else if(lbl === 'doi') {
+        doiVals.forEach(function(v, i) {
+          if(!tds[i]) return;
+          var cls = v<0?'color:var(--red)':v<doi_t?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+          var txt = v>0 ? (v>=999?'∞':n_id(Math.round(v))) : '—';
+          tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
+        });
+      }
+    });
   });
 }
 
@@ -7183,9 +7202,62 @@ function _fcExportModal(target) {
 
 function _fcDoExport(fmt) {
   closeModal('fc-export-modal');
+  if(fmt === 'excel-tall') { _fcExportExcelTall(); return; }
   if(fmt === 'excel')   _fcExportExcel(_fcExportTarget);
   else if(fmt === 'gsheets') _fcExportGSheets(_fcExportTarget);
   else                  _fcExportCSVDirect(_fcExportTarget);
+}
+
+function _fcExportExcelTall() {
+  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+  var rows = _fcBuildRowsTall();
+  if(!rows.length) { toast('Tidak ada data','err'); return; }
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Style: header row bold
+  var range = XLSX.utils.decode_range(ws['!ref']);
+  for(var c2 = range.s.c; c2 <= range.e.c; c2++) {
+    var cell = ws[XLSX.utils.encode_cell({r:0,c:c2})];
+    if(cell) { if(!cell.s) cell.s = {}; cell.s.font = {bold:true}; }
+  }
+  ws['!cols'] = rows[0].map(function(_, ci) {
+    return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
+      return Math.max(mx, String(row[ci]||'').length);
+    }, 0) + 2)) };
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
+  XLSX.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  toast('Excel Tall downloaded ✓','ok');
+}
+
+// ── Build "tall" format: per item multi-row (Req, OSPO, OSPR, Propose, Stock, DOI) ──
+function _fcBuildRowsTall() {
+  var ospoIdx = _buildOSPOIndex();
+  var items = Object.keys(STATE.masterData || {}).filter(function(code) {
+    var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
+    return iT !== 'FG';
+  });
+  var fcD = {};
+  items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
+
+  var hdr = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'].concat(FC_MONTHS);
+  var rows = [hdr];
+
+  var BARIS = ['Requirement','OSPO','OSPR','Propose PR','Stock','DOI (Hari)'];
+  items.forEach(function(code) {
+    var m = STATE.masterData[code] || {};
+    var fc = fcD[code];
+    var meta = [code, m.desc||'', m.abc||'', m.supplier||'', m.uom||'',
+                m.moq||0, m.multiple||1, fc.lt_days||0];
+    var dataRows = [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi];
+    BARIS.forEach(function(label, bi) {
+      rows.push(meta.concat([label]).concat(dataRows[bi].map(function(v){
+        return v != null ? (typeof v === 'number' ? v : v) : 0;
+      })));
+    });
+  });
+  return rows;
 }
 
 // ── Build data arrays for each target ────────────────────────────────────────
