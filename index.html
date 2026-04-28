@@ -7205,22 +7205,24 @@ function renderPerformance() {
   function fmtDate(d) { if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
   function daysDiff(a, b) { return a && b ? Math.round((a-b)/86400000) : null; }
 
-  // Build GRPO lookup by docNum → array of lines
-  var grpoByDoc = {};
+  // Build GRPO lookup by baseRef (= PO DocNum) — accurate 1:1 matching
+  var grpoByPO = {};
   grpo.forEach(function(g) {
-    var dn = String(g.docNum||g.grpoNum||'');
-    if(!dn) return;
-    if(!grpoByDoc[dn]) grpoByDoc[dn] = [];
-    grpoByDoc[dn].push(g);
+    var ref = String(g.baseRef||'');
+    if(!ref) return;
+    if(!grpoByPO[ref]) grpoByPO[ref] = { qty:0, dates:[] };
+    grpoByPO[ref].qty += parseFloat(g.qty)||0;
+    var gd = parseDMY(g.grpoDate);
+    if(gd) grpoByPO[ref].dates.push(gd);
   });
 
-  // Match PO lines with GRPO + overrides
+  // All POs — show if has GRPO or has confDate/confQty
   var rows = [];
   poData.forEach(function(po) {
     var dn      = String(po.docNum||'');
     var code    = po.itemCode||'';
-    var key     = dn + '_' + code;
-    var ovrItem = ovr[key] || {};
+    var ovKey   = dn + '_' + code;
+    var ovrItem = ovr[ovKey] || {};
     var m       = master[code] || {};
 
     var reqDate  = parseDMY(po.prReqDate);
@@ -7228,33 +7230,19 @@ function renderPerformance() {
     var confQty  = parseFloat(ovrItem.confQty) || 0;
     var reqQty   = parseFloat(po.orderQty || po.openQty || 0);
 
-    // Find matching GRPO lines for this PO + item
-    var grpoLines = [];
-    Object.keys(grpoByDoc).forEach(function(gdn) {
-      grpoByDoc[gdn].forEach(function(g) {
-        if(g.itemCode === code && (g.poNum === dn || g.baseRef === dn || String(g.docNum)===dn)) {
-          grpoLines.push(g);
-        }
-      });
-    });
-    // Also match by item code in current GRPO month
-    if(!grpoLines.length) {
-      grpo.forEach(function(g) {
-        if(g.itemCode === code) grpoLines.push(g);
-      });
-    }
+    // Match GRPO by baseRef = PO docNum (exact 1:1)
+    var grpoMatch = grpoByPO[dn];
+    var grpoQty   = grpoMatch ? grpoMatch.qty : 0;
+    var grpoDate  = grpoMatch && grpoMatch.dates.length
+      ? new Date(Math.max.apply(null, grpoMatch.dates)) : null;
 
-    var grpoQty  = grpoLines.reduce(function(s,g){ return s + (parseFloat(g.qty)||0); }, 0);
-    var grpoDates= grpoLines.map(function(g){ return parseDMY(g.grpoDate||g.docDate); }).filter(Boolean);
-    var grpoDate = grpoDates.length ? new Date(Math.max.apply(null, grpoDates)) : null;
+    // Skip if nothing to measure
+    if(!confDate && !confQty && !grpoDate) return;
 
-    // Range filter based on grpoDate or reqDate
-    var refDate  = grpoDate || reqDate;
-    if(range === 'thisweek' && refDate && refDate < wkMon) return;
-    if(range === 'thismonth' && refDate && refDate < mo1) return;
-
-    // Skip if no conf and no grpo (nothing to measure)
-    if(!confDate && !grpoDate && !confQty) return;
+    // Range filter
+    var refDate2 = grpoDate || confDate || reqDate;
+    if(range === 'thisweek'  && refDate2 && refDate2 < wkMon) return;
+    if(range === 'thismonth' && refDate2 && refDate2 < mo1)   return;
 
     var gapReqConf  = confDate ? daysDiff(confDate, reqDate)  : null; // + = conf terlambat dari req
     var gapConfGrpo = (confDate && grpoDate) ? daysDiff(grpoDate, confDate) : null; // + = grpo terlambat dari conf
