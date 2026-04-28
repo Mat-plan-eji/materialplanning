@@ -2996,8 +2996,10 @@ function processMasterData(rows) {
     var abc = String(row['ABC'] || row['Abc'] || row['Class'] || row['ABC Class'] || '').trim().toUpperCase();
     var status  = String(row['Status'] || row['status'] || '').trim();
     var phase   = String(row['Phase'] || row['phase'] || row['Phase Code'] || '').trim();
-    var isObs   = /obsolet/i.test(status) || /obsolet/i.test(phase);
-    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt, abc: abc, status: status, phase: phase, obsolet: isObs };
+    var isObs   = /obsolet/i.test(status) || /obsolet/i.test(phase) || /obsolet/i.test(abc);
+    // If abc is Obsolete/NPD, it's not a class — blank it so color coding doesn't break
+    var abcClass = /^[ABC]$/i.test(abc) ? abc.toUpperCase() : '';
+    result[code] = { desc: desc, moq: moq, multiple: multiple, uom: uom, supplier: supplier, lt: lt, abc: abcClass, status: status, phase: phase, obsolet: isObs };
   });
   return result;
 }
@@ -3259,7 +3261,9 @@ function _doBuildProjection() {
       endStockNext: Math.round(endStock - mrpNextMonth),
       itemType: itemType, isUrgent: isUrgent,
       abc: ((STATE.masterData||{})[code] ? ((STATE.masterData||{})[code].abc||'') : ''),
-      obsolet: ((STATE.masterData||{})[code] ? !!((STATE.masterData||{})[code].obsolet) : false)
+      obsolet: ((STATE.masterData||{})[code]
+        ? (!!(STATE.masterData[code].obsolet) || /obsolet/i.test(STATE.masterData[code].abc||''))
+        : false)
     });
   });
 
@@ -3381,9 +3385,15 @@ function renderProjection() {
     var _abcSel = document.querySelectorAll('.proj-abc-cb:checked');
     if(_abcSel.length > 0) {
       var _abcVals = Array.prototype.map.call(_abcSel, function(cb){ return cb.value; });
+      // Determine if item is obsolete: from masterData status/phase field
+      var _master = (STATE.masterData||{})[p.productCode] || {};
+      var _isObs  = !!p.obsolet
+        || /obsolet/i.test(_master.status||'')
+        || /obsolet/i.test(_master.phase||'')
+        || /obsolet/i.test(_master.abc||'');
       var _matchAbc = _abcVals.some(function(v){
-        if(v === 'OBSOLET') return !!p.obsolet;
-        return (p.abc||'') === v && !p.obsolet;
+        if(v === 'OBSOLET') return _isObs;
+        return (p.abc||'') === v && !_isObs;
       });
       if(!_matchAbc) return false;
     }
