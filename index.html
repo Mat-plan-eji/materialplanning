@@ -6184,19 +6184,28 @@ function _calcForecast(code, ospoIdx) {
   }
 
   var WD = 25; // hari kerja per bulan
+  // Avg requirement dari semua bulan yang ada data (untuk estimasi beyond horizon)
+  var avgReq = (function() {
+    var sum = 0, cnt = 0;
+    forecast.forEach(function(v){ if(v > 0){ sum += v; cnt++; } });
+    return cnt > 0 ? sum / cnt : 0;
+  })();
+
   function calcDOI(stockArr) {
     return FC_MONTHS.map(function(_, i) {
       var s  = stockArr[i]; if(s <= 0) return 0;
       var r0 = forecast[i]   || 0;
-      var r1 = forecast[i+1] || 0;
-      var r2 = forecast[i+2] || 0;
-      if(r0 <= 0 && r1 <= 0) return s > 0 ? 999 : 0;
+      // Kalau bulan berikutnya di luar horizon, pakai avgReq sebagai estimasi
+      var r1 = (forecast[i+1] != null && forecast[i+1] > 0) ? forecast[i+1] : avgReq;
+      var r2 = (forecast[i+2] != null && forecast[i+2] > 0) ? forecast[i+2] : avgReq;
+      if(r0 <= 0 && r1 <= 0) return s > 0 ? 0 : 0;
       if(r0 > 0 && s < r0)   return Math.round(s / r0 * WD);
       var s1 = s - r0;
       if(r1 > 0 && s1 < r1)  return Math.round(WD + s1 / r1 * WD);
       var s2 = s1 - r1;
       if(r2 > 0)              return Math.round(WD + WD + s2 / r2 * WD);
-      return s2 > 0 ? 999 : WD + WD;
+      // Stock masih besar tapi sudah tidak ada req beyond → cap at 3 bulan (75 hari)
+      return WD * 3;
     });
   }
 
@@ -6227,8 +6236,8 @@ function _calcForecast(code, ospoIdx) {
     var propSoFar = 0;
     for(var pp = snapMoIdx; pp <= fm; pp++) propSoFar += (proposeAuto[pp] || 0);
     var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m - propSoFar);
-    var step   = multiple > 0 ? multiple : 1;
-    var neededR = needed > 0 ? Math.ceil(needed / step) * step : 0;
+    var step    = multiple > 0 ? multiple : 1;
+    var neededR = needed > 0 ? Math.max(moq, Math.ceil(needed / step) * step) : 0;
 
     // Ambil dari pool OSPO
     var fromPool = Math.min(neededR, ospoPool);
@@ -6240,7 +6249,7 @@ function _calcForecast(code, ospoIdx) {
     if(remainShort > 0 && _fcAutoPropose) {
       var propIdx = Math.max(fm, earliestDelivIdx);
       if(propIdx < 9) {
-        var propQty = Math.ceil(remainShort / step) * step;
+        var propQty = Math.max(moq, Math.ceil(remainShort / step) * step);
         proposeAuto[propIdx] = (proposeAuto[propIdx] || 0) + propQty;
       }
     }
@@ -6667,10 +6676,7 @@ function _fcDetailRow(code, fc, master) {
     + mhdr
     + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right;white-space:nowrap">'
     + toggleBtn
-    + ((_fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){return v!=null;}))
-       || (_fcOsprOverride[code] && _fcOsprOverride[code].some(function(v){return v!=null;}))
-      ? ' <button onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" style="font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid var(--teal);color:var(--teal);background:transparent;font-family:var(--font);margin-left:4px">↺ Reset</button>'
-      : '')
+    + ' <button onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" style="font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid var(--teal);color:var(--teal);background:transparent;font-family:var(--font);margin-left:4px">↺ Reset PO</button>'
     + '</th>'
     + '</tr></thead>'
     + '<tbody>'
