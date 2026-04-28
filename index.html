@@ -923,6 +923,38 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 </div>
 
 <!-- SETTINGS -->
+<div class="page" id="pg-performance">
+<div class="page-inner">
+  <div class="ph">
+    <div class="ph-l">
+      <h2>Supplier Performance</h2>
+      <p>Analisis ketepatan waktu dan qty kiriman vs konfirmasi vs request</p>
+    </div>
+    <div class="ph-r">
+      <select id="perf-range" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
+        <option value="all">Semua Data</option>
+        <option value="thisweek">Minggu Ini</option>
+        <option value="thismonth">Bulan Ini</option>
+      </select>
+      <select id="perf-view" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
+        <option value="supplier">Per Supplier</option>
+        <option value="item">Per Item</option>
+        <option value="detail">Detail PO</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadGRPO(true).then(renderPerformance)" style="font-size:11.5px">↺ Refresh GRPO</button>
+    </div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div id="perf-kpi" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px"></div>
+
+  <!-- Table -->
+  <div id="perf-table"></div>
+</div>
+</div
+</div>
+</div>
+
 <div class="page" id="pg-settings">
 <div class="page-inner">
   <div class="ph"><div class="ph-l"><h2>Settings</h2><p>Konfigurasi koneksi SAP, WA, dan Firebase (cloud sync)</p></div></div>
@@ -7991,33 +8023,3 @@ if(document.readyState === "loading") {
 </script>
 </body>
 </html
-
-<div class="page" id="pg-performance">
-<div class="page-inner">
-  <div class="ph">
-    <div class="ph-l">
-      <h2>Supplier Performance</h2>
-      <p>Analisis ketepatan waktu dan qty kiriman vs konfirmasi vs request</p>
-    </div>
-    <div class="ph-r">
-      <select id="perf-range" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
-        <option value="all">Semua Data</option>
-        <option value="thisweek">Minggu Ini</option>
-        <option value="thismonth">Bulan Ini</option>
-      </select>
-      <select id="perf-view" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
-        <option value="supplier">Per Supplier</option>
-        <option value="item">Per Item</option>
-        <option value="detail">Detail PO</option>
-      </select>
-      <button class="btn btn-primary btn-sm" onclick="loadGRPO(true).then(renderPerformance)" style="font-size:11.5px">↺ Refresh GRPO</button>
-    </div>
-  </div>
-
-  <!-- KPI Strip -->
-  <div id="perf-kpi" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px"></div>
-
-  <!-- Table -->
-  <div id="perf-table"></div>
-</div>
-</div>>
