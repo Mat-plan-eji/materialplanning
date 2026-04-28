@@ -6674,10 +6674,11 @@ function _fcDetailRow(code, fc, master) {
     + '<thead><tr>'
     + '<th style="text-align:left;padding:6px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border2);min-width:120px">Baris</th>'
     + mhdr
-    + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right;white-space:nowrap">'
+    + '<th style="border-bottom:2px solid var(--border2);padding:4px 6px;text-align:right;white-space:nowrap;vertical-align:middle">'
+    + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
     + toggleBtn
-    + ' <button onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" style="font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid var(--teal);color:var(--teal);background:transparent;font-family:var(--font);margin-left:4px">↺ Reset PO</button>'
-    + '</th>'
+    + '<button onclick="event.stopPropagation();_fcResetOspoOspr(\'' + code + '\')" style="font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid var(--teal);color:var(--teal);background:transparent;font-family:var(--font)">↺ Reset PO</button>'
+    + '</div></th>'
     + '</tr></thead>'
     + '<tbody>'
     + gRow('Requirement', fc.forecast, function(){ return 'color:var(--text)'; })
