@@ -2713,7 +2713,14 @@ function fmtNum(n, dec) {
   return neg ? '-' + result : result;
 }
 // Shorthand — ganti semua .toLocaleString('id-ID') dengan ini
-function n_id(n, dec) { return fmtNum(n, dec); }
+function n_id(n, dec) {
+  if(dec === undefined) {
+    // Auto: show up to 2 decimals if number has fractional part
+    var abs = Math.abs(n);
+    dec = (abs !== Math.floor(abs)) ? 2 : 0;
+  }
+  return fmtNum(n, dec);
+}
 
 // ── Normalize SAP item code ────────────────────────────────────────────────────
 // Kode SAP adalah angka murni (misal 3000010001). Google Sheets Indonesia
@@ -6496,11 +6503,11 @@ function _fcRenderDetail(el, items, fcData, fRows) {
     // Per-month cells — show propose by default
     var mCells = FC_MONTHS.map(function(_, i) {
       if(fRows==='forecast') {
-        var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(Math.round(v)):'—')+'</td>';
+        var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(v):'—')+'</td>';
       } else if(fRows==='stock') {
         var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOI()*daily;
         var cl=v2<0?'var(--red)':v2<minS?'var(--amber)':'var(--text)';
-        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(Math.round(v2))+'</td>';
+        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(v2)+'</td>';
       } else if(fRows==='doi') {
         var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOI()?'var(--amber)':d>99?'var(--muted)':'var(--green)';
         return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d===999?'∞':d)+'</td>';
@@ -6508,7 +6515,7 @@ function _fcRenderDetail(el, items, fcData, fRows) {
         // propose (default)
         var pv=fc.propose[i];
         if(!pv) return '<td style="text-align:right;padding:6px 5px;color:var(--hint);font-size:11px">—</td>';
-        return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:3px">'+n_id(Math.round(pv))+'</td>';
+        return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;background:var(--amber-bg);color:var(--amber);font-weight:700;border-radius:3px">'+n_id(pv)+'</td>';
       }
     }).join('');
 
@@ -6522,7 +6529,7 @@ function _fcRenderDetail(el, items, fcData, fRows) {
       + '<td style="padding:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)">'+(m.supplier||'—')+'</td>'
       + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:700;color:'+abcColor+'">'+(abc||'—')+'</td>'
       + '<td style="padding:8px 6px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(fc.lt_days?fc.lt_days+'d':'—')+'</td>'
-      + '<td style="padding:8px;text-align:right;font-family:var(--mono);font-size:11px">'+n_id(Math.round(fc.soh))+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono);font-size:11px">'+n_id(fc.soh)+'</td>'
       + mCells
       + '</tr>';
 
@@ -6546,11 +6553,11 @@ function _fcDetailRow(code, fc, master) {
   var matcomM = (STATE.matcomMonthly || {})[code] || {};
   var matcomApril = matcomM[4] || 0; // bulan berjalan (April)
   var matcomRow = matcomApril > 0
-    ? ['Matcom Apr','<span style="color:var(--teal);font-weight:600">'+n_id(Math.round(matcomApril))+'</span> <small style="color:var(--muted)">'+(master.uom||'')+'</small>']
+    ? ['Matcom Apr','<span style="color:var(--teal);font-weight:600">'+n_id(matcomApril)+'</span> <small style="color:var(--muted)">'+(master.uom||'')+'</small>']
     : null;
   var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
     ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
-    ['SOH',n_id(Math.round(fc.soh))],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
+    ['SOH',n_id(fc.soh)],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
   if(matcomRow) mRows.splice(mRows.length-1, 0, matcomRow);
   if(rn && _isAdmin) mRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
   mRows.forEach(function(r){
@@ -6573,7 +6580,7 @@ function _fcDetailRow(code, fc, master) {
       var lb = s.isOverdue?'⚠ Terlambat':(s.isUrgent?'⚡ '+s.daysLeft+'h lagi':'✓ '+s.daysLeft+'h lagi');
       sug += '<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:'+bg+';border-radius:var(--r);margin-bottom:4px;font-size:11px">'
         + '<span style="font-family:var(--mono);color:var(--muted)">'+s.proposeMonth+'</span>'
-        + '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">'+n_id(Math.round(s.qty))+' '+(master.uom||'')+'</span>'
+        + '<span style="font-family:var(--mono);font-weight:600;color:var(--text)">'+n_id(s.qty)+' '+(master.uom||'')+'</span>'
         + '<span style="margin-left:auto;font-size:10px;color:'+cl+';font-weight:600">'+lb+'</span>'
         + '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Buat PR sebelum '+ds+'</span>'
         + '</div>';
@@ -6606,7 +6613,7 @@ function _fcDetailRow(code, fc, master) {
         +   ' data-code="'+itemCode+'" data-mi="'+i+'" data-base="'+base+'" data-rowtype="'+(rowType||'ospo')+'"'
         +   ' oninput="_fcOspoRowEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
         +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_wt+';color:'+inp_clr+';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none"'
-        +   ' title="'+(isEdited ? 'SAP: '+n_id(Math.round(base))+' (diedit manual)' : 'Klik untuk edit')+'">'
+        +   ' title="'+(isEdited ? 'SAP: '+n_id(base)+' (diedit manual)' : 'Klik untuk edit')+'">'
         + '</div></td>';
     }).join('');
     var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
@@ -6647,7 +6654,7 @@ function _fcDetailRow(code, fc, master) {
           + '</div></td>'
       }
       var style = clsFn ? clsFn(v, i) : 'color:var(--text)';
-      var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(Math.round(v));
+      var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(v);
       return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</td>';
     }).join('');
     var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
@@ -6711,7 +6718,7 @@ function _fcDetailRow(code, fc, master) {
       byTo[toMo].forEach(function(n) {
         pullHtml += '<div style="color:var(--text);line-height:1.6">'
           + 'PO bulan <b>' + n.fromMonth + '</b> ditarik ke <b>' + n.toMonth + '</b>'
-          + ' &nbsp;—&nbsp; <span style="font-family:var(--mono);font-weight:600">' + n_id(Math.round(n.qty)) + '</span>'
+          + ' &nbsp;—&nbsp; <span style="font-family:var(--mono);font-weight:600">' + n_id(n.qty) + '</span>'
           + '</div>';
       });
     });
@@ -6808,7 +6815,7 @@ function _fcRenderRekap(el, items, fcData, fStatus) {
       + '<td style="padding:9px 10px;font-size:12px;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.name+'</td>'
       + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:'+abcClr+'">'+(r.abc||'—')+'</td>'
       + '<td style="padding:9px 10px;font-size:11.5px;color:var(--muted)">'+(r.site||'—')+'</td>'
-      + '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600">'+n_id(Math.round(r.qty))+'<span style="font-size:10px;color:var(--muted);margin-left:3px">'+r.uom+'</span></td>'
+      + '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600">'+n_id(r.qty)+'<span style="font-size:10px;color:var(--muted);margin-left:3px">'+r.uom+'</span></td>'
       + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--muted)">'+fmt(r.delivDate)+'</td>'
       + '<td style="padding:9px 10px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500">'+fmt(r.createPRBy)+'</td>'
       + '<td style="padding:7px 10px;text-align:center">'
@@ -6862,7 +6869,7 @@ function _fcRenderSupplier(el, items, fcData) {
       var isFirst = rowIdx === 0;
       var cells = vals.map(function(v) {
         return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;color:' + (v>0?clr:'var(--hint)') + '">'
-          + (v>0 ? n_id(Math.round(v)) : '—') + '</td>';
+          + (v>0 ? n_id(v) : '—') + '</td>';
       }).join('');
       return '<tr style="border-bottom:1px dotted var(--border);' + bgBase + '">'
         + (isFirst
@@ -6878,7 +6885,7 @@ function _fcRenderSupplier(el, items, fcData) {
     html += '<tr style="border-bottom:2px solid var(--border);' + bgBase + '">'
       + '<td style="padding:5px 8px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);white-space:nowrap">Propose PR</td>'
       + fc.propose.map(function(v) {
-          return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;font-weight:'+(v>0?'700':'400')+';color:'+(v>0?'var(--amber)':'var(--hint)')+'">'+( v>0?n_id(Math.round(v)):'—')+'</td>';
+          return '<td style="text-align:right;padding:5px;font-family:var(--mono);font-size:11px;font-weight:'+(v>0?'700':'400')+';color:'+(v>0?'var(--amber)':'var(--hint)')+'">'+( v>0?n_id(v):'—')+'</td>';
         }).join('')
       + '</tr>';
   });
@@ -7031,7 +7038,7 @@ function _fcLiveRecalc(code) {
         if(i >= tds.length) return;
         var minS = fc.forecast[i]>0 ? fc.forecast[i]*(doi_t/25) : 0;
         var cls  = v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
-        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(Math.round(v))+'</span>';
+        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
       });
     } else if(lbl === 'doi') {
       doiVals.forEach(function(v, i) {
@@ -7117,7 +7124,7 @@ function _fcProposeEdit(input) {
   var qty  = parseFloat(input.value) || 0;
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
-  _fcPropose[code][mi] = qty;
+  _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
   // Multiple validation
   if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
     input.style.outline = '1.5px solid var(--red)';
