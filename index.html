@@ -3745,12 +3745,29 @@ function renderDashboard() {
         var t = /^3/.test(itemCode)?'RM':(/^4/.test(itemCode)?'PM':'FG');
         if(t !== _dashType) return;
       }
-      var po = STATE.poData.find(function(p){ return p.docNum === parts[0] && p.itemCode === itemCode; });
+      var po = STATE.poData.find(function(p){ return String(p.docNum) === String(parts[0]) && p.itemCode === itemCode; });
       // Get best item name: PO name → masterData → mrpData → itemCode
-      var _ovName = (po ? _poName(po.itemCode, po.itemName) : '') ||
-        (STATE.masterData && STATE.masterData[itemCode] && STATE.masterData[itemCode].desc) ||
-        (STATE.mrpData && STATE.mrpData[itemCode] && STATE.mrpData[itemCode].desc) ||
-        itemCode;
+      // Try every possible source for the item name
+      var _ovName = '';
+      // 1. From PO data directly
+      if(!_ovName && po && po.itemName) _ovName = po.itemName; // use itemName directly, skip _poName display mode
+      // 2. From masterData
+      if(!_ovName && STATE.masterData && STATE.masterData[itemCode]) _ovName = STATE.masterData[itemCode].desc || '';
+      // 3. From MRP data
+      if(!_ovName && STATE.mrpData && STATE.mrpData[itemCode]) _ovName = STATE.mrpData[itemCode].desc || STATE.mrpData[itemCode].name || '';
+      // 4. From matcom data
+      if(!_ovName && STATE.matcomData && STATE.matcomData[itemCode]) _ovName = STATE.matcomData[itemCode].sapName || STATE.matcomData[itemCode].name || '';
+      // 5. From projection data
+      if(!_ovName && STATE.projectionData) {
+        var _projItem = STATE.projectionData.find(function(p){ return p.productCode === itemCode; });
+        if(_projItem) _ovName = _projItem.description || _projItem.realName || '';
+      }
+      // 6. Search all PO data by item code
+      if(!_ovName) {
+        var _anyPO = STATE.poData.find(function(p){ return p.itemCode === itemCode && p.itemName; });
+        if(_anyPO) _ovName = _poName(_anyPO.itemCode, _anyPO.itemName);
+      }
+      if(!_ovName) _ovName = itemCode; // last resort
       overdue.push({
         docNum: parts[0], itemCode: itemCode,
         itemName: _ovName,
@@ -7325,235 +7342,78 @@ function _fcFallbackHtmlCopy(html) {
 }
 
 function _fcExportExcelTall() {
-  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
-  var rows = _fcBuildRowsTall();
-  if(!rows.length) { toast('Tidak ada data','err'); return; }
-  var ws = XLSX.utils.aoa_to_sheet(rows);
-
-  var XS = window.XLSXStyle || XLSX; // use xlsx-style if loaded
-  var BARIS_LABELS = ['Requirement','OSPO','OSPR','Propose PR','Stock','DOI (Hari)'];
-  var ROW_FILLS = {
-    'Requirement': 'FFF8F9FA', 'OSPO': 'FFD1F0F0', 'OSPR': 'FFEDE7F6',
-    'Propose PR':  'FFFFF8E1', 'Stock': 'FFE8F5E9', 'DOI (Hari)': 'FFF1F8E9'
-  };
-  var ROW_COLORS = {
-    'Requirement': 'FF212529', 'OSPO': 'FF007A7A', 'OSPR': 'FF5E35B1',
-    'Propose PR':  'FFB8860B', 'Stock': 'FF2E7D32', 'DOI (Hari)': 'FF558B2F'
-  };
-  var HEADER_FILL = 'FF2D3748';
-  var range = XLSX.utils.decode_range(ws['!ref']);
-
-  for(var r2 = range.s.r; r2 <= range.e.r; r2++) {
-    var barisLabel = '';
-    // Column 8 = Baris (0-indexed: Item No=0, Desc=1, ABC=2, Supplier=3, UoM=4, MOQ=5, Multiple=6, LT=7, Baris=8)
-    var barisCell = ws[XLSX.utils.encode_cell({r:r2, c:8})];
-    if(barisCell) barisLabel = barisCell.v || '';
-    var isHeader = r2 === 0;
-    var fill = isHeader ? HEADER_FILL : (ROW_FILLS[barisLabel] || 'FFFFFFFF');
-    var fgColor = isHeader ? 'FFFFFFFF' : (ROW_COLORS[barisLabel] || 'FF333333');
-    var bold = isHeader || barisLabel === 'Requirement' || barisLabel === 'Propose PR';
-
-    for(var c2 = range.s.c; c2 <= range.e.c; c2++) {
-      var addr = XLSX.utils.encode_cell({r:r2, c:c2});
-      if(!ws[addr]) ws[addr] = {t:'z', v:''};
-      ws[addr].s = {
-        fill: { patternType:'solid', fgColor:{rgb: fill} },
-        font: { bold: bold, color:{rgb: fgColor}, sz: 10 },
-        border: { top:{style:'thin',color:{rgb:'FFCCCCCC'}}, bottom:{style:'thin',color:{rgb:'FFCCCCCC'}},
-                  left:{style:'thin',color:{rgb:'FFCCCCCC'}}, right:{style:'thin',color:{rgb:'FFCCCCCC'}} },
-        alignment: { horizontal: c2 >= 9 ? 'right' : (c2 === 8 ? 'left' : 'left'), vertical:'center' }
-      };
-    }
-  }
-
-  ws['!cols'] = rows[0].map(function(_, ci) {
-    return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
-      return Math.max(mx, String(row[ci]||'').length);
-    }, 0) + 2)) };
-  });
-
-  var wb = (XS.utils && XS !== XLSX) ? XS.utils.book_new() : XLSX.utils.book_new();
-  if(XS !== XLSX && XS.utils) {
-    XS.utils.book_append_sheet(wb, ws, 'Forecast');
-    XS.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
-  } else {
-    XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
-    XLSX.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
-  }
-  toast('Excel Tall downloaded ✓','ok');
-}
-
-// ── Build "tall" format: per item multi-row (Req, OSPO, OSPR, Propose, Stock, DOI) ──
-function _fcBuildRowsTall() {
+  // Build the same colored HTML as GSheets, save as .xls (Excel reads HTML natively)
   var ospoIdx = _buildOSPOIndex();
   var items = Object.keys(STATE.masterData || {}).filter(function(code) {
     var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
     return iT !== 'FG';
   });
+  if(!items.length) { toast('Tidak ada data','err'); return; }
   var fcD = {};
   items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
 
-  var hdr = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'].concat(FC_MONTHS);
-  var rows = [hdr];
+  var metaCols = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'];
+  var headerBg = '#2d3748'; var headerClr = '#ffffff';
 
-  var BARIS = ['Requirement','OSPO','OSPR','Propose PR','Stock','DOI (Hari)'];
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
+    + '<head><meta charset="UTF-8">'
+    + '<style>td,th{font-size:10pt;font-family:Arial;}table{border-collapse:collapse}</style>'
+    + '</head><body><table>';
+
+  // Header
+  html += '<tr>';
+  metaCols.concat(FC_MONTHS).forEach(function(h) {
+    html += '<th style="background:'+headerBg+';color:'+headerClr+';font-weight:bold;padding:5px 8px;border:1px solid #555;white-space:nowrap">'+h+'</th>';
+  });
+  html += '</tr>';
+
+  var BARIS_DATA = function(fc){ return [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi]; };
+
   items.forEach(function(code) {
-    var m = STATE.masterData[code] || {};
-    var fc = fcD[code];
-    var meta = [code, m.desc||'', m.abc||'', m.supplier||'', m.uom||'',
-                m.moq||0, m.multiple||1, fc.lt_days||0];
-    var dataRows = [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi];
-    BARIS.forEach(function(label, bi) {
-      rows.push(meta.concat([label]).concat(dataRows[bi].map(function(v){
-        return v != null ? (typeof v === 'number' ? v : v) : 0;
-      })));
-    });
-  });
-  return rows;
-}
+    var m   = STATE.masterData[code] || {};
+    var fc  = fcD[code];
+    var abc = m.abc||'';
+    var abcClr = abc==='A'?'#c0392b':abc==='B'?'#d68910':abc==='C'?'#1a7a4a':'#555';
+    var data = BARIS_DATA(fc);
 
-// ── Build data arrays for each target ────────────────────────────────────────
-function _fcBuildRows(target) {
-  var ospoIdx = _buildOSPOIndex();
-  var items = Object.keys(STATE.masterData || {}).filter(function(code) {
-    var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
-    return iT !== 'FG';
-  });
-  var fcD = {};
-  items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
-
-  if(target === 'rekap') {
-    var fmt = function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); };
-    var rows = [['Item No.','Item Description','ABC','Whse','Required Qty','UoM','Required Date','Tgl Create PR','Tipe','Status']];
-    items.forEach(function(code) {
-      var m=STATE.masterData[code]||{}, fc=fcD[code];
-      var name=m.desc||'', iT=/^3/.test(code)?'RM':'PM';
-      var site=(STATE.stockData&&STATE.stockData[code])
-        ? ((STATE.stockData[code].btg>0?'BITUNG':'')+(STATE.stockData[code].sng>0?(STATE.stockData[code].btg>0?' & SANGIANG':'SANGIANG'):'')) : '';
-      fc.suggestions.forEach(function(s){
-        rows.push([code,name,m.abc||'',site,Math.round(s.qty),m.uom||'',fmt(s.delivDate),fmt(s.createPRBy),iT,
-          s.isOverdue?'Terlambat':s.isUrgent?'Segera':'Oke']);
+    _FC_TALL_ROWS.forEach(function(row, bi) {
+      var isFirst = bi === 0;
+      html += '<tr>';
+      // Item No
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-family:monospace;white-space:nowrap;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+code+'</b>':code)+'</td>';
+      // Description
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+(m.desc||'')+'</b>':(m.desc||''))+'</td>';
+      // ABC
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;font-weight:bold;color:'+abcClr+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(abc||'')+'</td>';
+      // Supplier
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(m.supplier||'')+'</td>';
+      // UoM MOQ Multiple LT
+      [m.uom||'', m.moq||0, m.multiple||1, fc.lt_days||0].forEach(function(v){
+        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(isFirst?'<b>'+v+'</b>':v)+'</td>';
       });
+      // Baris label
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-weight:'+(row.bold?'bold':'normal')+';color:'+row.color+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+';white-space:nowrap">'+row.label+'</td>';
+      // Month values
+      data[bi].forEach(function(v){
+        var dispV = (v==null||v===0)?'—':(typeof v==='number'?(v%1!==0?v.toFixed(2):v):v);
+        var valClr = row.color;
+        if(row.label==='Stock' && typeof v==='number') valClr = v<0?'#c0392b':v===0?'#888':'#2e7d32';
+        if(row.label==='DOI (Hari)' && typeof v==='number') valClr = v<30?'#c0392b':v<60?'#d68910':'#2e7d32';
+        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:right;font-family:monospace;color:'+valClr+';font-weight:'+(row.bold&&v?'bold':'normal')+';background:'+row.bg+(isFirst?';border-top:2px solid #888':'')+'">'+(dispV===0?'0':dispV)+'</td>';
+      });
+      html += '</tr>';
     });
-    rows.sort(function(a,b){ return a[7].localeCompare(b[7]); }); // sort by Tgl Create PR
-    return rows;
-  }
-
-  if(target === 'supplier') {
-    var hdr = ['Item No','Description','Baris'].concat(FC_MONTHS);
-    var rows = [hdr];
-    items.forEach(function(code) {
-      var m=STATE.masterData[code]||{}, fc=fcD[code];
-      if(!fc.ospo.some(function(v){return v>0;}) && !fc.ospr.some(function(v){return v>0;}) && !fc.propose.some(function(v){return v>0;})) return;
-      var desc=m.desc||'';
-      rows.push([code,desc,'OSPO'     ].concat(fc.ospo.map(function(v){return Math.round(v||0);})));
-      rows.push([code,desc,'OSPR'     ].concat(fc.ospr.map(function(v){return Math.round(v||0);})));
-      rows.push([code,desc,'Propose PR'].concat(fc.propose.map(function(v){return Math.round(v||0);})));
-    });
-    return rows;
-  }
-
-  // detail (default)
-  var hdr2 = ['Item No','Description','ABC','Supplier','UoM','LT','MOQ','Multiple','SOH'];
-  FC_MONTHS.forEach(function(m){hdr2.push('Req '+m,'OSPO '+m,'OSPR '+m,'Stock '+m,'DOI '+m,'Propose '+m);});
-  var rows2 = [hdr2];
-  items.forEach(function(code) {
-    var m2=STATE.masterData[code]||{}, fc2=fcD[code];
-    var line=[code,m2.desc||'',m2.abc||'',m2.supplier||'',m2.uom||'',fc2.lt_days||0,m2.moq||0,m2.multiple||1,Math.round(fc2.soh)];
-    for(var i=0;i<9;i++) line.push(Math.round(fc2.forecast[i]||0),Math.round(fc2.ospo[i]||0),Math.round(fc2.ospr[i]||0),Math.round(fc2.stock[i]||0),fc2.doi[i]||0,Math.round(fc2.propose[i]||0));
-    rows2.push(line);
   });
-  return rows2;
-}
 
-// ── Excel export ──────────────────────────────────────────────────────────────
-function _fcExportExcel(target) {
-  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
-  var rows = _fcBuildRows(target);
-  if(!rows.length) { toast('Tidak ada data','err'); return; }
-  var ws = XLSX.utils.aoa_to_sheet(rows);
+  html += '</table></body></html>';
 
-  // Style header row bold (basic)
-  var range = XLSX.utils.decode_range(ws['!ref']);
-  for(var c2 = range.s.c; c2 <= range.e.c; c2++) {
-    var cell = ws[XLSX.utils.encode_cell({r:0,c:c2})];
-    if(cell) { if(!cell.s) cell.s = {}; cell.s.font = {bold:true}; }
-  }
-
-  // Auto column widths
-  var colWidths = rows[0].map(function(_, ci) {
-    return { wch: Math.min(30, Math.max(10, rows.reduce(function(mx, row) {
-      return Math.max(mx, String(row[ci]||'').length);
-    }, 0) + 2)) };
-  });
-  ws['!cols'] = colWidths;
-
-  var wb  = XLSX.utils.book_new();
-  var names = { detail:'Forecast Detail', rekap:'Rekap PR', supplier:'Forecast' };
-  XLSX.utils.book_append_sheet(wb, ws, names[target] || 'Forecast');
-
-  var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
-  XLSX.writeFile(wb, (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
-  toast('Excel downloaded ✓','ok');
-}
-
-// ── Google Sheets export ──────────────────────────────────────────────────────
-function _fcExportGSheets(target) {
-  var rows = _fcBuildRows(target);
-  if(!rows.length) { toast('Tidak ada data','err'); return; }
-  // Build TSV for clipboard (Sheets accepts TSV paste)
-  var tsv = rows.map(function(row) {
-    return row.map(function(v) {
-      var s = String(v == null ? '' : v);
-      // Quote if contains tab or newline
-      return s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0 ? '"' + s.replace(/"/g,'""') + '"' : s;
-    }).join('	');
-  }).join('\n');
-
-  // Copy to clipboard
-  if(navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(tsv).then(function() {
-      window.open('https://sheets.new', '_blank');
-      toast('Data disalin! Paste (Ctrl+V) di Google Sheets yang baru terbuka','ok');
-    }).catch(function() {
-      _fcFallbackCopy(tsv);
-    });
-  } else {
-    _fcFallbackCopy(tsv);
-  }
-}
-
-function _fcFallbackCopy(text) {
-  var ta = document.createElement('textarea');
-  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast('Data disalin! Buka sheets.new lalu paste','ok'); }
-  catch(e) { toast('Gagal copy, coba download CSV','err'); }
-  document.body.removeChild(ta);
-  window.open('https://sheets.new', '_blank');
-}
-
-// ── CSV export ────────────────────────────────────────────────────────────────
-function _fcExportCSVDirect(target) {
-  var rows = _fcBuildRows(target);
-  if(!rows.length) { toast('Tidak ada data','err'); return; }
-  var csv = rows.map(function(row) {
-    return row.map(function(v) {
-      var s = String(v == null ? '' : v);
-      return (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) ? '"' + s.replace(/"/g,'""') + '"' : s;
-    }).join(',');
-  }).join('\n');
-  var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
-  var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  // Save as .xls (Excel-compatible HTML)
+  var blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click(); toast('CSV downloaded ✓','ok');
+  a.download = 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xls';
+  a.click();
+  toast('Excel Tall (berwarna) downloaded ✓','ok');
 }
 
-// Kick off — tries Firebase first, falls back to localStorage
-appStart();
 
-</script>
-</body>
-</html>
