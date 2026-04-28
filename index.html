@@ -761,6 +761,9 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <button class="btn" onclick="_fcDoExport('excel-tall')" style="justify-content:center;gap:8px;padding:9px">
         📊 Excel Format Tall (multi-baris per item)
       </button>
+      <button class="btn" onclick="_fcDoExport('gsheets-tall')" style="justify-content:center;gap:8px;padding:9px">
+        <img src="https://www.gstatic.com/images/branding/product/1x/sheets_2020q4_48dp.png" style="width:16px;height:16px;vertical-align:middle"> Google Sheets Tall + Warna
+      </button>
       <button class="btn" onclick="_fcDoExport('gsheets')" style="justify-content:center;gap:8px;padding:9px">
         <img src="https://www.gstatic.com/images/branding/product/1x/sheets_2020q4_48dp.png" style="width:16px;height:16px;vertical-align:middle"> Buka di Google Sheets
       </button>
@@ -1093,6 +1096,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-style@0.8.13/dist/xlsx.full.min.js" onload="window.XLSXStyle=XLSX"></script>
 <!-- Firebase SDK v10 compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3742,9 +3746,14 @@ function renderDashboard() {
         if(t !== _dashType) return;
       }
       var po = STATE.poData.find(function(p){ return p.docNum === parts[0] && p.itemCode === itemCode; });
+      // Get best item name: PO name → masterData → mrpData → itemCode
+      var _ovName = (po ? _poName(po.itemCode, po.itemName) : '') ||
+        (STATE.masterData && STATE.masterData[itemCode] && STATE.masterData[itemCode].desc) ||
+        (STATE.mrpData && STATE.mrpData[itemCode] && STATE.mrpData[itemCode].desc) ||
+        itemCode;
       overdue.push({
         docNum: parts[0], itemCode: itemCode,
-        itemName: po ? _poName(po.itemCode, po.itemName) : itemCode,
+        itemName: _ovName,
         supplier: po ? po.supplierName : '—',
         confDate: ovr.confDate, confQty: ovr.confQty || 0
       });
@@ -7202,10 +7211,117 @@ function _fcExportModal(target) {
 
 function _fcDoExport(fmt) {
   closeModal('fc-export-modal');
-  if(fmt === 'excel-tall') { _fcExportExcelTall(); return; }
+  if(fmt === 'excel-tall')   { _fcExportExcelTall(); return; }
+  if(fmt === 'gsheets-tall') { _fcExportGSheetsTall(); return; }
   if(fmt === 'excel')   _fcExportExcel(_fcExportTarget);
   else if(fmt === 'gsheets') _fcExportGSheets(_fcExportTarget);
   else                  _fcExportCSVDirect(_fcExportTarget);
+}
+
+
+// ── Row colors for tall format ───────────────────────────────────────────────
+var _FC_TALL_ROWS = [
+  { label:'Requirement', bg:'#f8f9fa', color:'#212529', bold:true  },
+  { label:'OSPO',        bg:'#d1f0f0', color:'#007a7a', bold:false },
+  { label:'OSPR',        bg:'#ede7f6', color:'#5e35b1', bold:false },
+  { label:'Propose PR',  bg:'#fff8e1', color:'#b8860b', bold:true  },
+  { label:'Stock',       bg:'#e8f5e9', color:'#2e7d32', bold:false },
+  { label:'DOI (Hari)',  bg:'#f1f8e9', color:'#558b2f', bold:false }
+];
+
+// ── GSheets tall export: build colored HTML table, copy to clipboard ─────────
+function _fcExportGSheetsTall() {
+  var ospoIdx = _buildOSPOIndex();
+  var items = Object.keys(STATE.masterData || {}).filter(function(code) {
+    var iT = /^3/.test(code)?'RM':(/^4/.test(code)?'PM':'FG');
+    return iT !== 'FG';
+  });
+  var fcD = {};
+  items.forEach(function(c){ fcD[c] = _calcForecast(c, ospoIdx); });
+
+  var metaCols = ['Item No','Description','ABC','Supplier','UoM','MOQ','Multiple','LT','Baris'];
+  var headerBg = '#2d3748'; var headerClr = '#ffffff';
+
+  var html = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px">';
+  // Header row
+  html += '<tr>';
+  metaCols.concat(FC_MONTHS).forEach(function(h) {
+    html += '<th style="background:'+headerBg+';color:'+headerClr+';font-weight:bold;padding:5px 8px;border:1px solid #555;white-space:nowrap">'+h+'</th>';
+  });
+  html += '</tr>';
+
+  var BARIS_DATA = function(fc) { return [fc.forecast, fc.ospo, fc.ospr, fc.propose, fc.stock, fc.doi]; };
+
+  items.forEach(function(code) {
+    var m   = STATE.masterData[code] || {};
+    var fc  = fcD[code];
+    var abc = m.abc||'';
+    var abcClr = abc==='A'?'#c0392b':abc==='B'?'#d68910':abc==='C'?'#1a7a4a':'#555';
+    var data = BARIS_DATA(fc);
+
+    _FC_TALL_ROWS.forEach(function(row, bi) {
+      var isFirstRow = bi === 0;
+      html += '<tr style="border-bottom:1px solid #ddd">';
+      // Item No
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-family:monospace;white-space:nowrap;background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(isFirstRow?'<b>'+code+'</b>':code)+'</td>';
+      // Description
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;max-width:160px;overflow:hidden;background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(isFirstRow?'<b>'+(m.desc||'')+'</b>':(m.desc||''))+'</td>';
+      // ABC
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;font-weight:bold;color:'+abcClr+';background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(abc||'')+'</td>';
+      // Supplier
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(m.supplier||'')+'</td>';
+      // UoM, MOQ, Multiple, LT
+      [m.uom||'', m.moq||0, m.multiple||1, fc.lt_days||0].forEach(function(v) {
+        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:center;background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(isFirstRow?'<b>'+v+'</b>':v)+'</td>';
+      });
+      // Baris label
+      html += '<td style="padding:4px 7px;border:1px solid #ddd;font-weight:'+(row.bold?'bold':'normal')+';color:'+row.color+';background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+';white-space:nowrap">'+row.label+'</td>';
+      // Month values
+      data[bi].forEach(function(v) {
+        var dispV = (v==null||v===0) ? '' : (typeof v === 'number' ? (v%1!==0?v.toFixed(2):v) : v);
+        var valClr = row.color;
+        if(row.label==='Stock' && typeof v==='number') valClr = v<0?'#c0392b':v===0?'#888':'#2e7d32';
+        if(row.label==='DOI (Hari)' && typeof v==='number') valClr = v<30?'#c0392b':v<60?'#d68910':'#2e7d32';
+        html += '<td style="padding:4px 7px;border:1px solid #ddd;text-align:right;font-family:monospace;color:'+valClr+';font-weight:'+(row.bold&&dispV?'bold':'normal')+';background:'+row.bg+(isFirstRow?';border-top:2px solid #999':'')+'">'+(dispV||'')+'</td>';
+      });
+      html += '</tr>';
+    });
+  });
+  html += '</table>';
+
+  // Copy as HTML to clipboard
+  var copyOk = false;
+  if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+    var blob = new Blob([html], {type:'text/html'});
+    navigator.clipboard.write([new ClipboardItem({'text/html': blob})]).then(function() {
+      window.open('https://sheets.new','_blank');
+      toast('HTML berwarna disalin! Buka Sheets → klik A1 → Ctrl+V','ok');
+    }).catch(function() { _fcFallbackHtmlCopy(html); });
+  } else {
+    _fcFallbackHtmlCopy(html);
+  }
+}
+
+function _fcFallbackHtmlCopy(html) {
+  // Fallback: use execCommand with html
+  var div = document.createElement('div');
+  div.innerHTML = html;
+  div.style.position = 'fixed'; div.style.opacity = '0'; div.style.pointerEvents = 'none';
+  document.body.appendChild(div);
+  var sel = window.getSelection();
+  sel.removeAllRanges();
+  var range = document.createRange();
+  range.selectNodeContents(div);
+  sel.addRange(range);
+  try {
+    document.execCommand('copy');
+    toast('HTML berwarna disalin! Buka Sheets → klik A1 → Ctrl+V','ok');
+  } catch(e) {
+    toast('Gagal copy HTML, coba Download Excel','err');
+  }
+  sel.removeAllRanges();
+  document.body.removeChild(div);
+  window.open('https://sheets.new','_blank');
 }
 
 function _fcExportExcelTall() {
@@ -7214,20 +7330,56 @@ function _fcExportExcelTall() {
   if(!rows.length) { toast('Tidak ada data','err'); return; }
   var ws = XLSX.utils.aoa_to_sheet(rows);
 
-  // Style: header row bold
+  var XS = window.XLSXStyle || XLSX; // use xlsx-style if loaded
+  var BARIS_LABELS = ['Requirement','OSPO','OSPR','Propose PR','Stock','DOI (Hari)'];
+  var ROW_FILLS = {
+    'Requirement': 'FFF8F9FA', 'OSPO': 'FFD1F0F0', 'OSPR': 'FFEDE7F6',
+    'Propose PR':  'FFFFF8E1', 'Stock': 'FFE8F5E9', 'DOI (Hari)': 'FFF1F8E9'
+  };
+  var ROW_COLORS = {
+    'Requirement': 'FF212529', 'OSPO': 'FF007A7A', 'OSPR': 'FF5E35B1',
+    'Propose PR':  'FFB8860B', 'Stock': 'FF2E7D32', 'DOI (Hari)': 'FF558B2F'
+  };
+  var HEADER_FILL = 'FF2D3748';
   var range = XLSX.utils.decode_range(ws['!ref']);
-  for(var c2 = range.s.c; c2 <= range.e.c; c2++) {
-    var cell = ws[XLSX.utils.encode_cell({r:0,c:c2})];
-    if(cell) { if(!cell.s) cell.s = {}; cell.s.font = {bold:true}; }
+
+  for(var r2 = range.s.r; r2 <= range.e.r; r2++) {
+    var barisLabel = '';
+    // Column 8 = Baris (0-indexed: Item No=0, Desc=1, ABC=2, Supplier=3, UoM=4, MOQ=5, Multiple=6, LT=7, Baris=8)
+    var barisCell = ws[XLSX.utils.encode_cell({r:r2, c:8})];
+    if(barisCell) barisLabel = barisCell.v || '';
+    var isHeader = r2 === 0;
+    var fill = isHeader ? HEADER_FILL : (ROW_FILLS[barisLabel] || 'FFFFFFFF');
+    var fgColor = isHeader ? 'FFFFFFFF' : (ROW_COLORS[barisLabel] || 'FF333333');
+    var bold = isHeader || barisLabel === 'Requirement' || barisLabel === 'Propose PR';
+
+    for(var c2 = range.s.c; c2 <= range.e.c; c2++) {
+      var addr = XLSX.utils.encode_cell({r:r2, c:c2});
+      if(!ws[addr]) ws[addr] = {t:'z', v:''};
+      ws[addr].s = {
+        fill: { patternType:'solid', fgColor:{rgb: fill} },
+        font: { bold: bold, color:{rgb: fgColor}, sz: 10 },
+        border: { top:{style:'thin',color:{rgb:'FFCCCCCC'}}, bottom:{style:'thin',color:{rgb:'FFCCCCCC'}},
+                  left:{style:'thin',color:{rgb:'FFCCCCCC'}}, right:{style:'thin',color:{rgb:'FFCCCCCC'}} },
+        alignment: { horizontal: c2 >= 9 ? 'right' : (c2 === 8 ? 'left' : 'left'), vertical:'center' }
+      };
+    }
   }
+
   ws['!cols'] = rows[0].map(function(_, ci) {
     return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
       return Math.max(mx, String(row[ci]||'').length);
     }, 0) + 2)) };
   });
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
-  XLSX.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
+
+  var wb = (XS.utils && XS !== XLSX) ? XS.utils.book_new() : XLSX.utils.book_new();
+  if(XS !== XLSX && XS.utils) {
+    XS.utils.book_append_sheet(wb, ws, 'Forecast');
+    XS.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  } else {
+    XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
+    XLSX.writeFile(wb, 'forecast_tall_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  }
   toast('Excel Tall downloaded ✓','ok');
 }
 
