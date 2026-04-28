@@ -326,6 +326,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ni" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
   <div class="ni" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
   <div class="ni" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span>List Kiriman Daily</div>
+  <div class="ni" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance</div>
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
   <div class="ni" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
@@ -1822,6 +1823,7 @@ function showPage(name, el) {
     po: function(){if(!STATE.poData.length)loadPO();else renderPO()},
     schedule: renderSchedule,
     'daily-list': function(){initDailyList();renderDailyList()},
+    'performance': function(){renderPerformance();},
     grpo: initGRPO,
     ospo: function(){if(!STATE.ospoData.length)loadOSPO();else renderOSPO()},
     ospr: function(){if(!STATE.osprData.length)loadOSPR().then(renderOSPR);else renderOSPR()},
@@ -7135,6 +7137,292 @@ function _fcExportRekap() {
   a.click(); toast('Rekap PR exported ✓','ok');
 }
 
+
+// ─── Supplier Performance ─────────────────────────────────────────────────────
+function renderPerformance() {
+  var kpiEl   = document.getElementById('perf-kpi');
+  var tblEl   = document.getElementById('perf-table');
+  if(!kpiEl || !tblEl) return;
+
+  var grpo    = STATE.grpoData    || [];
+  var poData  = STATE.poData      || [];
+  var ovr     = STATE.poOverrides || {};
+  var master  = STATE.masterData  || {};
+
+  if(!grpo.length && !poData.length) {
+    tblEl.innerHTML = '<div class="empty" style="padding:40px"><div class="empty-ico">📊</div><h3>Belum ada data</h3><p>Sync GRPO dan PO terlebih dahulu</p></div>';
+    return;
+  }
+
+  var range  = (document.getElementById('perf-range')||{value:'all'}).value;
+  var view   = (document.getElementById('perf-view') ||{value:'supplier'}).value;
+  var now    = new Date(); now.setHours(0,0,0,0);
+  var wkMon  = new Date(now); wkMon.setDate(now.getDate() - (now.getDay()===0?6:now.getDay()-1));
+  var mo1    = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Parse date helpers
+  function parseDMY(s) {
+    if(!s) return null;
+    var p = s.split('/');
+    if(p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return new Date(s);
+  }
+  function parseISO(s) { return s ? new Date(s+'T00:00:00') : null; }
+  function fmtDate(d) { if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+  function daysDiff(a, b) { return a && b ? Math.round((a-b)/86400000) : null; }
+
+  // Build GRPO lookup by docNum → array of lines
+  var grpoByDoc = {};
+  grpo.forEach(function(g) {
+    var dn = String(g.docNum||g.grpoNum||'');
+    if(!dn) return;
+    if(!grpoByDoc[dn]) grpoByDoc[dn] = [];
+    grpoByDoc[dn].push(g);
+  });
+
+  // Match PO lines with GRPO + overrides
+  var rows = [];
+  poData.forEach(function(po) {
+    var dn      = String(po.docNum||'');
+    var code    = po.itemCode||'';
+    var key     = dn + '_' + code;
+    var ovrItem = ovr[key] || {};
+    var m       = master[code] || {};
+
+    var reqDate  = parseDMY(po.prReqDate);
+    var confDate = ovrItem.confDate ? parseISO(ovrItem.confDate) : null;
+    var confQty  = parseFloat(ovrItem.confQty) || 0;
+    var reqQty   = parseFloat(po.orderQty || po.openQty || 0);
+
+    // Find matching GRPO lines for this PO + item
+    var grpoLines = [];
+    Object.keys(grpoByDoc).forEach(function(gdn) {
+      grpoByDoc[gdn].forEach(function(g) {
+        if(g.itemCode === code && (g.poNum === dn || g.baseRef === dn || String(g.docNum)===dn)) {
+          grpoLines.push(g);
+        }
+      });
+    });
+    // Also match by item code in current GRPO month
+    if(!grpoLines.length) {
+      grpo.forEach(function(g) {
+        if(g.itemCode === code) grpoLines.push(g);
+      });
+    }
+
+    var grpoQty  = grpoLines.reduce(function(s,g){ return s + (parseFloat(g.qty)||0); }, 0);
+    var grpoDates= grpoLines.map(function(g){ return parseDMY(g.grpoDate||g.docDate); }).filter(Boolean);
+    var grpoDate = grpoDates.length ? new Date(Math.max.apply(null, grpoDates)) : null;
+
+    // Range filter based on grpoDate or reqDate
+    var refDate  = grpoDate || reqDate;
+    if(range === 'thisweek' && refDate && refDate < wkMon) return;
+    if(range === 'thismonth' && refDate && refDate < mo1) return;
+
+    // Skip if no conf and no grpo (nothing to measure)
+    if(!confDate && !grpoDate && !confQty) return;
+
+    var gapReqConf  = confDate ? daysDiff(confDate, reqDate)  : null; // + = conf terlambat dari req
+    var gapConfGrpo = (confDate && grpoDate) ? daysDiff(grpoDate, confDate) : null; // + = grpo terlambat dari conf
+    var gapReqGrpo  = (reqDate && grpoDate)  ? daysDiff(grpoDate, reqDate)  : null; // overall
+
+    var qtyAccConf  = confQty > 0 && reqQty  > 0 ? (confQty / reqQty  * 100) : null;
+    var qtyAccGrpo  = grpoQty > 0 && confQty > 0 ? (grpoQty / confQty * 100) : (grpoQty>0&&reqQty>0 ? grpoQty/reqQty*100 : null);
+
+    rows.push({
+      docNum: dn, itemCode: code, itemName: m.desc||po.itemName||code,
+      supplier: m.supplier||po.supplier||'—',
+      reqDate, confDate, grpoDate,
+      reqQty, confQty, grpoQty,
+      gapReqConf, gapConfGrpo, gapReqGrpo,
+      qtyAccConf, qtyAccGrpo,
+      otd: gapConfGrpo !== null ? gapConfGrpo <= 0 : null,
+      abc: m.abc||''
+    });
+  });
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────────
+  var withGrpo    = rows.filter(function(r){ return r.grpoDate; });
+  var withConf    = rows.filter(function(r){ return r.confDate; });
+  var otdRows     = withGrpo.filter(function(r){ return r.otd !== null; });
+  var otdOk       = otdRows.filter(function(r){ return r.otd; }).length;
+  var otdPct      = otdRows.length ? Math.round(otdOk/otdRows.length*100) : null;
+  var avgLate     = withGrpo.filter(function(r){ return r.gapConfGrpo>0; });
+  var avgLateDays = avgLate.length ? Math.round(avgLate.reduce(function(s,r){return s+r.gapConfGrpo;},0)/avgLate.length) : 0;
+  var qtyRows     = rows.filter(function(r){ return r.qtyAccGrpo!==null; });
+  var qtyAvg      = qtyRows.length ? Math.round(qtyRows.reduce(function(s,r){return s+r.qtyAccGrpo;},0)/qtyRows.length) : null;
+
+  function kpiCard(label, val, sub, color) {
+    return '<div style="padding:14px 16px;background:var(--bg2)">'
+      + '<div style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">'+label+'</div>'
+      + '<div style="font-size:26px;font-weight:700;font-family:var(--mono);color:'+(color||'var(--text)')+'">'+val+'</div>'
+      + '<div style="font-size:10.5px;color:var(--muted);margin-top:3px">'+sub+'</div>'
+      + '</div>';
+  }
+  kpiEl.innerHTML =
+    kpiCard('PO Terealisasi', withGrpo.length, 'sudah ada GRPO', 'var(--text)') +
+    kpiCard('OTD Rate', otdPct!==null ? otdPct+'%' : '—', otdOk+' tepat waktu dari '+otdRows.length, otdPct>=90?'var(--green)':otdPct>=70?'var(--amber)':'var(--red)') +
+    kpiCard('Avg Keterlambatan', avgLateDays ? avgLateDays+' hari' : '—', 'dari yang terlambat', avgLateDays>7?'var(--red)':avgLateDays>3?'var(--amber)':'var(--green)') +
+    kpiCard('Qty Accuracy', qtyAvg!==null ? qtyAvg+'%' : '—', 'GRPO vs Konfirmasi', qtyAvg>=95?'var(--green)':qtyAvg>=80?'var(--amber)':'var(--red)') +
+    kpiCard('Belum Diterima', (rows.length - withGrpo.length), 'PO dengan konfirmasi', 'var(--amber)');
+
+  // ── Table ─────────────────────────────────────────────────────────────────────
+  if(!rows.length) {
+    tblEl.innerHTML = '<div class="empty" style="padding:40px"><div class="empty-ico">📋</div><h3>Tidak ada data</h3><p>Tidak ada PO dengan konfirmasi atau GRPO di rentang waktu ini</p></div>';
+    return;
+  }
+
+  if(view === 'supplier') _perfRenderSupplier(tblEl, rows);
+  else if(view === 'item') _perfRenderItem(tblEl, rows);
+  else _perfRenderDetail(tblEl, rows);
+}
+
+// ── Per Supplier view ─────────────────────────────────────────────────────────
+function _perfRenderSupplier(el, rows) {
+  var bySupplier = {};
+  rows.forEach(function(r) {
+    var s = r.supplier;
+    if(!bySupplier[s]) bySupplier[s] = [];
+    bySupplier[s].push(r);
+  });
+
+  var supRows = Object.keys(bySupplier).map(function(sup) {
+    var rs = bySupplier[sup];
+    var grpoRs  = rs.filter(function(r){ return r.grpoDate; });
+    var otdRs   = grpoRs.filter(function(r){ return r.otd !== null; });
+    var otdOk   = otdRs.filter(function(r){ return r.otd; }).length;
+    var otdPct  = otdRs.length ? Math.round(otdOk/otdRs.length*100) : null;
+    var lateRs  = grpoRs.filter(function(r){ return r.gapConfGrpo>0; });
+    var avgLate = lateRs.length ? Math.round(lateRs.reduce(function(s,r){return s+r.gapConfGrpo;},0)/lateRs.length) : 0;
+    var qRs     = rs.filter(function(r){ return r.qtyAccGrpo!==null; });
+    var qAvg    = qRs.length ? Math.round(qRs.reduce(function(s,r){return s+r.qtyAccGrpo;},0)/qRs.length) : null;
+    return { sup, total:rs.length, delivered:grpoRs.length, otdPct, avgLate, qAvg };
+  }).sort(function(a,b){ return (a.otdPct||0)-(b.otdPct||0); });
+
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
+    + '<th style="text-align:left;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Supplier</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Total PO</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Diterima</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">OTD %</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Avg Terlambat</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Qty Accuracy</th>'
+    + '</tr></thead><tbody>';
+
+  supRows.forEach(function(r, i) {
+    var otdClr  = r.otdPct===null?'var(--muted)':r.otdPct>=90?'var(--green)':r.otdPct>=70?'var(--amber)':'var(--red)';
+    var qClr    = r.qAvg===null?'var(--muted)':r.qAvg>=95?'var(--green)':r.qAvg>=80?'var(--amber)':'var(--red)';
+    var lClr    = r.avgLate>7?'var(--red)':r.avgLate>3?'var(--amber)':'var(--green)';
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+      + '<td style="padding:10px 10px;font-weight:500">'+r.sup+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono)">'+r.total+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono)">'+r.delivered+'</td>'
+      + '<td style="text-align:center;padding:10px 6px"><span style="font-weight:700;font-family:var(--mono);color:'+otdClr+'">'+(r.otdPct!==null?r.otdPct+'%':'—')+'</span></td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono);color:'+lClr+'">'+(r.avgLate?r.avgLate+'h':'—')+'</td>'
+      + '<td style="text-align:center;padding:10px 6px"><span style="font-weight:700;font-family:var(--mono);color:'+qClr+'">'+(r.qAvg!==null?r.qAvg+'%':'—')+'</span></td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// ── Per Item view ─────────────────────────────────────────────────────────────
+function _perfRenderItem(el, rows) {
+  var byItem = {};
+  rows.forEach(function(r) {
+    if(!byItem[r.itemCode]) byItem[r.itemCode] = [];
+    byItem[r.itemCode].push(r);
+  });
+
+  var itemRows = Object.keys(byItem).map(function(code) {
+    var rs = byItem[code];
+    var grpoRs  = rs.filter(function(r){ return r.grpoDate; });
+    var lateRs  = grpoRs.filter(function(r){ return r.gapConfGrpo > 0; });
+    var avgGap  = grpoRs.length ? Math.round(grpoRs.reduce(function(s,r){ return s+(r.gapReqGrpo||0); },0)/grpoRs.length) : null;
+    return { code, name:rs[0].itemName, supplier:rs[0].supplier, total:rs.length, delivered:grpoRs.length, lateCount:lateRs.length, avgGap };
+  }).sort(function(a,b){ return (b.lateCount||0)-(a.lateCount||0); });
+
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
+    + '<th style="text-align:left;padding:8px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Item</th>'
+    + '<th style="text-align:left;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Supplier</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">PO</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Diterima</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Terlambat</th>'
+    + '<th style="text-align:center;padding:8px 6px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Avg Gap (hari)</th>'
+    + '</tr></thead><tbody>';
+
+  itemRows.forEach(function(r, i) {
+    var lClr = r.lateCount > 0 ? 'var(--red)' : 'var(--green)';
+    var gClr = r.avgGap > 7 ? 'var(--red)' : r.avgGap > 0 ? 'var(--amber)' : 'var(--green)';
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+      + '<td style="padding:10px 10px"><span style="font-family:var(--mono);font-size:11px;color:var(--muted)">'+r.code+'</span><br><span style="font-weight:500">'+r.name+'</span></td>'
+      + '<td style="padding:10px 6px;font-size:12px;color:var(--muted)">'+r.supplier+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono)">'+r.total+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono)">'+r.delivered+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono);font-weight:700;color:'+lClr+'">'+r.lateCount+'</td>'
+      + '<td style="text-align:center;padding:10px 6px;font-family:var(--mono);color:'+gClr+'">'+(r.avgGap!==null?(r.avgGap>0?'+':'')+r.avgGap+'h':'—')+'</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// ── Detail PO view ────────────────────────────────────────────────────────────
+function _perfRenderDetail(el, rows) {
+  var sorted = rows.slice().sort(function(a,b){
+    if(a.grpoDate && !b.grpoDate) return -1;
+    if(!a.grpoDate && b.grpoDate) return 1;
+    return (b.gapConfGrpo||0) - (a.gapConfGrpo||0);
+  });
+
+  function fmtGap(n, invert) {
+    if(n===null||n===undefined) return '<span style="color:var(--muted)">—</span>';
+    var late = invert ? n > 0 : n > 0;
+    var clr  = late ? 'var(--red)' : n===0 ? 'var(--green)' : 'var(--teal)';
+    return '<span style="font-family:var(--mono);font-weight:600;color:'+clr+'">'+(n>0?'+':'')+n+' hari</span>';
+  }
+  function fmtQty(q, ref) {
+    if(!q || !ref) return '<span style="color:var(--muted)">—</span>';
+    var pct = Math.round(q/ref*100);
+    var clr = pct>=95?'var(--green)':pct>=80?'var(--amber)':'var(--red)';
+    return '<span style="font-family:var(--mono);color:'+clr+'">'+n_id(q)+' <small>('+pct+'%)</small></span>';
+  }
+
+  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
+    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">PO / Item</th>'
+    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Supplier</th>'
+    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">PR Req Date</th>'
+    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Conf Date</th>'
+    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">GRPO Date</th>'
+    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Gap Req→Conf</th>'
+    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Gap Conf→GRPO</th>'
+    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Req Qty</th>'
+    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Conf Qty</th>'
+    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">GRPO Qty</th>'
+    + '</tr></thead><tbody>';
+
+  sorted.forEach(function(r, i) {
+    var status = r.grpoDate
+      ? (r.gapConfGrpo > 0 ? '<span style="background:var(--red-bg);color:var(--red);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Terlambat</span>'
+        : '<span style="background:var(--green-bg);color:var(--green);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Tepat Waktu</span>')
+      : '<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Belum Diterima</span>';
+
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+      + '<td style="padding:9px 8px"><div style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">'+r.docNum+'</div><div style="font-weight:500;font-size:12px">'+r.itemName+'</div><div style="font-size:10px;color:var(--muted)">'+r.itemCode+'</div></td>'
+      + '<td style="padding:9px 8px;font-size:12px;color:var(--muted)">'+r.supplier+'</td>'
+      + '<td style="text-align:center;padding:9px 8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.reqDate)+'</td>'
+      + '<td style="text-align:center;padding:9px 8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.confDate)+'</td>'
+      + '<td style="text-align:center;padding:9px 8px">'+fmtDate(r.grpoDate)+' '+status+'</td>'
+      + '<td style="text-align:center;padding:9px 8px">'+fmtGap(r.gapReqConf)+'</td>'
+      + '<td style="text-align:center;padding:9px 8px">'+fmtGap(r.gapConfGrpo)+'</td>'
+      + '<td style="text-align:right;padding:9px 8px;font-family:var(--mono)">'+n_id(r.reqQty)+'</td>'
+      + '<td style="text-align:right;padding:9px 8px">'+fmtQty(r.confQty, r.reqQty)+'</td>'
+      + '<td style="text-align:right;padding:9px 8px">'+fmtQty(r.grpoQty, r.confQty||r.reqQty)+'</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table></div>';
+}
+
 // ─── Toggle expand row ────────────────────────────────────────────────────────
 function _fcToggle(code) {
   _fcExpanded[code] = !_fcExpanded[code];
@@ -7702,4 +7990,34 @@ if(document.readyState === "loading") {
 }
 </script>
 </body>
-</html>
+</html
+
+<div class="page" id="pg-performance">
+<div class="page-inner">
+  <div class="ph">
+    <div class="ph-l">
+      <h2>Supplier Performance</h2>
+      <p>Analisis ketepatan waktu dan qty kiriman vs konfirmasi vs request</p>
+    </div>
+    <div class="ph-r">
+      <select id="perf-range" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
+        <option value="all">Semua Data</option>
+        <option value="thisweek">Minggu Ini</option>
+        <option value="thismonth">Bulan Ini</option>
+      </select>
+      <select id="perf-view" onchange="renderPerformance()" style="font-size:12px;padding:5px 10px">
+        <option value="supplier">Per Supplier</option>
+        <option value="item">Per Item</option>
+        <option value="detail">Detail PO</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadGRPO(true).then(renderPerformance)" style="font-size:11.5px">↺ Refresh GRPO</button>
+    </div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div id="perf-kpi" style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px"></div>
+
+  <!-- Table -->
+  <div id="perf-table"></div>
+</div>
+</div>>
