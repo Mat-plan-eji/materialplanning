@@ -7252,7 +7252,7 @@ function renderPerformance() {
     var qtyAccGrpo  = grpoQty > 0 && confQty > 0 ? (grpoQty / confQty * 100) : (grpoQty>0&&reqQty>0 ? grpoQty/reqQty*100 : null);
 
     rows.push({
-      docNum: dn, itemCode: code, itemName: m.desc||po.itemName||code,
+      docNum: dn, itemCode: code, itemName: m.desc||po.itemName||code, site: po.site||po.whse||'',
       supplier: m.supplier||po.supplier||'—',
       reqDate, confDate, grpoDate,
       reqQty, confQty, grpoQty,
@@ -7388,58 +7388,84 @@ function _perfRenderItem(el, rows) {
   el.innerHTML = html + '</tbody></table>';
 }
 
-// ── Detail PO view ────────────────────────────────────────────────────────────
+// ── Detail PO view — format OTIF ──────────────────────────────────────────────
 function _perfRenderDetail(el, rows) {
   var sorted = rows.slice().sort(function(a,b){
-    if(a.grpoDate && !b.grpoDate) return -1;
-    if(!a.grpoDate && b.grpoDate) return 1;
-    return (b.gapConfGrpo||0) - (a.gapConfGrpo||0);
+    // Sort: belum diterima dulu, lalu by reqDate desc
+    if(!a.grpoDate && b.grpoDate) return -1;
+    if(a.grpoDate && !b.grpoDate) return 1;
+    return (b.reqDate||0) - (a.reqDate||0);
   });
 
-  function fmtGap(n, invert) {
-    if(n===null||n===undefined) return '<span style="color:var(--muted)">—</span>';
-    var late = invert ? n > 0 : n > 0;
-    var clr  = late ? 'var(--red)' : n===0 ? 'var(--green)' : 'var(--teal)';
-    return '<span style="font-family:var(--mono);font-weight:600;color:'+clr+'">'+(n>0?'+':'')+n+' hari</span>';
+  function pct(a, b) {
+    if(!b || b===0) return null;
+    return Math.round(a/b*100);
   }
-  function fmtQty(q, ref) {
-    if(!q || !ref) return '<span style="color:var(--muted)">—</span>';
-    var pct = Math.round(q/ref*100);
-    var clr = pct>=95?'var(--green)':pct>=80?'var(--amber)':'var(--red)';
-    return '<span style="font-family:var(--mono);color:'+clr+'">'+n_id(q)+' <small>('+pct+'%)</small></span>';
+  function fmtPct(p) {
+    if(p===null) return '<span style="color:var(--muted)">—</span>';
+    var clr = p>=100?'var(--green)':p>=95?'var(--teal)':p>=80?'var(--amber)':'var(--red)';
+    return '<span style="font-family:var(--mono);font-weight:600;color:'+clr+'">'+p+'%</span>';
   }
 
-  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">'
-    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
-    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">PO / Item</th>'
-    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Supplier</th>'
-    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">PR Req Date</th>'
-    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Conf Date</th>'
-    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">GRPO Date</th>'
-    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Gap Req→Conf</th>'
-    + '<th style="text-align:center;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap">Gap Conf→GRPO</th>'
-    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Req Qty</th>'
-    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Conf Qty</th>'
-    + '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">GRPO Qty</th>'
+  var TH = 'padding:7px 8px;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;white-space:nowrap;border-bottom:2px solid var(--border2)';
+  var html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1200px">'
+    + '<thead><tr>'
+    + '<th style="text-align:left;'+TH+'">Doc Num</th>'
+    + '<th style="text-align:left;'+TH+'">PO Req Date</th>'
+    + '<th style="text-align:left;'+TH+'">Site</th>'
+    + '<th style="text-align:left;'+TH+'">Supplier</th>'
+    + '<th style="text-align:left;'+TH+'">Item Code</th>'
+    + '<th style="text-align:left;'+TH+'">Deskripsi</th>'
+    + '<th style="text-align:center;'+TH+'">Tgl Konfirmasi</th>'
+    + '<th style="text-align:right;'+TH+'">Qty</th>'
+    + '<th style="text-align:left;'+TH+'">UoM</th>'
+    + '<th style="text-align:right;'+TH+'">Actual</th>'
+    + '<th style="text-align:center;'+TH+'">Tgl Kirim</th>'
+    + '<th style="text-align:right;'+TH+'">Kekurangan</th>'
+    + '<th style="text-align:right;'+TH+'">LT (hari)</th>'
+    + '<th style="text-align:center;'+TH+'">% On Time</th>'
+    + '<th style="text-align:center;'+TH+'">% In Full</th>'
+    + '<th style="text-align:center;'+TH+'">% Confirm Accuracy</th>'
     + '</tr></thead><tbody>';
 
   sorted.forEach(function(r, i) {
-    var status = r.grpoDate
-      ? (r.gapConfGrpo > 0 ? '<span style="background:var(--red-bg);color:var(--red);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Terlambat</span>'
-        : '<span style="background:var(--green-bg);color:var(--green);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Tepat Waktu</span>')
-      : '<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;padding:1px 6px;border-radius:2px;font-weight:600">Belum Diterima</span>';
+    var m       = (STATE.masterData||{})[r.itemCode] || {};
+    var uom     = m.uom || r.uom || '—';
+    var site    = r.site || '—';
 
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
-      + '<td style="padding:9px 8px"><div style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">'+r.docNum+'</div><div style="font-weight:500;font-size:12px">'+r.itemName+'</div><div style="font-size:10px;color:var(--muted)">'+r.itemCode+'</div></td>'
-      + '<td style="padding:9px 8px;font-size:12px;color:var(--muted)">'+r.supplier+'</td>'
-      + '<td style="text-align:center;padding:9px 8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.reqDate)+'</td>'
-      + '<td style="text-align:center;padding:9px 8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.confDate)+'</td>'
-      + '<td style="text-align:center;padding:9px 8px">'+fmtDate(r.grpoDate)+' '+status+'</td>'
-      + '<td style="text-align:center;padding:9px 8px">'+fmtGap(r.gapReqConf)+'</td>'
-      + '<td style="text-align:center;padding:9px 8px">'+fmtGap(r.gapConfGrpo)+'</td>'
-      + '<td style="text-align:right;padding:9px 8px;font-family:var(--mono)">'+n_id(r.reqQty)+'</td>'
-      + '<td style="text-align:right;padding:9px 8px">'+fmtQty(r.confQty, r.reqQty)+'</td>'
-      + '<td style="text-align:right;padding:9px 8px">'+fmtQty(r.grpoQty, r.confQty||r.reqQty)+'</td>'
+    // % On Time: GRPO Date ≤ Conf Date (or Req Date if no conf)
+    var benchmark = r.confDate || r.reqDate;
+    var onTime = r.grpoDate && benchmark ? (r.grpoDate <= benchmark ? 100 : 0) : null;
+    // LT = GRPO Date - Conf Date (days late, positive = late)
+    var lt = (r.grpoDate && r.confDate) ? daysDiff(r.grpoDate, r.confDate) : null;
+    // % In Full = GRPO Qty / Conf Qty (or Req Qty)
+    var inFull = pct(r.grpoQty, r.confQty || r.reqQty);
+    // Kekurangan
+    var ref = r.confQty || r.reqQty;
+    var kekurangan = ref > 0 ? Math.max(0, ref - r.grpoQty) : 0;
+    // % Confirm Accuracy = Conf Qty / Req Qty
+    var confAcc = r.confQty && r.reqQty ? pct(r.confQty, r.reqQty) : null;
+
+    var rowBg = i%2 ? 'background:var(--bg3)' : '';
+    var notRecv = !r.grpoDate;
+
+    html += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+r.docNum+'</td>'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.reqDate)+'</td>'
+      + '<td style="padding:8px;font-size:11.5px;color:var(--muted)">'+site+'</td>'
+      + '<td style="padding:8px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.supplier+'</td>'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+r.itemCode+'</td>'
+      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.itemName+'</td>'
+      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:600">'+(r.confDate?fmtDate(r.confDate):'<span style="color:var(--muted)">—</span>')+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono)">'+n_id(r.reqQty)+'</td>'
+      + '<td style="padding:8px;color:var(--muted);font-size:11.5px">'+uom+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(notRecv?'var(--muted)':r.grpoQty<ref?'var(--amber)':'var(--text)')+'">'+( notRecv?'—':n_id(r.grpoQty))+'</td>'
+      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px">'+(r.grpoDate?fmtDate(r.grpoDate):'<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;padding:1px 7px;border-radius:2px;font-weight:600">Belum</span>')+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(kekurangan>0?'var(--red)':'var(--green)')+'">'+( kekurangan>0?n_id(kekurangan):'0')+'</td>'
+      + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(lt>0?'var(--red)':lt===0?'var(--green)':'var(--muted)')+'">'+( lt!==null?(lt>0?'+':'')+lt:'—')+'</td>'
+      + '<td style="padding:8px;text-align:center">'+fmtPct(onTime)+'</td>'
+      + '<td style="padding:8px;text-align:center">'+fmtPct(inFull)+'</td>'
+      + '<td style="padding:8px;text-align:center">'+fmtPct(confAcc)+'</td>'
       + '</tr>';
   });
   el.innerHTML = html + '</tbody></table></div>';
