@@ -7356,7 +7356,7 @@ function _fcExportModal(target) {
     supplier: 'Export Forecast Supplier: OSPO, OSPR, Propose PR per bulan.'
   };
   var d = document.getElementById('fc-export-desc');
-  if(d) d.textContent = descs[target] || '';
+  if(d) d.innerHTML = descs[target] || '';
   document.getElementById('fc-export-modal').classList.add('open');
 }
 
@@ -7441,21 +7441,33 @@ function _fcBuildRows(target) {
 }
 
 function _fcExportExcel(target) {
-  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
-  var rows = _fcBuildRows(target);
-  if(!rows || !rows.length) { toast('Tidak ada data','err'); return; }
-  var ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = rows[0].map(function(_, ci) {
-    return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
-      return Math.max(mx, String(row[ci]||'').length);
-    }, 0) + 2)) };
-  });
-  var wb = XLSX.utils.book_new();
-  var names = { detail:'Forecast Detail', rekap:'Rekap PR', supplier:'Forecast Supplier' };
-  XLSX.utils.book_append_sheet(wb, ws, names[target] || 'Forecast');
-  var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
-  XLSX.writeFile(wb, (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
-  toast('Excel downloaded ✓','ok');
+  try {
+    if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+    var rows = _fcBuildRows(target);
+    if(!rows || !rows.length) { toast('Tidak ada data','err'); return; }
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = rows[0].map(function(_, ci) {
+      return { wch: Math.min(30, Math.max(8, rows.reduce(function(mx, row) {
+        return Math.max(mx, String(row[ci]||'').length);
+      }, 0) + 2)) };
+    });
+    var wb = XLSX.utils.book_new();
+    var names = { detail:'Forecast Detail', rekap:'Rekap PR', supplier:'Forecast Supplier' };
+    XLSX.utils.book_append_sheet(wb, ws, names[target] || 'Forecast');
+    var fname = { detail:'forecast_detail', rekap:'rekap_propose_pr', supplier:'forecast_supplier' };
+    // Always use Blob download (most reliable across browsers)
+    var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    var blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = (fname[target]||'forecast') + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    toast('Excel downloaded ✓','ok');
+  } catch(e) {
+    console.error('_fcExportExcel error:', e);
+    toast('Export gagal: ' + e.message, 'err');
+  }
 }
 
 function _fcExportGSheets(target) {
