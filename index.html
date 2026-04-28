@@ -2149,9 +2149,96 @@ async function syncAll() {
   if(STATE.mrpData) buildProjection();
   updateDashStats();
 
-  if(!failed.length) toast('Sync selesai ✓', 'ok');
-  else toast(failed.length + ' API gagal — data lain tetap tampil', 'inf');
+  if(!failed.length) {
+    toast('Sync selesai ✓', 'ok');
+  } else {
+    // Semua gagal → tawarkan pakai data Firebase terakhir
+    var allFailed = failed.length === results.length;
+    if(allFailed) {
+      _showSyncBar(false);
+      _showSyncFallbackBanner();
+    } else {
+      toast(failed.length + ' API gagal — data lain tetap tampil', 'inf');
+    }
+  }
   setTimeout(function(){ _showSyncBar(false); }, 4000);
+}
+
+// ── Fallback banner: tampilkan data Firebase terakhir ─────────────────────────
+function _showSyncFallbackBanner() {
+  var existing = document.getElementById('sync-fallback-banner');
+  if(existing) existing.remove();
+
+  // Ambil timestamp terakhir dari Firebase cache
+  var lastSync = localStorage.getItem('last_sync') || '—';
+  var hasCachedPO = !!localStorage.getItem('sap_cache_po');
+
+  var banner = document.createElement('div');
+  banner.id = 'sync-fallback-banner';
+  banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;'
+    + 'background:var(--bg2);border:1.5px solid var(--amber);border-radius:var(--r);'
+    + 'padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.35);min-width:340px;max-width:480px';
+
+  banner.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px">'
+    + '<span style="font-size:20px;flex-shrink:0">⚠️</span>'
+    + '<div style="flex:1">'
+    +   '<div style="font-weight:600;font-size:13px;color:var(--amber);margin-bottom:4px">Sync SAP Gagal</div>'
+    +   '<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">'
+    +     (hasCachedPO
+          ? 'Tidak bisa terhubung ke SAP. Gunakan data terakhir yang tersimpan di Firebase?<br><span style="font-size:10.5px;opacity:.7">Data terakhir: <b>' + lastSync + '</b></span>'
+          : 'Tidak bisa terhubung ke SAP dan tidak ada cache tersimpan.')
+    +   '</div>'
+    +   (hasCachedPO
+        ? '<div style="display:flex;gap:8px">'
+        +   '<button class="btn btn-primary btn-sm" onclick="_loadFallbackFromFirebase()" style="font-size:11.5px">📦 Pakai Data Sebelumnya</button>'
+        +   '<button class="btn btn-sm" onclick="_dismissSyncFallback()" style="font-size:11.5px">Tutup</button>'
+        + '</div>'
+        : '<button class="btn btn-sm" onclick="_dismissSyncFallback()">Tutup</button>'
+      )
+    + '</div></div>';
+
+  document.body.appendChild(banner);
+  // Auto-dismiss after 30s
+  setTimeout(function(){
+    var b = document.getElementById('sync-fallback-banner');
+    if(b) b.remove();
+  }, 30000);
+}
+
+function _dismissSyncFallback() {
+  var b = document.getElementById('sync-fallback-banner');
+  if(b) b.remove();
+}
+
+async function _loadFallbackFromFirebase() {
+  var banner = document.getElementById('sync-fallback-banner');
+  if(banner) {
+    banner.querySelector('.btn-primary').textContent = '⏳ Memuat...';
+    banner.querySelector('.btn-primary').disabled = true;
+  }
+  toast('Memuat data dari Firebase...', 'inf');
+
+  try {
+    // cloudLoad mengambil semua key dari Firestore termasuk sap_cache_*
+    cloudLoad(function(data) {
+      if(!data || !Object.keys(data).length) {
+        toast('Tidak ada data tersimpan di Firebase', 'err');
+        if(banner) banner.remove();
+        return;
+      }
+      // Re-run afterLoad dengan data Firebase
+      Object.keys(data).forEach(function(k){
+        var v = data[k]; if(v!=null) try{ localStorage.setItem(k,v); }catch(e){}
+      });
+      // Re-init app dari cache yang baru di-restore
+      try { _appInit(); } catch(e) { console.error('_appInit after fallback:', e); }
+      if(banner) banner.remove();
+      toast('Data sebelumnya berhasil dimuat (' + (localStorage.getItem('last_sync')||'—') + ')', 'ok');
+    });
+  } catch(e) {
+    toast('Gagal ambil dari Firebase: ' + e.message, 'err');
+    if(banner) banner.remove();
+  }
 }
 
 // PO filter debounce
@@ -7400,9 +7487,6 @@ function _fcExportExcelTall() {
     toast('Error: ' + e.message, 'err');
   }
 }
-
-
-
 </script>
 </body>
 </html>
