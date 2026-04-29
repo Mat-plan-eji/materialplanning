@@ -4310,28 +4310,35 @@ function generateSchedule() {
     }
   });
 
-  // ── 5. Group by (supplier + type): pakai delivery date TERCEPAT ─────────────
-  // RM/PM/FG dipisah karena beda warehouse
+  // ── 5. Group by (supplier + type) — pakai supplier AKTUAL dari PO ─────────
   var bySupplier = {};
   urgentItems.forEach(function(item){
     var matchedPOs = STATE.poData.filter(function(p){ return p.itemCode === item.productCode && p.openQty > 0; });
-    var supName = item.supplier || (matchedPOs.length ? matchedPOs[0].supplierName : 'Unknown');
-    var key = supName + '|||' + item.itemType; // pisah per type
-    if(!bySupplier[key]) {
-      bySupplier[key] = {
-        supName: supName, itemType: item.itemType, entries: [],
-        delivISO: item._delivISO,
-        earliestCoverage: item.coverageDate,
-        totalQty: 0
-      };
-    } else {
-      if(item._delivISO < bySupplier[key].delivISO)
-        bySupplier[key].delivISO = item._delivISO;
-      if(item.coverageDate < bySupplier[key].earliestCoverage)
-        bySupplier[key].earliestCoverage = item.coverageDate;
+
+    // Group POs by their actual supplier
+    var poBySupplier = {};
+    matchedPOs.forEach(function(po){
+      var sn = po.supplierName || item.supplier || 'Unknown';
+      if(!poBySupplier[sn]) poBySupplier[sn] = [];
+      poBySupplier[sn].push(po);
+    });
+    if(!Object.keys(poBySupplier).length) {
+      poBySupplier[item.supplier || 'Unknown'] = [];
     }
-    bySupplier[key].entries.push({ item: item, pos: matchedPOs });
-    matchedPOs.forEach(function(po){ bySupplier[key].totalQty += (po.openQty || 0); });
+
+    Object.keys(poBySupplier).forEach(function(supName) {
+      var pos = poBySupplier[supName];
+      var key = supName + '|||' + item.itemType;
+      if(!bySupplier[key]) {
+        bySupplier[key] = { supName: supName, itemType: item.itemType, entries: [],
+          delivISO: item._delivISO, earliestCoverage: item.coverageDate, totalQty: 0 };
+      } else {
+        if(item._delivISO < bySupplier[key].delivISO) bySupplier[key].delivISO = item._delivISO;
+        if(item.coverageDate < bySupplier[key].earliestCoverage) bySupplier[key].earliestCoverage = item.coverageDate;
+      }
+      bySupplier[key].entries.push({ item: item, pos: pos });
+      pos.forEach(function(po){ bySupplier[key].totalQty += (po.openQty||0); });
+    });
   });
 
   var suppliers = Object.values(bySupplier);
