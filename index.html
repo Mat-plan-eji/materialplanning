@@ -2069,12 +2069,56 @@ async function loadGRPO() {
     });
     var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
     renderGRPO();
+    _autoRemoveDeliveredCards();
     _setSyncItem('grpo', 'ok');
     toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' ✓', 'ok');
   } catch(e) {
     _setSyncItem('grpo', 'err');
     if(tbl) tbl.innerHTML = '<div class="alert alert-error" style="margin:16px">' + e.message + '</div>';
     toast('GRPO gagal: ' + e.message, 'err');
+  }
+}
+
+
+// ─── Auto-remove schedule cards that have been received (GRPO matched) ───────
+function _autoRemoveDeliveredCards() {
+  if(!STATE.scheduleData || !STATE.grpoData || !STATE.grpoData.length) return;
+
+  // Build set of PO docNums that have GRPO
+  var grpoDocNums = new Set();
+  STATE.grpoData.forEach(function(g) {
+    var ref = String(g.baseRef||'');
+    if(ref) grpoDocNums.add(ref);
+  });
+
+  if(!grpoDocNums.size) return;
+
+  var before = STATE.scheduleData.length;
+  var removed = [];
+
+  STATE.scheduleData = STATE.scheduleData.filter(function(card) {
+    // Only auto-remove confirmed cards
+    if(card.status !== 'confirmed') return true;
+
+    var dn = String(card.docNum||card.poNum||'');
+    if(!dn || !grpoDocNums.has(dn)) return true;
+
+    // Match found — preserve confDate/confQty/comment in poOverrides before removing
+    var code = card.itemCode||'';
+    var key  = dn + '_' + code;
+    if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
+    // Keep existing conf data, just mark as received
+    STATE.poOverrides[key].receivedDate = new Date().toISOString().split('T')[0];
+    // card is removed from schedule
+    removed.push(dn);
+    return false;
+  });
+
+  if(removed.length) {
+    cloudSave();
+    renderSchedule();
+    toast(removed.length + ' kartu jadwal sudah diterima & dihapus otomatis ✓', 'ok');
+    console.log('[AutoRemove] Removed', removed.length, 'cards:', removed.slice(0,5));
   }
 }
 
@@ -7226,7 +7270,7 @@ function renderPerformance() {
     var dn      = String(po.docNum||'');
     var code    = po.itemCode||'';
     var ovKey   = dn + '_' + code;
-    var ovrItem = ovr[ovKey] || {};
+    var ovrItem = ovr[ovKey] || ovr[dn] || {};
     var m       = master[code] || {};
 
     var reqDate  = parseDMY(po.prReqDate);
@@ -7242,6 +7286,8 @@ function renderPerformance() {
 
     // Skip if nothing to measure
     if(!confDate && !confQty && !grpoDate) return;
+    // Debug first few
+    if(rows.length < 2) console.log('[Perf] row:', dn, code, 'conf:', ovrItem, 'grpo:', !!grpoMatch);
 
     // Range filter
     var refDate2 = grpoDate || confDate || reqDate;
