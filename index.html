@@ -2084,41 +2084,62 @@ async function loadGRPO() {
 function _autoRemoveDeliveredCards() {
   if(!STATE.scheduleData || !STATE.grpoData || !STATE.grpoData.length) return;
 
-  // Build set of PO docNums that have GRPO
-  var grpoDocNums = new Set();
+  // Build set of PO docNums that have GRPO (from baseRef)
+  var grpoDocNums = {};
   STATE.grpoData.forEach(function(g) {
     var ref = String(g.baseRef||'');
-    if(ref) grpoDocNums.add(ref);
+    if(ref) grpoDocNums[ref] = true;
   });
+  if(!Object.keys(grpoDocNums).length) return;
 
-  if(!grpoDocNums.size) return;
-
-  var before = STATE.scheduleData.length;
   var removed = [];
 
   STATE.scheduleData = STATE.scheduleData.filter(function(card) {
-    // Only auto-remove confirmed cards
     if(card.status !== 'confirmed') return true;
 
-    var dn = String(card.docNum||card.poNum||'');
-    if(!dn || !grpoDocNums.has(dn)) return true;
+    // Card has entries array with PO details
+    // entries = [{item, pos:[{docNum, itemCode, ...}]}]
+    var entries = card.entries || [];
+    var allPONums = [];
+    entries.forEach(function(e) {
+      (e.pos||[]).forEach(function(p) {
+        var dn = String(p.docNum||p.poNum||'');
+        if(dn) allPONums.push(dn);
+      });
+    });
+    var allDelivered = allPONums.length > 0 && allPONums.every(function(dn){ return grpoDocNums[dn]; });
 
-    // Match found — preserve confDate/confQty/comment in poOverrides before removing
-    var code = card.itemCode||'';
-    var key  = dn + '_' + code;
-    if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
-    // Keep existing conf data, just mark as received
-    STATE.poOverrides[key].receivedDate = new Date().toISOString().split('T')[0];
-    // card is removed from schedule
-    removed.push(dn);
+    // Also check via pos string (fallback)
+    if(!allDelivered && card.pos) {
+      var poNums = card.pos.split(',').map(function(s){ return s.trim(); });
+      allDelivered = poNums.length > 0 && poNums.every(function(dn){ return dn && grpoDocNums[dn]; });
+    }
+
+    if(!allDelivered) return true;
+
+    // All POs received — preserve conf data, mark receivedDate
+    entries.forEach(function(e) {
+      (e.pos||[]).forEach(function(p) {
+        var dn   = String(p.docNum||p.poNum||'');
+        var code = p.itemCode||p.code||'';
+        var key  = dn + '_' + code;
+        if(dn) {
+          if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
+          STATE.poOverrides[key].receivedDate = new Date().toISOString().split('T')[0];
+        }
+      });
+    });
+    removed.push(card.supName||'?');
     return false;
   });
 
   if(removed.length) {
+    localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+    localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
     cloudSave();
     renderSchedule();
-    toast(removed.length + ' kartu jadwal sudah diterima & dihapus otomatis ✓', 'ok');
-    console.log('[AutoRemove] Removed', removed.length, 'cards:', removed.slice(0,5));
+    toast(removed.length + ' kartu jadwal diterima & dihapus otomatis ✓', 'ok');
+    console.log('[AutoRemove] Removed cards:', removed);
   }
 }
 
@@ -6520,14 +6541,12 @@ function _calcForecast(code, ospoIdx) {
     ospoPool -= fromPool;
     forecastOspo[fm] = fromPool;
 
-    // Sisa shortage setelah pool → propose PR di bulan paling awal feasible
+    // Sisa shortage → propose di bulan shortage itu sendiri
+    // (bukan earliest feasible — planner harus tahu bulan mana yang butuh)
     var remainShort = Math.max(0, needed - fromPool);
     if(remainShort > 0 && _fcAutoPropose) {
-      var propIdx = Math.max(fm, earliestDelivIdx);
-      if(propIdx < 9) {
-        var propQty = Math.max(moq, Math.ceil(remainShort / step) * step);
-        proposeAuto[propIdx] = (proposeAuto[propIdx] || 0) + propQty;
-      }
+      var propQty = Math.max(moq, Math.ceil(remainShort / step) * step);
+      proposeAuto[fm] = (proposeAuto[fm] || 0) + propQty;
     }
 
     stockFc[fm] = prevStFc + forecastOspo[fm] + ospr_m - req_m;
@@ -7344,8 +7363,13 @@ function renderPerformance() {
     return;
   }
 
-  if(view === 'supplier') _perfRenderSupplier(tblEl, rows);
-  else _perfRenderDetail(tblEl, rows);
+  try {
+    if(view === 'supplier') _perfRenderSupplier(tblEl, rows);
+    else _perfRenderDetail(tblEl, rows);
+  } catch(e) {
+    console.error('[Performance render error]', e);
+    tblEl.innerHTML = '<div class="alert alert-error" style="margin:16px">Render error: ' + e.message + '</div>';
+  }
 }
 
 // ── Per Supplier view ─────────────────────────────────────────────────────────
