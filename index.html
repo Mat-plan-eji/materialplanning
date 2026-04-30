@@ -7809,7 +7809,7 @@ function _mrpIdbSaveMrp(data) {
   _mrpIdbOpen(function(db) {
     if(!db) return;
     var tx = db.transaction('mrp', 'readwrite');
-    tx.objectStore('mrp').put({ id:'mrp_data', data: data, ts: new Date().toISOString() });
+    tx.objectStore('mrp').put({ id:'mrp_data', data: data, months: _mpsActiveMonths.slice(), ts: new Date().toISOString() });
   });
 }
 function _mrpIdbLoad() {
@@ -7846,6 +7846,9 @@ function _mrpIdbLoad() {
     tx2.objectStore('mrp').get('mrp_data').onsuccess = function(e) {
       if(e.target.result) {
         _mrpResult = e.target.result.data;
+        if(e.target.result.months && e.target.result.months.length) {
+          _mpsActiveMonths = e.target.result.months;
+        }
         var _savedTs = localStorage.getItem('mrp_last_calc') || '';
         var _tsLbl = document.getElementById('mrp-last-calc-label');
         if(_tsLbl && _savedTs) _tsLbl.textContent = '· Terakhir: ' + _savedTs;
