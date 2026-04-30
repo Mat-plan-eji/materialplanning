@@ -2094,7 +2094,7 @@ async function loadPO() {
         itemName: r.Dscription, openQty: r.OpenQty, uom: r.unitMsr,
         status: r.DocStatus, lineStatus: r.PO_LineStatus };
     });
-    var spo = document.getElementById('s-po'); if(spo) spo.textContent = n_id(STATE.poData.length);
+    var spo = document.getElementById('s-po'); if(spo) spo.textContent = STATE.poData.length;
     renderPO();
     _setSyncItem('po', 'ok');
     toast(STATE.poData.length + ' PO aktif ✓', 'ok');
@@ -2130,7 +2130,7 @@ async function loadGRPO() {
         baseRef: String(r.BaseRef||r.BaseEntry||r.PO_DocNum||r.PoNum||''),
         grpoDocNum: String(r.DocNum||r.DocEntry||'') };
     });
-    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = n_id(STATE.grpoData.length);
+    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
     renderGRPO();
     _autoRemoveDeliveredCards();
     _setSyncItem('grpo', 'ok');
@@ -2765,7 +2765,7 @@ async function loadGRPOMonth() {
       return { grpoDate:fmtSAPDate(r.GRPO_Date), itemCode:r.ItemCode,
         itemName:r.Dscription, supplierName:r.CardName, qty:r.Quantity, uom:r.unitMsr };
     });
-    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = n_id(STATE.grpoData.length);
+    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = STATE.grpoData.length;
     renderGRPO();
     toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' ✓', 'ok');
   } catch(e) {
@@ -3454,7 +3454,7 @@ function _doBuildProjection() {
 
   var urgentCount = projection.filter(function(p){return p.isUrgent}).length;
   document.getElementById('s-urgent').textContent = urgentCount;
-  document.getElementById('s-total').textContent = n_id(projection.length);
+  document.getElementById('s-total').textContent = projection.length;
   var nb = document.getElementById('nb-urgent');
   if(nb) { nb.style.display = urgentCount > 0 ? '' : 'none'; if(urgentCount > 0) nb.textContent = urgentCount; }
 
@@ -3928,7 +3928,7 @@ function renderDashboard() {
 
   var urgEl=document.getElementById('s-urgent'), totEl=document.getElementById('s-total'), poEl=document.getElementById('s-po');
   if(urgEl){ urgEl.textContent=urgentItems.length||'—'; urgEl.className='stat-val '+(urgentItems.length>10?'red':urgentItems.length>0?'amber':'green'); }
-  if(totEl) totEl.textContent=filtProj.length?n_id(filtProj.length):'—';
+  if(totEl) totEl.textContent=filtProj.length||'—';
   if(poEl)  poEl.textContent=filtPO.length||'—';
 
   var unconf = STATE.scheduleData.filter(function(s){
@@ -6967,7 +6967,7 @@ function _fcDetailRow(code, fc, master) {
       var inp_bg   = isEdited ? 'rgba(139,92,246,.08)' : (haVal ? 'rgba(20,184,166,.06)' : 'var(--bg3)');
       return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
         + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-        + '<input type="text" inputmode="numeric" value="'+(cur>0?n_id(cur):'0')+'"'
+        + '<input type="number" value="'+cur+'"'
         +   ' data-code="'+itemCode+'" data-mi="'+i+'" data-base="'+base+'" data-rowtype="'+(rowType||'ospo')+'"'
         +   ' oninput="_fcOspoRowEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
         +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_wt+';color:'+inp_clr+';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none"'
@@ -6995,7 +6995,7 @@ function _fcDetailRow(code, fc, master) {
         var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
         return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="text" inputmode="numeric" value="'+(cur>0?n_id(cur):'0')+'"'
+          + '<input type="number" value="'+cur+'"'
           +   ' data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
           +   ' oninput="_fcProposeEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
           +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
@@ -8210,8 +8210,7 @@ function _fcOspoRowEdit(input) {
 function _fcOsprEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var rawVal3 = input.value.replace(/\./g,'').replace(/,/g,'.');
-  var qty  = parseFloat(rawVal3) || 0;
+  var qty  = parseFloat(input.value) || 0;
   var base = parseFloat(input.getAttribute('data-base')) || 0;
   if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(9).fill(null);
   _fcOsprOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
@@ -8263,8 +8262,7 @@ function _fcOspoEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
   var base    = parseFloat(input.getAttribute('data-base')) || 0;
-  var rawVal2 = input.value.replace(/\./g,'').replace(/,/g,'.');
-  var qty     = parseFloat(rawVal2) || 0;
+  var qty  = parseFloat(input.value) || 0;
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(9).fill(null);
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
@@ -8301,7 +8299,7 @@ function _fcStepBtn(btn) {
   // Snap to nearest multiple before stepping
   var snapped  = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
   var newVal   = Math.max(0, snapped + delta);
-  inp.value    = newVal > 0 ? n_id(newVal) : '0';
+  inp.value    = newVal;
   _fcProposeEdit(inp);
 }
 
@@ -8330,8 +8328,7 @@ function _fcProposeStep(code, mi, delta) {
 function _fcProposeEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var rawVal = input.value.replace(/\./g,'').replace(/,/g,'.');
-  var qty  = parseFloat(rawVal) || 0;
+  var qty  = parseFloat(input.value) || 0;
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
   _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
