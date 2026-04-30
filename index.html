@@ -7547,11 +7547,11 @@ function _mrpShowResult() {
     var m = master[code] || {};
     var iT = /^3/.test(code)?'RM':'PM';
     var clr = iT==='RM'?'var(--teal)':'var(--purple)';
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+    var rowDesc = m.desc || (matcom[code] && matcom[code].sapName) || '—';
       + '<td style="padding:8px;font-family:var(--mono);font-size:11px">'
       +   '<span style="font-size:9.5px;font-weight:700;color:'+clr+';margin-right:4px">'+iT+'</span>'
       +   code + '</td>'
-      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+desc+'</td>'
+      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+rowDesc+'</td>'
       + MRP_MONTHS.map(function(mn){
           var v = _mrpResult[code][mn] || 0;
           return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+(v>0?n_id(Math.round(v)):'<span style="color:var(--hint)">—</span>')+'</td>';
