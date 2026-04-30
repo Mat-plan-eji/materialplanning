@@ -965,15 +965,15 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ph">
     <div class="ph-l">
       <h2>MPS → MRP</h2>
-      <p>Upload MPS & BOM untuk generate Material Requirement Planning otomatis</p>
+      <p>Upload MPS &amp; BOM untuk generate Material Requirement Planning otomatis</p>
     </div>
-    <div class="ph-r" style="gap:8px">
-      <button class="btn btn-primary btn-sm" onclick="_mpsMrpCalculate()" id="btn-calc-mrp" style="font-size:11.5px" disabled>⚡ Hitung MRP</button>
-      <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11.5px" disabled>✓ Terapkan MRP</button>
-      <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11.5px" disabled>☁ Simpan ke Firebase</button>
-      <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11.5px" disabled>↓ Export Detail</button>
-      <button class="btn btn-sm" onclick="_mrpExportRekap()" id="btn-export-rekap" style="font-size:11.5px" disabled>↓ Export Rekap</button>
-    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <button class="btn btn-primary btn-sm" onclick="_mpsMrpCalculate()" id="btn-calc-mrp" style="font-size:11.5px" disabled>⚡ Hitung MRP</button>
+    <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11.5px" disabled>✓ Terapkan MRP</button>
+    <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11.5px" disabled>☁ Simpan ke Firebase</button>
+    <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11.5px" disabled>↓ Export Detail</button>
+    <button class="btn btn-sm" onclick="_mrpExportRekap()" id="btn-export-rekap" style="font-size:11.5px" disabled>↓ Export Rekap</button>
   </div>
 
   <!-- Upload cards -->
