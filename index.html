@@ -7322,9 +7322,9 @@ function _fcExportRekap() {
 var _mpsData = null;         // { itemNo: { Apr:x, May:x, ... } }
 var _bomData = null;         // [ { fg, rm, qtyPerPcs } ]
 var _mrpResult = null;       // { rmCode: { Apr:x, May:x, ... } }
-var _mpsActiveMonths = MRP_MONTHS.slice(); // months detected from MPS file
 
 var MRP_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var _mpsActiveMonths = MRP_MONTHS.slice(); // months detected from MPS file
 var MRP_MPS_COLS = ['AprPlan','MayPlan','JunPlan','JulPlan','AugPlan','SepPlan','OctPlan','NovPlan','DecPlan'];
 
 function renderMpsMrp() {
