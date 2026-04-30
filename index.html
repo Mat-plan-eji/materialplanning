@@ -7541,7 +7541,7 @@ function _mrpShowResult() {
       + '<td style="padding:8px;font-family:var(--mono);font-size:11px">'
       +   '<span style="font-size:9.5px;font-weight:700;color:'+clr+';margin-right:4px">'+iT+'</span>'
       +   code + '</td>'
-      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(m.desc||'—')+'</td>'
+      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+desc+'</td>'
       + MRP_MONTHS.map(function(mn){
           var v = _mrpResult[code][mn] || 0;
           return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+(v>0?n_id(Math.round(v)):'<span style="color:var(--hint)">—</span>')+'</td>';
@@ -7603,33 +7603,62 @@ function _mpsMrpSaveToFirebase() {
 
 // ── Export Detail (per item × per bulan, like BOM sheet) ─────────────────────
 function _mrpExportDetail() {
-  if(!_mrpResult || typeof XLSX === 'undefined') { toast('Tidak ada data MRP','err'); return; }
+  if(!_bomData || !_mpsData || !_mrpResult || typeof XLSX === 'undefined') {
+    toast('Butuh MPS, BOM dan hasil MRP — hitung MRP dulu','err'); return;
+  }
   var master = STATE.masterData || {};
-  var hdr = ['Item Code','Deskripsi','UoM','Tipe'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m+" '26"; }));
+  var mrpM   = STATE.mrpData    || {};
+  var PLAN_ID = ['Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+  // Header: FG | FG Desc | RM/PM | RM Desc | UoM | BOM Type | Qty per pcs | Plan Apr | Mat req Apr | ...
+  var hdr = ['Item (FG)','Item Description (FG)','Item (RM/PM)','Item Description (RM/PM)','UoM','BOM Type','Qty per pcs'];
+  MRP_MONTHS.forEach(function(m, i) {
+    hdr.push('Plan ' + PLAN_ID[i]);
+    hdr.push('Mat req ' + PLAN_ID[i]);
+  });
   var rows = [hdr];
-  var codes = Object.keys(_mrpResult).sort();
-  codes.forEach(function(code) {
-    var m   = master[code] || {};
-    var iT  = /^3/.test(code)?'RM':'PM';
-    var row = [code, m.desc||'', m.uom||'', iT];
-    MRP_MONTHS.forEach(function(mn) {
-      row.push(Math.round(_mrpResult[code][mn]||0));
+
+  // Group BOM by FG
+  var bomByFG = {};
+  _bomData.forEach(function(b) {
+    if(!bomByFG[b.fg]) bomByFG[b.fg] = [];
+    bomByFG[b.fg].push(b);
+  });
+
+  Object.keys(bomByFG).sort().forEach(function(fg) {
+    var fgM   = master[fg] || {};
+    var fgD   = fgM.desc || '';
+    var plans = _mpsData[fg] || {};
+    bomByFG[fg].forEach(function(b) {
+      var rmM    = master[b.rm] || mrpM[b.rm] || {};
+      var rmDesc = rmM.desc || '';
+      var uom    = rmM.uom  || 'KG';
+      var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
+      MRP_MONTHS.forEach(function(mn) {
+        var plan   = parseFloat(plans[mn]) || 0;
+        var matreq = Math.round(plan * b.qty);
+        row.push(plan || '');
+        row.push(matreq || '');
+      });
+      rows.push(row);
     });
-    rows.push(row);
   });
 
   var ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:14},{wch:35},{wch:6},{wch:4}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
+  ws['!cols'] = [{wch:14},{wch:35},{wch:14},{wch:35},{wch:6},{wch:8},{wch:12}].concat(
+    MRP_MONTHS.reduce(function(acc){ return acc.concat([{wch:12},{wch:14}]); }, [])
+  );
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'MRP Detail');
   var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
   var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'MRP_Detail_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  a.download = 'MRP_Detail_BOM_' + new Date().toISOString().slice(0,10) + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('Export Detail ✓','ok');
+  toast('Export Detail BOM ✓ · ' + (rows.length-1) + ' baris','ok');
 }
+
 
 // ── Export Rekap (grouped by supplier) ────────────────────────────────────────
 function _mrpExportRekap() {
