@@ -1431,6 +1431,14 @@ var _saveTimers = {};
 var _myLastWrite = {}; // track own writes to skip in onSnapshot
 function cloudSave(key, value) {
   if(!_fbReady || !_db) return;
+  // If called without args, save all CLOUD_KEYS from localStorage
+  if(key === undefined) {
+    CLOUD_KEYS.forEach(function(k) {
+      var v = localStorage.getItem(k);
+      if(v != null) cloudSave(k, v);
+    });
+    return;
+  }
   _setSyncStatus('saving');
   _myLastWrite[key] = Date.now();
   clearTimeout(_saveTimers[key]);
@@ -2130,7 +2138,7 @@ async function loadGRPO() {
         baseRef: String(r.BaseRef||r.BaseEntry||r.PO_DocNum||r.PoNum||''),
         grpoDocNum: String(r.DocNum||r.DocEntry||'') };
     });
-    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = STATE.grpoData.length;
+    var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = (STATE.grpoData||[]).length;
     renderGRPO();
     _autoRemoveDeliveredCards();
     _setSyncItem('grpo', 'ok');
@@ -2765,7 +2773,7 @@ async function loadGRPOMonth() {
       return { grpoDate:fmtSAPDate(r.GRPO_Date), itemCode:r.ItemCode,
         itemName:r.Dscription, supplierName:r.CardName, qty:r.Quantity, uom:r.unitMsr };
     });
-    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = STATE.grpoData.length;
+    var sg = document.getElementById('s-grpo'); if(sg) sg.textContent = (STATE.grpoData||[]).length;
     renderGRPO();
     toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' ✓', 'ok');
   } catch(e) {
@@ -7525,7 +7533,15 @@ function _mpsMrpCalculate() {
         var cnt2 = Object.keys(_mpsData).length;
         mpsEl.textContent = '✓ ' + cnt2 + ' FG · Terakhir dihitung: ' + calcTs;
       }
-      toast('MRP selesai dihitung ✓ · Klik "Terapkan MRP" untuk diterapkan ke Forecast & Projection', 'ok');
+      var _calcTs = new Date().toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      localStorage.setItem('mrp_last_calc', _calcTs);
+      var _mpsStatusEl = document.getElementById('mps-status');
+      if(_mpsStatusEl && _mpsData) {
+        var _cnt2 = Object.keys(_mpsData).length;
+        _mpsStatusEl.textContent = '✓ ' + _cnt2 + ' FG · Terakhir dihitung: ' + _calcTs;
+        _mpsStatusEl.style.color = 'var(--green)';
+      }
+      toast('MRP selesai dihitung ✓ · ' + _calcTs, 'ok');
     }
   }
   setTimeout(processChunk, 0);
@@ -7549,6 +7565,9 @@ function _mrpShowResult() {
   // Table preview: top 20 by Apr requirement
   var sorted = rmCodes.slice().sort(function(a,b){ return (_mrpResult[b]['Apr']||0) - (_mrpResult[a]['Apr']||0); });
   var master    = STATE.masterData || {};
+  var mrpMaster  = STATE.mrpData    || {};
+  var matcom     = STATE.matcomData  || {};
+  var showMonths = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
   var mrpMaster  = STATE.mrpData    || {};
   var matcom     = STATE.matcomData  || {};
 
