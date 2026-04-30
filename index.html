@@ -7004,7 +7004,7 @@ function _fcDetailRow(code, fc, master) {
         var inp_bg = haVal ? 'var(--amber-bg)' : 'var(--bg3)';
         return '<td style="padding:2px 3px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">'
           + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
-          + '<input type="number" value="'+cur+'"'
+          + '<input type="text" inputmode="numeric" value="'+(cur>0?n_id(cur):'0')+'"'
           +   ' data-code="'+fieldCode+'" data-mi="'+i+'" data-moq="'+moqV+'"'
           +   ' oninput="_fcProposeEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
           +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_weight+';color:'+inp_color+';background:transparent;border:none;padding:3px 4px;outline:none">'
@@ -7578,7 +7578,11 @@ function _mrpShowResult() {
   var master    = STATE.masterData || {};
   var mrpMaster  = STATE.mrpData    || {};
   var matcom     = STATE.matcomData  || {};
-  var showMonths = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
+  // Detect active months from actual result data — most reliable source
+  var showMonths = MRP_MONTHS.filter(function(m) {
+    return rmCodes.some(function(c){ return ((_mrpResult[c]||{})[m]||0) > 0; });
+  });
+  if(!showMonths.length) showMonths = _mpsActiveMonths.length ? _mpsActiveMonths : MRP_MONTHS;
   var mrpMaster  = STATE.mrpData    || {};
   var matcom     = STATE.matcomData  || {};
 
@@ -7589,6 +7593,9 @@ function _mrpShowResult() {
     + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Deskripsi</th>'
     + activeMonths.map(function(m){ return '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">'+m+'</th>'; }).join('')
     + '</tr></thead><tbody>';
+
+  // Sync _mpsActiveMonths with what's actually in the result
+  if(showMonths.length) _mpsActiveMonths = showMonths;
 
   sorted.slice(0, 50).forEach(function(code, i) {
     var m = master[code] || mrpMaster[code] || {};
@@ -8321,7 +8328,7 @@ function _fcOspoStep(btn) {
   var cur     = parseFloat(inp.value) || 0;
   var snapped = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
   var newVal  = Math.max(0, snapped + step);
-  inp.value   = newVal;
+  inp.value   = newVal > 0 ? n_id(newVal) : '0';
   _fcOspoEdit(inp);
 }
 
@@ -8339,7 +8346,7 @@ function _fcStepBtn(btn) {
   // Snap to nearest multiple before stepping
   var snapped  = multiple > 1 ? Math.round(cur / multiple) * multiple : cur;
   var newVal   = Math.max(0, snapped + delta);
-  inp.value    = newVal;
+  inp.value    = newVal > 0 ? n_id(newVal) : '0';
   _fcProposeEdit(inp);
 }
 
@@ -8368,7 +8375,7 @@ function _fcProposeStep(code, mi, delta) {
 function _fcProposeEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var qty  = parseFloat(input.value) || 0;
+  var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
   if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
   _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
