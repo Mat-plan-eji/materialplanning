@@ -1669,7 +1669,7 @@ function appStart() {
       console.error('[boot] _appInit CRASH:', e.message, e.stack);
       toast('Boot error: ' + e.message, 'err');
     }
-    removeSplash();
+    removeSplash(); // always remove splash
     // Auto-load Sheets jika data belum ada tapi URL sudah ada di cloud
     setTimeout(function(){
       if((!STATE.masterData || !STATE.mrpData) &&
@@ -8734,6 +8734,16 @@ function _fcExportExcelTall() {
 }
 
 // ─── Kick off ───────────────────────────────────────────────────────────────
+window.onerror = function(msg, src, line, col, err) {
+  console.error('[GLOBAL ERROR]', msg, 'at', src+':'+line, err&&err.stack);
+  // Show visible error if app hasn't loaded
+  var overlay = document.getElementById('boot-overlay');
+  if(overlay) {
+    var msgEl = document.getElementById('boot-msg');
+    if(msgEl) msgEl.textContent = 'Error: ' + msg;
+  }
+  return false;
+};
 if(document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", appStart);
 } else {
