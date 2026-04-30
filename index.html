@@ -7747,7 +7747,7 @@ function _mrpExportRekap() {
 
 // ── IndexedDB helpers for BOM (large data, local only) ────────────────────────
 function _mrpIdbOpen(cb) {
-  var req = indexedDB.open('mrp_db', 1);
+  var req = indexedDB.open('mrp_db', 2);
   req.onupgradeneeded = function(e) {
     var db2 = e.target.result;
     if(!db2.objectStoreNames.contains('bom')) db2.createObjectStore('bom', {keyPath:'id'});
@@ -8725,4 +8725,4 @@ if(document.readyState === "loading") {
 }
 </script>
 </body>
-</html
+</html>
