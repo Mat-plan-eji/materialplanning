@@ -326,12 +326,12 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span>Material Planner Dashboard</div>
   <div class="ni" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
   <div class="ni" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
-  <div class="nav-divider"></div>
+  <div class="ni" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
   <div class="nav-section">Delivery</div>
   <div class="ni" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
   <div class="ni" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
   <div class="ni" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span>List Kiriman Daily</div>
-  <div class="ni" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance</div>
+  <div class="ni" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
   <div class="ni" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
@@ -959,6 +959,63 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 </div>
 </div>
 
+
+<div class="page" id="pg-mps-mrp">
+<div class="page-inner">
+  <div class="ph">
+    <div class="ph-l">
+      <h2>MPS → MRP</h2>
+      <p>Upload MPS & BOM untuk generate Material Requirement Planning otomatis</p>
+    </div>
+    <div class="ph-r" style="gap:8px">
+      <button class="btn btn-primary btn-sm" onclick="_mpsMrpCalculate()" id="btn-calc-mrp" style="font-size:11.5px" disabled>⚡ Hitung MRP</button>
+      <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11.5px" disabled>✓ Terapkan MRP</button>
+      <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11.5px" disabled>☁ Simpan ke Firebase</button>
+      <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11.5px" disabled>↓ Export Detail</button>
+      <button class="btn btn-sm" onclick="_mrpExportRekap()" id="btn-export-rekap" style="font-size:11.5px" disabled>↓ Export Rekap</button>
+    </div>
+  </div>
+
+  <!-- Upload cards -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+    <!-- MPS Upload -->
+    <div class="stat" style="padding:20px">
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:12px">📅 MPS (Master Production Schedule)</div>
+      <div id="mps-status" style="font-size:12px;color:var(--muted);margin-bottom:12px">Belum di-upload</div>
+      <label style="display:inline-block">
+        <input type="file" id="mps-file-input" accept=".xlsx,.xls" style="display:none" onchange="_mpsUpload(this)">
+        <span class="btn btn-sm" style="cursor:pointer;font-size:11.5px">📂 Upload MPS (.xlsx)</span>
+      </label>
+
+    </div>
+
+    <!-- BOM Upload -->
+    <div class="stat" style="padding:20px">
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:12px">🔧 BOM (Bill of Materials)</div>
+      <div id="bom-status" style="font-size:12px;color:var(--muted);margin-bottom:12px">Belum di-upload</div>
+      <label style="display:inline-block">
+        <input type="file" id="bom-file-input" accept=".xlsx,.xls" style="display:none" onchange="_bomUpload(this)">
+        <span class="btn btn-sm" style="cursor:pointer;font-size:11.5px">📂 Upload BOM (.xlsx)</span>
+      </label>
+
+    </div>
+
+  </div>
+
+  <!-- Progress bar -->
+  <div id="mrp-progress-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="mrp-progress-label">Menghitung...</div>
+    <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+      <div id="mrp-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width .2s;border-radius:3px"></div>
+    </div>
+  </div>
+
+  <!-- Result summary -->
+  <div id="mrp-result"></div>
+
+</div>
+</div>
 <div class="page" id="pg-settings">
 <div class="page-inner">
   <div class="ph"><div class="ph-l"><h2>Settings</h2><p>Konfigurasi koneksi SAP, WA, dan Firebase (cloud sync)</p></div></div>
@@ -1860,6 +1917,7 @@ function showPage(name, el) {
     schedule: renderSchedule,
     'daily-list': function(){initDailyList();renderDailyList()},
     'performance': function(){renderPerformance();},
+    'mps-mrp':     function(){renderMpsMrp();},
     grpo: initGRPO,
     ospo: function(){if(!STATE.ospoData.length)loadOSPO();else renderOSPO()},
     ospr: function(){if(!STATE.osprData.length)loadOSPR().then(renderOSPR);else renderOSPR()},
@@ -3413,11 +3471,11 @@ function setUrgentCutoff() {
   var cutoff = getCutoff();
   var el = document.getElementById('f-proj-coverage');
   // Hanya set default jika belum ada nilai
-  if(el && !el.value) el.placeholder = fmtDate(cutoff) + ' (default)';
+  if(el && !el.value) el.placeholder = _perfFmtDate(cutoff) + ' (default)';
   var lbl = document.getElementById('cutoff-lbl');
-  if(lbl) lbl.textContent = fmtDate(cutoff);
+  if(lbl) lbl.textContent = _perfFmtDate(cutoff);
   var sub = document.getElementById('proj-sub');
-  if(sub) sub.textContent = 'Master Data + MRP + Stock | Cutoff default: W+' + (CFG.wn/7|0) + ' (' + fmtDate(cutoff) + ')';
+  if(sub) sub.textContent = 'Master Data + MRP + Stock | Cutoff default: W+' + (CFG.wn/7|0) + ' (' + _perfFmtDate(cutoff) + ')';
 }
 
 function populateSKUFilter() {
@@ -5408,7 +5466,7 @@ function exportConfigHTML() {
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-function fmtDate(d) {
+function _perfFmtDate(d) {
   return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 function fmtDateID(d) {
@@ -7246,7 +7304,430 @@ function _fcExportRekap() {
 }
 
 
+
+// ─── MPS → MRP ────────────────────────────────────────────────────────────────
+var _mpsData = null;  // { itemNo: { Apr:x, May:x, ... } }
+var _bomData = null;  // [ { fg, rm, qtyPerPcs } ]
+var _mrpResult = null; // { rmCode: { Apr:x, May:x, ... } }
+
+var MRP_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var MRP_MPS_COLS = ['AprPlan','MayPlan','JunPlan','JulPlan','AugPlan','SepPlan','OctPlan','NovPlan','DecPlan'];
+
+function renderMpsMrp() {
+  // Restore from IndexedDB if available
+  _mrpIdbLoad();
+}
+
+// ── Upload MPS ────────────────────────────────────────────────────────────────
+function _mpsUpload(input) {
+  var file = input.files[0]; if(!file) return;
+  var statusEl = document.getElementById('mps-status');
+  statusEl.textContent = '⏳ Membaca file...';
+  statusEl.style.color = 'var(--muted)';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      // Find MPS sheet
+      var sheetName = wb.SheetNames.find(function(s){ return /MPS/i.test(s); }) || wb.SheetNames[0];
+      var ws = wb.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Find header row (contains "Item No.")
+      var hdrIdx = -1;
+      for(var i=0; i<rows.length; i++) {
+        if(rows[i].indexOf('Item No.') >= 0) { hdrIdx = i; break; }
+      }
+      if(hdrIdx < 0) { statusEl.textContent = '❌ Header "Item No." tidak ditemukan'; statusEl.style.color='var(--red)'; return; }
+
+      var headers = rows[hdrIdx];
+      var itemCol = headers.indexOf('Item No.');
+      var planIdxs = MRP_MPS_COLS.map(function(c){ return headers.indexOf(c); });
+
+      _mpsData = {};
+      var count = 0;
+      for(var r=hdrIdx+1; r<rows.length; r++) {
+        var row = rows[r];
+        var code = String(row[itemCol]||'').trim();
+        if(!code || !/^\d{10}/.test(code)) continue;
+        var plans = {};
+        MRP_MONTHS.forEach(function(m, i) {
+          plans[m] = parseFloat(row[planIdxs[i]]) || 0;
+        });
+        _mpsData[code] = plans;
+        count++;
+      }
+
+      statusEl.textContent = '✓ ' + count + ' FG item dari sheet "' + sheetName + '"';
+      statusEl.style.color = 'var(--green)';
+      _mrpCheckReady();
+    } catch(err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = 'var(--red)';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Upload BOM ────────────────────────────────────────────────────────────────
+function _bomUpload(input) {
+  var file = input.files[0]; if(!file) return;
+  var statusEl = document.getElementById('bom-status');
+  statusEl.textContent = '⏳ Membaca BOM (mungkin agak lama)...';
+  statusEl.style.color = 'var(--muted)';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      var sheetName = wb.SheetNames.find(function(s){ return /BOM/i.test(s); }) || wb.SheetNames[0];
+      var ws = wb.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Find header row
+      var hdrIdx = -1;
+      for(var i=0; i<rows.length; i++) {
+        if(rows[i].indexOf('Item') >= 0 && rows[i].indexOf('Qty per pcs') >= 0) { hdrIdx = i; break; }
+      }
+      if(hdrIdx < 0) { statusEl.textContent = '❌ Header tidak ditemukan'; statusEl.style.color='var(--red)'; return; }
+
+      var headers = rows[hdrIdx];
+      var fgCol   = 0; // Item (FG)
+      var rmCol   = 2; // Item.1 (RM/PM component)
+      var qtyCol  = headers.indexOf('Qty per pcs');
+      var typeCol = headers.indexOf('BOM Type');
+
+      _bomData = [];
+      var count = 0;
+      for(var r=hdrIdx+1; r<rows.length; r++) {
+        var row = rows[r];
+        var fg   = String(row[fgCol]||'').trim();
+        var rm   = String(row[rmCol]||'').trim();
+        var type = String(row[typeCol]||'').trim();
+        var qty  = parseFloat(row[qtyCol]) || 0;
+        // Only RM (3xxx) and PM (4xxx), BOM Type N
+        if(type !== 'N') continue;
+        if(!/^[34]/.test(rm)) continue;
+        if(!fg || !rm || !qty) continue;
+        _bomData.push({ fg:fg, rm:rm, qty:qty });
+        count++;
+      }
+
+      // Save to IndexedDB for next session
+      _mrpIdbSaveBom(_bomData);
+
+      statusEl.textContent = '✓ ' + count + ' baris RM/PM dari sheet "' + sheetName + '"';
+      statusEl.style.color = 'var(--green)';
+      _mrpCheckReady();
+    } catch(err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = 'var(--red)';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Check if ready to calculate ──────────────────────────────────────────────
+function _mrpCheckReady() {
+  var btn = document.getElementById('btn-calc-mrp');
+  if(btn) btn.disabled = !(_mpsData && _bomData);
+}
+
+// ── Calculate MRP ─────────────────────────────────────────────────────────────
+function _mpsMrpCalculate() {
+  if(!_mpsData || !_bomData) { toast('Upload MPS dan BOM terlebih dahulu','err'); return; }
+
+  var progWrap = document.getElementById('mrp-progress-wrap');
+  var progBar  = document.getElementById('mrp-progress-bar');
+  var progLbl  = document.getElementById('mrp-progress-label');
+  if(progWrap) progWrap.style.display = 'block';
+
+  // Async chunked to avoid UI freeze
+  var result = {};
+  var total  = _bomData.length;
+  var chunk  = 2000;
+  var idx    = 0;
+
+  function processChunk() {
+    var end = Math.min(idx + chunk, total);
+    for(var i=idx; i<end; i++) {
+      var b = _bomData[i];
+      var mps = _mpsData[b.fg];
+      if(!mps) continue;
+      if(!result[b.rm]) {
+        result[b.rm] = {};
+        MRP_MONTHS.forEach(function(m){ result[b.rm][m] = 0; });
+      }
+      MRP_MONTHS.forEach(function(m) {
+        result[b.rm][m] += (mps[m] || 0) * b.qty;
+      });
+    }
+    idx = end;
+    var pct = Math.round(idx/total*100);
+    if(progBar) progBar.style.width = pct+'%';
+    if(progLbl) progLbl.textContent = 'Menghitung... ' + pct + '% (' + idx + '/' + total + ' baris)';
+
+    if(idx < total) {
+      setTimeout(processChunk, 0);
+    } else {
+      _mrpResult = result;
+      if(progWrap) progWrap.style.display = 'none';
+      _mrpShowResult();
+      _mrpIdbSaveMrp(result);
+      var saveBtn = document.getElementById('btn-save-mrp');      if(saveBtn) saveBtn.disabled = false;
+      var detBtn  = document.getElementById('btn-export-detail'); if(detBtn)  detBtn.disabled  = false;
+      var rekBtn  = document.getElementById('btn-export-rekap');  if(rekBtn)  rekBtn.disabled   = false;
+      var tepBtn  = document.getElementById('btn-terapkan-mrp');  if(tepBtn)  tepBtn.disabled   = false;
+      toast('MRP selesai dihitung ✓ · Klik "Terapkan MRP" untuk diterapkan ke Forecast & Projection', 'ok');
+    }
+  }
+  setTimeout(processChunk, 0);
+}
+
+// ── Show result summary ───────────────────────────────────────────────────────
+function _mrpShowResult() {
+  var el = document.getElementById('mrp-result');
+  if(!el || !_mrpResult) return;
+
+  var rmCodes = Object.keys(_mrpResult);
+  var rmCount = rmCodes.filter(function(c){ return /^3/.test(c); }).length;
+  var pmCount = rmCodes.filter(function(c){ return /^4/.test(c); }).length;
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">'
+    + _mrpKpi('Total Item', rmCodes.length, 'RM + PM')
+    + _mrpKpi('Raw Material', rmCount, 'item RM (3xxx)')
+    + _mrpKpi('Packaging', pmCount, 'item PM (4xxx)')
+    + '</div>';
+
+  // Table preview: top 20 by Apr requirement
+  var sorted = rmCodes.slice().sort(function(a,b){ return (_mrpResult[b]['Apr']||0) - (_mrpResult[a]['Apr']||0); });
+  var master = STATE.masterData || {};
+
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2)">'
+    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Item Code</th>'
+    + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Deskripsi</th>'
+    + MRP_MONTHS.map(function(m){ return '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">'+m+'</th>'; }).join('')
+    + '</tr></thead><tbody>';
+
+  sorted.slice(0, 50).forEach(function(code, i) {
+    var m = master[code] || {};
+    var iT = /^3/.test(code)?'RM':'PM';
+    var clr = iT==='RM'?'var(--teal)':'var(--purple)';
+    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11px">'
+      +   '<span style="font-size:9.5px;font-weight:700;color:'+clr+';margin-right:4px">'+iT+'</span>'
+      +   code + '</td>'
+      + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(m.desc||'—')+'</td>'
+      + MRP_MONTHS.map(function(mn){
+          var v = _mrpResult[code][mn] || 0;
+          return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+(v>0?n_id(Math.round(v)):'<span style="color:var(--hint)">—</span>')+'</td>';
+        }).join('')
+      + '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  if(rmCodes.length > 50) html += '<div style="padding:8px 0;font-size:11.5px;color:var(--muted)">Menampilkan 50 dari '+rmCodes.length+' item (diurutkan berdasarkan Req April terbesar)</div>';
+
+  el.innerHTML = html;
+  toast('MRP berhasil dihitung: ' + rmCodes.length + ' item ✓', 'ok');
+}
+
+function _mrpKpi(label, val, sub) {
+  return '<div class="stat" style="padding:14px 16px">'
+    + '<div style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px">'+label+'</div>'
+    + '<div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--text)">'+val+'</div>'
+    + '<div style="font-size:10.5px;color:var(--muted);margin-top:3px">'+sub+'</div>'
+    + '</div>';
+}
+
+// ── Terapkan MRP — dipanggil manual oleh user ────────────────────────────────
+function _mrpTerapkan() {
+  if(!_mrpResult) { toast('Hitung MRP dulu','err'); return; }
+  _mrpApplyToState(_mrpResult);
+  toast('MRP diterapkan ke Forecast & Projection ✓', 'ok');
+  // Update button style to show applied
+  var btn = document.getElementById('btn-terapkan-mrp');
+  if(btn) { btn.textContent = '✓ MRP Diterapkan'; btn.style.background='var(--green)'; btn.style.borderColor='var(--green)'; }
+}
+
+// ── Apply MRP to STATE (local, instant) ──────────────────────────────────────
+function _mrpApplyToState(result) {
+  var mrpData = {};
+  Object.keys(result).forEach(function(code) {
+    var m = (STATE.masterData||{})[code] || {};
+    mrpData[code] = { desc: m.desc || code, months: {} };
+    MRP_MONTHS.forEach(function(mn, i) {
+      var fcKey = FC_MONTHS[i];
+      mrpData[code].months[fcKey] = Math.round(result[code][mn] || 0);
+    });
+  });
+  STATE.mrpData = mrpData;
+  localStorage.setItem('mrp_data', JSON.stringify(mrpData));
+  // Refresh forecast & projection if currently open
+  if(document.getElementById('fc-table')) renderForecast();
+  if(document.getElementById('proj-tbody') || document.getElementById('proj-table')) { buildProjection(); renderProjection(); }
+}
+
+// ── Save to Firebase (hasil MRP saja, bukan BOM) ──────────────────────────────
+function _mpsMrpSaveToFirebase() {
+  if(!_mrpResult) { toast('Hitung MRP dulu','err'); return; }
+  // STATE already updated by _mrpApplyToState — just cloudSave
+  cloudSave();
+  toast('MRP disimpan ke Firebase ✓ · ' + Object.keys(_mrpResult).length + ' item · semua user akan update', 'ok');
+}
+
+
+// ── Export Detail (per item × per bulan, like BOM sheet) ─────────────────────
+function _mrpExportDetail() {
+  if(!_mrpResult || typeof XLSX === 'undefined') { toast('Tidak ada data MRP','err'); return; }
+  var master = STATE.masterData || {};
+  var hdr = ['Item Code','Deskripsi','UoM','Tipe'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m+" '26"; }));
+  var rows = [hdr];
+  var codes = Object.keys(_mrpResult).sort();
+  codes.forEach(function(code) {
+    var m   = master[code] || {};
+    var iT  = /^3/.test(code)?'RM':'PM';
+    var row = [code, m.desc||'', m.uom||'', iT];
+    MRP_MONTHS.forEach(function(mn) {
+      row.push(Math.round(_mrpResult[code][mn]||0));
+    });
+    rows.push(row);
+  });
+
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:14},{wch:35},{wch:6},{wch:4}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'MRP Detail');
+  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'MRP_Detail_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Export Detail ✓','ok');
+}
+
+// ── Export Rekap (grouped by supplier) ────────────────────────────────────────
+function _mrpExportRekap() {
+  if(!_mrpResult || typeof XLSX === 'undefined') { toast('Tidak ada data MRP','err'); return; }
+  var master = STATE.masterData || {};
+
+  // Group by supplier
+  var bySupplier = {};
+  Object.keys(_mrpResult).forEach(function(code) {
+    var m   = master[code] || {};
+    var sup = m.supplier || 'Unknown';
+    if(!bySupplier[sup]) bySupplier[sup] = [];
+    bySupplier[sup].push(code);
+  });
+
+  var wb = XLSX.utils.book_new();
+
+  // Sheet 1: Summary per supplier
+  var hdrSum = ['Supplier','Item Count'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m; }));
+  var rowsSum = [hdrSum];
+  Object.keys(bySupplier).sort().forEach(function(sup) {
+    var codes = bySupplier[sup];
+    var row = [sup, codes.length];
+    MRP_MONTHS.forEach(function(mn) {
+      var total = codes.reduce(function(s,c){ return s + (_mrpResult[c][mn]||0); }, 0);
+      row.push(Math.round(total));
+    });
+    rowsSum.push(row);
+  });
+  var wsSum = XLSX.utils.aoa_to_sheet(rowsSum);
+  wsSum['!cols'] = [{wch:35},{wch:8}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
+  XLSX.utils.book_append_sheet(wb, wsSum, 'Rekap Supplier');
+
+  // Sheet 2: Detail with supplier column
+  var hdrDet = ['Supplier','Item Code','Deskripsi','UoM','Tipe'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m; }));
+  var rowsDet = [hdrDet];
+  Object.keys(bySupplier).sort().forEach(function(sup) {
+    bySupplier[sup].forEach(function(code) {
+      var m   = master[code] || {};
+      var iT  = /^3/.test(code)?'RM':'PM';
+      var row = [sup, code, m.desc||'', m.uom||'', iT];
+      MRP_MONTHS.forEach(function(mn) { row.push(Math.round(_mrpResult[code][mn]||0)); });
+      rowsDet.push(row);
+    });
+  });
+  var wsDet = XLSX.utils.aoa_to_sheet(rowsDet);
+  wsDet['!cols'] = [{wch:35},{wch:14},{wch:35},{wch:6},{wch:4}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
+  XLSX.utils.book_append_sheet(wb, wsDet, 'Detail per Supplier');
+
+  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'MRP_Rekap_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Export Rekap ✓','ok');
+}
+
+// ── IndexedDB helpers for BOM (large data, local only) ────────────────────────
+function _mrpIdbOpen(cb) {
+  var req = indexedDB.open('mrp_db', 1);
+  req.onupgradeneeded = function(e) {
+    e.target.result.createObjectStore('bom',  {keyPath:'id'});
+    e.target.result.createObjectStore('mrp',  {keyPath:'id'});
+  };
+  req.onsuccess = function(e) { cb(e.target.result); };
+  req.onerror   = function()  { cb(null); };
+}
+function _mrpIdbSaveBom(data) {
+  _mrpIdbOpen(function(db) {
+    if(!db) return;
+    var tx = db.transaction('bom', 'readwrite');
+    tx.objectStore('bom').put({ id:'bom_data', data: data, ts: new Date().toISOString() });
+  });
+}
+function _mrpIdbSaveMrp(data) {
+  _mrpIdbOpen(function(db) {
+    if(!db) return;
+    var tx = db.transaction('mrp', 'readwrite');
+    tx.objectStore('mrp').put({ id:'mrp_data', data: data, ts: new Date().toISOString() });
+  });
+}
+function _mrpIdbLoad() {
+  _mrpIdbOpen(function(db) {
+    if(!db) return;
+    // Load BOM
+    var tx1 = db.transaction('bom','readonly');
+    tx1.objectStore('bom').get('bom_data').onsuccess = function(e) {
+      if(e.target.result) {
+        _bomData = e.target.result.data;
+        var ts   = e.target.result.ts ? new Date(e.target.result.ts).toLocaleDateString('id-ID') : '';
+        var el   = document.getElementById('bom-status');
+        if(el) { el.textContent = '✓ BOM tersimpan: ' + _bomData.length + ' baris (' + ts + ')'; el.style.color='var(--green)'; }
+        _mrpCheckReady();
+      }
+    };
+    // Load MRP result
+    var tx2 = db.transaction('mrp','readonly');
+    tx2.objectStore('mrp').get('mrp_data').onsuccess = function(e) {
+      if(e.target.result) {
+        _mrpResult = e.target.result.data;
+        var saveBtn = document.getElementById('btn-save-mrp');       if(saveBtn) saveBtn.disabled = false;
+        var detBtn  = document.getElementById('btn-export-detail');   if(detBtn)  detBtn.disabled  = false;
+        var rekBtn  = document.getElementById('btn-export-rekap');    if(rekBtn)  rekBtn.disabled   = false;
+        var tepBtn  = document.getElementById('btn-terapkan-mrp');    if(tepBtn)  tepBtn.disabled   = false;
+        _mrpShowResult();
+      }
+    };
+  });
+}
+
 // ─── Supplier Performance ─────────────────────────────────────────────────────
+function _perfParseDMY(s) {
+  if(!s) return null;
+  var p = s.split('/');
+  if(p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  return new Date(s);
+}
+function _perfParseISO(s) { return s ? new Date(s+'T00:00:00') : null; }
+function _perfFmtDate(d) { if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function _perfDaysDiff(a, b) { return a && b ? Math.round((a-b)/86400000) : null; }
+
 function renderPerformance() {
   var kpiEl   = document.getElementById('perf-kpi');
   var tblEl   = document.getElementById('perf-table');
@@ -7269,15 +7750,7 @@ function renderPerformance() {
   var mo1    = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // Parse date helpers
-  function parseDMY(s) {
-    if(!s) return null;
-    var p = s.split('/');
-    if(p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-    return new Date(s);
-  }
-  function parseISO(s) { return s ? new Date(s+'T00:00:00') : null; }
-  function fmtDate(d) { if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
-  function daysDiff(a, b) { return a && b ? Math.round((a-b)/86400000) : null; }
+  // helpers are global — see _perfParseDMY etc below
 
   // Build GRPO lookup by baseRef (= PO DocNum) — accurate 1:1 matching
   var grpoByPO = {};
@@ -7286,7 +7759,7 @@ function renderPerformance() {
     if(!ref) return;
     if(!grpoByPO[ref]) grpoByPO[ref] = { qty:0, dates:[] };
     grpoByPO[ref].qty += parseFloat(g.qty)||0;
-    var gd = parseDMY(g.grpoDate);
+    var gd = _perfParseDMY(g.grpoDate);
     if(gd) grpoByPO[ref].dates.push(gd);
   });
 
@@ -7299,8 +7772,8 @@ function renderPerformance() {
     var ovrItem = ovr[ovKey] || ovr[dn] || {};
     var m       = master[code] || {};
 
-    var reqDate  = parseDMY(po.prReqDate);
-    var confDate = ovrItem.confDate ? parseISO(ovrItem.confDate) : null;
+    var reqDate  = _perfParseDMY(po.prReqDate);
+    var confDate = ovrItem.confDate ? _perfParseISO(ovrItem.confDate) : null;
     var confQty  = parseFloat(ovrItem.confQty) || 0;
     var reqQty   = parseFloat(po.orderQty || po.openQty || 0);
 
@@ -7320,12 +7793,12 @@ function renderPerformance() {
     if(range === 'thisweek'  && refDate2 && refDate2 < wkMon) return;
     if(range === 'thismonth' && refDate2 && refDate2 < mo1)   return;
 
-    var gapReqConf  = confDate ? daysDiff(confDate, reqDate)  : null; // + = conf terlambat dari req
-    var gapConfGrpo = (confDate && grpoDate) ? daysDiff(grpoDate, confDate) : null; // + = grpo terlambat dari conf
-    var gapReqGrpo  = (reqDate && grpoDate)  ? daysDiff(grpoDate, reqDate)  : null; // overall
+    var gapReqConf  = confDate ? _perfDaysDiff(confDate, reqDate)  : null; // + = conf terlambat dari req
+    var gapConfGrpo = (confDate && grpoDate) ? _perfDaysDiff(grpoDate, confDate) : null; // + = grpo terlambat dari conf
+    var gapReqGrpo  = (reqDate && grpoDate)  ? _perfDaysDiff(grpoDate, reqDate)  : null; // overall
 
     var qtyAccConf  = confQty > 0 && reqQty  > 0 ? (confQty / reqQty  * 100) : null;
-    var qtyAccGrpo  = grpoQty > 0 && confQty > 0 ? (grpoQty / confQty * 100) : (grpoQty>0&&reqQty>0 ? grpoQty/reqQty*100 : null);
+    var qtyAccGrpo  = grpoQty > 0 && (confQty||reqQty) > 0 ? Math.min(100, Math.round(grpoQty / (confQty||reqQty) * 100)) : null;
 
     rows.push({
       docNum: dn, itemCode: code, itemName: m.desc||po.itemName||code, site: po.site||po.whse||'',
@@ -7394,7 +7867,7 @@ function _perfRenderSupplier(el, rows) {
     function ltScore(lt) { return lt<=1?100:lt===2?75:(lt>=3&&lt<=4)?50:lt===5?25:0; }
     var otScores=[], ifScores=[], caScores=[], ltVals=[];
     rs.forEach(function(r) {
-      var lt  = (r.grpoDate && r.confDate) ? daysDiff(r.grpoDate, r.confDate) : null;
+      var lt  = (r.grpoDate && r.confDate) ? _perfDaysDiff(r.grpoDate, r.confDate) : null;
       var ref = r.confQty || r.reqQty;
       var onT = !r.grpoDate ? 0 : (lt!==null ? ltScore(lt) : null);
       if(onT !== null) otScores.push(onT);
@@ -7526,7 +7999,7 @@ function _perfRenderDetail(el, rows) {
     var site    = r.site || '—';
 
     // LT = Tgl Kirim - Tgl Konfirmasi (hari, positif = terlambat)
-    var lt = (r.grpoDate && r.confDate) ? daysDiff(r.grpoDate, r.confDate) : null;
+    var lt = (r.grpoDate && r.confDate) ? _perfDaysDiff(r.grpoDate, r.confDate) : null;
     var ref = r.confQty || r.reqQty;
     var kekurangan = ref > 0 ? Math.max(0, ref - r.grpoQty) : 0;
 
@@ -7538,9 +8011,10 @@ function _perfRenderDetail(el, rows) {
       onTime = lt<=1 ? 100 : lt===2 ? 75 : (lt>=3&&lt<=4) ? 50 : lt===5 ? 25 : 0;
     }
 
-    // % In Full: Actual/Qty (100% jika Actual ≥ Qty)
+    // % In Full: Actual/Qty — use confQty if available, else reqQty
+    // Cap at 100% (over-delivery not penalized for In Full)
     var inFull = null;
-    if(ref > 0) inFull = r.grpoQty >= ref ? 100 : Math.round(r.grpoQty / ref * 100);
+    if(ref > 0 && r.grpoQty > 0) inFull = Math.min(100, Math.round(r.grpoQty / ref * 100));
 
     // % Confirm Accuracy: AVERAGE(OTD score by |LT|, qty accuracy)
     var confAcc = null;
@@ -7556,16 +8030,16 @@ function _perfRenderDetail(el, rows) {
 
     html += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
       + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+r.docNum+'</td>'
-      + '<td style="padding:8px;font-family:var(--mono);font-size:11.5px">'+fmtDate(r.reqDate)+'</td>'
+      + '<td style="padding:8px;font-family:var(--mono);font-size:11.5px">'+_perfFmtDate(r.reqDate)+'</td>'
       + '<td style="padding:8px;font-size:11.5px;color:var(--muted)">'+site+'</td>'
       + '<td style="padding:8px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.supplier+'</td>'
       + '<td style="padding:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+r.itemCode+'</td>'
       + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.itemName+'</td>'
-      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:600">'+(r.confDate?fmtDate(r.confDate):'<span style="color:var(--muted)">—</span>')+'</td>'
+      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:600">'+(r.confDate?_perfFmtDate(r.confDate):'<span style="color:var(--muted)">—</span>')+'</td>'
       + '<td style="padding:8px;text-align:right;font-family:var(--mono)">'+n_id(r.reqQty)+'</td>'
       + '<td style="padding:8px;color:var(--muted);font-size:11.5px">'+uom+'</td>'
       + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(notRecv?'var(--muted)':r.grpoQty<ref?'var(--amber)':'var(--text)')+'">'+( notRecv?'—':n_id(r.grpoQty))+'</td>'
-      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px">'+(r.grpoDate?fmtDate(r.grpoDate):'<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;padding:1px 7px;border-radius:2px;font-weight:600">Belum</span>')+'</td>'
+      + '<td style="padding:8px;text-align:center;font-family:var(--mono);font-size:11.5px">'+(r.grpoDate?_perfFmtDate(r.grpoDate):'<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;padding:1px 7px;border-radius:2px;font-weight:600">Belum</span>')+'</td>'
       + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(kekurangan>0?'var(--red)':'var(--green)')+'">'+( kekurangan>0?n_id(kekurangan):'0')+'</td>'
       + '<td style="padding:8px;text-align:right;font-family:var(--mono);color:'+(lt>0?'var(--red)':lt===0?'var(--green)':'var(--muted)')+'">'+( lt!==null?(lt>0?'+':'')+lt:'—')+'</td>'
       + '<td style="padding:8px;text-align:center">'+fmtPct(onTime)+'</td>'
