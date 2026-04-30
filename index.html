@@ -967,6 +967,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
     <div class="ph-r" style="flex-wrap:wrap;gap:6px;max-width:500px;justify-content:flex-end">
       <button class="btn btn-primary btn-sm" onclick="_mpsMrpCalculate()" id="btn-calc-mrp" style="font-size:11px" disabled>&#x26A1; Hitung MRP</button>
+      <span id="mrp-last-calc-label" style="font-size:11px;color:var(--muted);padding:0 4px"></span>
       <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11px" disabled>&#x2713; Terapkan MRP</button>
       <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11px" disabled>&#x2601; Simpan ke Firebase</button>
       <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11px" disabled>&#x2193; Export Detail</button>
@@ -7320,6 +7321,7 @@ function _fcExportRekap() {
 
 // ─── MPS → MRP ────────────────────────────────────────────────────────────────
 var _mpsData = null;         // { itemNo: { Apr:x, May:x, ... } }
+var _fgDescFromMps = {};     // { itemNo: description } from MPS upload
 var _bomData = null;         // [ { fg, rm, qtyPerPcs } ]
 var _mrpResult = null;       // { rmCode: { Apr:x, May:x, ... } }
 
@@ -7386,9 +7388,21 @@ function _mpsUpload(input) {
       });
 
       // Detect which months have any plan data
-      _mpsActiveMonths = MRP_MONTHS.filter(function(m){ return planIdxs[m] >= 0; });
+      // Detect active months: must have column AND at least some non-zero plan
+      _mpsActiveMonths = MRP_MONTHS.filter(function(m) {
+        if(planIdxs[m] < 0) return false;
+        for(var ri=hdrIdx+1; ri<Math.min(hdrIdx+50, rows.length); ri++) {
+          if(parseFloat(rows[ri][planIdxs[m]]) > 0) return true;
+        }
+        return false;
+      });
+      if(!_mpsActiveMonths.length) _mpsActiveMonths = MRP_MONTHS.slice();
+
+      // Also find description column
+      var descCol = headers.findIndex(function(h){ return /^(item\s*desc|description|deskripsi)/i.test(h); });
 
       _mpsData = {};
+      _fgDescFromMps = {};
       var count = 0;
       for(var r=hdrIdx+1; r<rows.length; r++) {
         var row = rows[r];
@@ -7399,6 +7413,7 @@ function _mpsUpload(input) {
           plans[m] = planIdxs[m] >= 0 ? (parseFloat(row[planIdxs[m]]) || 0) : 0;
         });
         _mpsData[code] = plans;
+        if(descCol >= 0 && row[descCol]) _fgDescFromMps[code] = String(row[descCol]).trim();
         count++;
       }
 
@@ -7535,12 +7550,8 @@ function _mpsMrpCalculate() {
       }
       var _calcTs = new Date().toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
       localStorage.setItem('mrp_last_calc', _calcTs);
-      var _mpsStatusEl = document.getElementById('mps-status');
-      if(_mpsStatusEl && _mpsData) {
-        var _cnt2 = Object.keys(_mpsData).length;
-        _mpsStatusEl.textContent = '✓ ' + _cnt2 + ' FG · Terakhir dihitung: ' + _calcTs;
-        _mpsStatusEl.style.color = 'var(--green)';
-      }
+      var _tsLabel = document.getElementById('mrp-last-calc-label');
+      if(_tsLabel) _tsLabel.textContent = '· Terakhir: ' + _calcTs;
       toast('MRP selesai dihitung ✓ · ' + _calcTs, 'ok');
     }
   }
@@ -7653,15 +7664,17 @@ function _mrpExportDetail() {
   if(!_bomData || !_mpsData || !_mrpResult || typeof XLSX === 'undefined') {
     toast('Butuh MPS, BOM dan hasil MRP — hitung MRP dulu','err'); return;
   }
-  var master = STATE.masterData || {};
-  var mrpM   = STATE.mrpData    || {};
-  var PLAN_ID = ['Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  var master  = STATE.masterData || {};
+  var mrpM    = STATE.mrpData    || {};
+  var fgDescs = _fgDescFromMps   || {};
+  var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
+  var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
 
-  // Header: FG | FG Desc | RM/PM | RM Desc | UoM | BOM Type | Qty per pcs | Plan Apr | Mat req Apr | ...
+  // Header: FG | FG Desc | RM/PM | RM Desc | UoM | BOM Type | Qty per pcs | Plan Mei | Mat req Mei | ...
   var hdr = ['Item (FG)','Item Description (FG)','Item (RM/PM)','Item Description (RM/PM)','UoM','BOM Type','Qty per pcs'];
-  MRP_MONTHS.forEach(function(m, i) {
-    hdr.push('Plan ' + PLAN_ID[i]);
-    hdr.push('Mat req ' + PLAN_ID[i]);
+  months.forEach(function(m) {
+    hdr.push('Plan ' + (MONTH_ID[m]||m));
+    hdr.push('Mat req ' + (MONTH_ID[m]||m));
   });
   var rows = [hdr];
 
@@ -7672,20 +7685,21 @@ function _mrpExportDetail() {
     bomByFG[b.fg].push(b);
   });
 
-  Object.keys(bomByFG).sort().forEach(function(fg) {
-    var fgM   = master[fg] || {};
-    var fgD   = fgM.desc || '';
+  // Only export FGs that are in MPS
+  var fgList = Object.keys(bomByFG).filter(function(fg){ return _mpsData[fg]; }).sort();
+  fgList.forEach(function(fg) {
+    var fgD   = fgDescs[fg] || '';
     var plans = _mpsData[fg] || {};
     bomByFG[fg].forEach(function(b) {
       var rmM    = master[b.rm] || mrpM[b.rm] || {};
       var rmDesc = rmM.desc || '';
       var uom    = rmM.uom  || 'KG';
       var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
-      MRP_MONTHS.forEach(function(mn) {
+      months.forEach(function(mn) {
         var plan   = parseFloat(plans[mn]) || 0;
         var matreq = Math.round(plan * b.qty);
-        row.push(plan || '');
-        row.push(matreq || '');
+        row.push(plan > 0 ? plan : '');
+        row.push(matreq > 0 ? matreq : '');
       });
       rows.push(row);
     });
@@ -7707,53 +7721,54 @@ function _mrpExportDetail() {
 }
 
 
-// ── Export Rekap (grouped by supplier) ────────────────────────────────────────
+// ── Export Rekap — format sesuai tampilan web ─────────────────────────────────
 function _mrpExportRekap() {
   if(!_mrpResult || typeof XLSX === 'undefined') { toast('Tidak ada data MRP','err'); return; }
-  var master = STATE.masterData || {};
+  var master  = STATE.masterData || {};
+  var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
+  var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
+  var fgDescs = _fgDescFromMps || {};
 
-  // Group by supplier
+  var wb = XLSX.utils.book_new();
+
+  // Sheet 1: Rekap per Supplier (total requirement)
   var bySupplier = {};
   Object.keys(_mrpResult).forEach(function(code) {
     var m   = master[code] || {};
-    var sup = m.supplier || 'Unknown';
+    var sup = m.supplier || '—';
     if(!bySupplier[sup]) bySupplier[sup] = [];
     bySupplier[sup].push(code);
   });
 
-  var wb = XLSX.utils.book_new();
-
-  // Sheet 1: Summary per supplier
-  var hdrSum = ['Supplier','Item Count'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m; }));
+  var hdrSum = ['Supplier','Jumlah Item'].concat(months.map(function(m){ return 'Req '+(MONTH_ID[m]||m); }));
   var rowsSum = [hdrSum];
   Object.keys(bySupplier).sort().forEach(function(sup) {
     var codes = bySupplier[sup];
     var row = [sup, codes.length];
-    MRP_MONTHS.forEach(function(mn) {
-      var total = codes.reduce(function(s,c){ return s + (_mrpResult[c][mn]||0); }, 0);
-      row.push(Math.round(total));
+    months.forEach(function(mn) {
+      var total = codes.reduce(function(s,c){ return s + ((_mrpResult[c]||{})[mn]||0); }, 0);
+      row.push(Math.round(total) || '');
     });
     rowsSum.push(row);
   });
   var wsSum = XLSX.utils.aoa_to_sheet(rowsSum);
-  wsSum['!cols'] = [{wch:35},{wch:8}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
+  wsSum['!cols'] = [{wch:35},{wch:10}].concat(months.map(function(){ return {wch:14}; }));
   XLSX.utils.book_append_sheet(wb, wsSum, 'Rekap Supplier');
 
-  // Sheet 2: Detail with supplier column
-  var hdrDet = ['Supplier','Item Code','Deskripsi','UoM','Tipe'].concat(MRP_MONTHS.map(function(m){ return 'Req '+m; }));
+  // Sheet 2: Detail per RM/PM dengan supplier, sesuai format tampilan web
+  var hdrDet = ['Item Code','Deskripsi','ABC','Supplier','UoM','Tipe'].concat(months.map(function(m){ return 'Req '+(MONTH_ID[m]||m); }));
   var rowsDet = [hdrDet];
-  Object.keys(bySupplier).sort().forEach(function(sup) {
-    bySupplier[sup].forEach(function(code) {
-      var m   = master[code] || {};
-      var iT  = /^3/.test(code)?'RM':'PM';
-      var row = [sup, code, m.desc||'', m.uom||'', iT];
-      MRP_MONTHS.forEach(function(mn) { row.push(Math.round(_mrpResult[code][mn]||0)); });
-      rowsDet.push(row);
-    });
+  var codes = Object.keys(_mrpResult).sort(function(a,b){ return a.localeCompare(b); });
+  codes.forEach(function(code) {
+    var m   = master[code] || {};
+    var iT  = /^3/.test(code)?'RM':'PM';
+    var row = [code, m.desc||'', m.abc||'', m.supplier||'—', m.uom||'', iT];
+    months.forEach(function(mn) { row.push(Math.round((_mrpResult[code]||{})[mn]||0)||''); });
+    rowsDet.push(row);
   });
   var wsDet = XLSX.utils.aoa_to_sheet(rowsDet);
-  wsDet['!cols'] = [{wch:35},{wch:14},{wch:35},{wch:6},{wch:4}].concat(MRP_MONTHS.map(function(){ return {wch:12}; }));
-  XLSX.utils.book_append_sheet(wb, wsDet, 'Detail per Supplier');
+  wsDet['!cols'] = [{wch:14},{wch:35},{wch:4},{wch:30},{wch:6},{wch:4}].concat(months.map(function(){ return {wch:14}; }));
+  XLSX.utils.book_append_sheet(wb, wsDet, 'Detail RM-PM');
 
   var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
   var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -7831,6 +7846,9 @@ function _mrpIdbLoad() {
     tx2.objectStore('mrp').get('mrp_data').onsuccess = function(e) {
       if(e.target.result) {
         _mrpResult = e.target.result.data;
+        var _savedTs = localStorage.getItem('mrp_last_calc') || '';
+        var _tsLbl = document.getElementById('mrp-last-calc-label');
+        if(_tsLbl && _savedTs) _tsLbl.textContent = '· Terakhir: ' + _savedTs;
         var saveBtn = document.getElementById('btn-save-mrp');       if(saveBtn) saveBtn.disabled = false;
         var detBtn  = document.getElementById('btn-export-detail');   if(detBtn)  detBtn.disabled  = false;
         var rekBtn  = document.getElementById('btn-export-rekap');    if(rekBtn)  rekBtn.disabled   = false;
