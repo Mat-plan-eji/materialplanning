@@ -7330,26 +7330,53 @@ function _mpsUpload(input) {
       var ws = wb.Sheets[sheetName];
       var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
-      // Find header row (contains "Item No.")
+      // Find header row (contains "Item No" or "Item No.")
       var hdrIdx = -1;
       for(var i=0; i<rows.length; i++) {
-        if(rows[i].indexOf('Item No.') >= 0) { hdrIdx = i; break; }
+        var rowStr = rows[i].map(function(v){return String(v||'').trim();});
+        if(rowStr.some(function(v){ return /^item\s*no/i.test(v); })) { hdrIdx = i; break; }
       }
-      if(hdrIdx < 0) { statusEl.textContent = '❌ Header "Item No." tidak ditemukan'; statusEl.style.color='var(--red)'; return; }
+      if(hdrIdx < 0) { statusEl.textContent = '❌ Header "Item No" tidak ditemukan'; statusEl.style.color='var(--red)'; return; }
 
-      var headers = rows[hdrIdx];
-      var itemCol = headers.indexOf('Item No.');
-      var planIdxs = MRP_MPS_COLS.map(function(c){ return headers.indexOf(c); });
+      var headers = rows[hdrIdx].map(function(v){ return String(v||'').trim(); });
+      // Find item code column
+      var itemCol = headers.findIndex(function(h){ return /^item\s*no/i.test(h); });
+
+      // Auto-detect plan columns — support both formats:
+      // Format lama: AprPlan, MayPlan, JunPlan, ... DecPlan
+      // Format baru: Plan Mei, Plan Jun, Plan Jul, ... Plan Des
+      var MONTH_MAP_LAMA = { 'Apr':'AprPlan','May':'MayPlan','Jun':'JunPlan','Jul':'JulPlan','Aug':'AugPlan','Sep':'SepPlan','Oct':'OctPlan','Nov':'NovPlan','Dec':'DecPlan' };
+      var MONTH_MAP_BARU = { 'Apr':'Plan Apr','May':'Plan Mei','Jun':'Plan Jun','Jul':'Plan Jul','Aug':'Plan Agu','Sep':'Plan Sep','Oct':'Plan Okt','Nov':'Plan Nov','Dec':'Plan Des' };
+      // Also try Indonesian with exact match
+      var MONTH_MAP_ALT  = { 'Apr':'Plan Apr','May':'Plan May','Jun':'Plan Jun','Jul':'Plan Jul','Aug':'Plan Aug','Sep':'Plan Sep','Oct':'Plan Oct','Nov':'Plan Nov','Dec':'Plan Dec' };
+
+      // Detect which format by checking headers
+      var planIdxs = {};
+      var monthMap = MONTH_MAP_LAMA;
+      if(headers.indexOf('MayPlan') < 0) {
+        // Try new format
+        if(headers.indexOf('Plan Mei') >= 0) monthMap = MONTH_MAP_BARU;
+        else monthMap = MONTH_MAP_ALT;
+      }
+      MRP_MONTHS.forEach(function(m) {
+        var colName = monthMap[m];
+        var idx = headers.indexOf(colName);
+        // Fallback: partial match
+        if(idx < 0) {
+          idx = headers.findIndex(function(h){ return h.toLowerCase().indexOf(m.toLowerCase()) >= 0 && /plan/i.test(h); });
+        }
+        planIdxs[m] = idx;
+      });
 
       _mpsData = {};
       var count = 0;
       for(var r=hdrIdx+1; r<rows.length; r++) {
         var row = rows[r];
         var code = String(row[itemCol]||'').trim();
-        if(!code || !/^\d{10}/.test(code)) continue;
+        if(!code || !/^\d{9,12}/.test(code)) continue;
         var plans = {};
-        MRP_MONTHS.forEach(function(m, i) {
-          plans[m] = parseFloat(row[planIdxs[i]]) || 0;
+        MRP_MONTHS.forEach(function(m) {
+          plans[m] = planIdxs[m] >= 0 ? (parseFloat(row[planIdxs[m]]) || 0) : 0;
         });
         _mpsData[code] = plans;
         count++;
