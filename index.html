@@ -7311,9 +7311,10 @@ function _fcExportRekap() {
 
 
 // ─── MPS → MRP ────────────────────────────────────────────────────────────────
-var _mpsData = null;  // { itemNo: { Apr:x, May:x, ... } }
-var _bomData = null;  // [ { fg, rm, qtyPerPcs } ]
-var _mrpResult = null; // { rmCode: { Apr:x, May:x, ... } }
+var _mpsData = null;         // { itemNo: { Apr:x, May:x, ... } }
+var _bomData = null;         // [ { fg, rm, qtyPerPcs } ]
+var _mrpResult = null;       // { rmCode: { Apr:x, May:x, ... } }
+var _mpsActiveMonths = MRP_MONTHS.slice(); // months detected from MPS file
 
 var MRP_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var MRP_MPS_COLS = ['AprPlan','MayPlan','JunPlan','JulPlan','AugPlan','SepPlan','OctPlan','NovPlan','DecPlan'];
@@ -7376,6 +7377,9 @@ function _mpsUpload(input) {
         planIdxs[m] = idx;
       });
 
+      // Detect which months have any plan data
+      _mpsActiveMonths = MRP_MONTHS.filter(function(m){ return planIdxs[m] >= 0; });
+
       _mpsData = {};
       var count = 0;
       for(var r=hdrIdx+1; r<rows.length; r++) {
@@ -7389,6 +7393,9 @@ function _mpsUpload(input) {
         _mpsData[code] = plans;
         count++;
       }
+
+      // Save MPS to IndexedDB
+      _mrpIdbSaveMps(_mpsData, _mpsActiveMonths);
 
       statusEl.textContent = '✓ ' + count + ' FG item dari sheet "' + sheetName + '"';
       statusEl.style.color = 'var(--green)';
@@ -7489,10 +7496,10 @@ function _mpsMrpCalculate() {
       if(!mps) continue;
       if(!result[b.rm]) {
         result[b.rm] = {};
-        MRP_MONTHS.forEach(function(m){ result[b.rm][m] = 0; });
+        _mpsActiveMonths.forEach(function(m){ result[b.rm][m] = 0; });
       }
-      MRP_MONTHS.forEach(function(m) {
-        result[b.rm][m] += (mps[m] || 0) * b.qty;
+      _mpsActiveMonths.forEach(function(m) {
+        result[b.rm][m] = (result[b.rm][m]||0) + (mps[m] || 0) * b.qty;
       });
     }
     idx = end;
@@ -7511,6 +7518,13 @@ function _mpsMrpCalculate() {
       var detBtn  = document.getElementById('btn-export-detail'); if(detBtn)  detBtn.disabled  = false;
       var rekBtn  = document.getElementById('btn-export-rekap');  if(rekBtn)  rekBtn.disabled   = false;
       var tepBtn  = document.getElementById('btn-terapkan-mrp');  if(tepBtn)  tepBtn.disabled   = false;
+      var calcTs = new Date().toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      localStorage.setItem('mrp_last_calc', calcTs);
+      var mpsEl = document.getElementById('mps-status');
+      if(mpsEl && _mpsData) {
+        var cnt2 = Object.keys(_mpsData).length;
+        mpsEl.textContent = '✓ ' + cnt2 + ' FG · Terakhir dihitung: ' + calcTs;
+      }
       toast('MRP selesai dihitung ✓ · Klik "Terapkan MRP" untuk diterapkan ke Forecast & Projection', 'ok');
     }
   }
@@ -7538,11 +7552,12 @@ function _mrpShowResult() {
   var mrpMaster  = STATE.mrpData    || {};
   var matcom     = STATE.matcomData  || {};
 
+  var activeMonths = _mpsActiveMonths || MRP_MONTHS;
   html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<thead><tr style="border-bottom:2px solid var(--border2)">'
     + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Item Code</th>'
     + '<th style="text-align:left;padding:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Deskripsi</th>'
-    + MRP_MONTHS.map(function(m){ return '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">'+m+'</th>'; }).join('')
+    + activeMonths.map(function(m){ return '<th style="text-align:right;padding:8px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">'+m+'</th>'; }).join('')
     + '</tr></thead><tbody>';
 
   sorted.slice(0, 50).forEach(function(code, i) {
@@ -7555,7 +7570,7 @@ function _mrpShowResult() {
       +   '<span style="font-size:9.5px;font-weight:700;color:'+clr+';margin-right:4px">'+iT+'</span>'
       +   code + '</td>'
       + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+rowDesc+'</td>'
-      + MRP_MONTHS.map(function(mn){
+      + activeMonths.map(function(mn){
           var v = _mrpResult[code][mn] || 0;
           return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+(v>0?n_id(Math.round(v)):'<span style="color:var(--hint)">—</span>')+'</td>';
         }).join('')
@@ -7734,8 +7749,10 @@ function _mrpExportRekap() {
 function _mrpIdbOpen(cb) {
   var req = indexedDB.open('mrp_db', 1);
   req.onupgradeneeded = function(e) {
-    e.target.result.createObjectStore('bom',  {keyPath:'id'});
-    e.target.result.createObjectStore('mrp',  {keyPath:'id'});
+    var db2 = e.target.result;
+    if(!db2.objectStoreNames.contains('bom')) db2.createObjectStore('bom', {keyPath:'id'});
+    if(!db2.objectStoreNames.contains('mrp')) db2.createObjectStore('mrp', {keyPath:'id'});
+    if(!db2.objectStoreNames.contains('mps')) db2.createObjectStore('mps', {keyPath:'id'});
   };
   req.onsuccess = function(e) { cb(e.target.result); };
   req.onerror   = function()  { cb(null); };
@@ -7745,6 +7762,13 @@ function _mrpIdbSaveBom(data) {
     if(!db) return;
     var tx = db.transaction('bom', 'readwrite');
     tx.objectStore('bom').put({ id:'bom_data', data: data, ts: new Date().toISOString() });
+  });
+}
+function _mrpIdbSaveMps(data, months) {
+  _mrpIdbOpen(function(db) {
+    if(!db) return;
+    var tx = db.transaction('mps', 'readwrite');
+    tx.objectStore('mps').put({ id:'mps_data', data: data, months: months, ts: new Date().toISOString() });
   });
 }
 function _mrpIdbSaveMrp(data) {
@@ -7768,6 +7792,21 @@ function _mrpIdbLoad() {
         _mrpCheckReady();
       }
     };
+    // Load MPS
+    try {
+      var tx3 = db.transaction('mps','readonly');
+      tx3.objectStore('mps').get('mps_data').onsuccess = function(e3) {
+        if(e3.target.result) {
+          _mpsData = e3.target.result.data;
+          if(e3.target.result.months) _mpsActiveMonths = e3.target.result.months;
+          var ts3  = e3.target.result.ts ? new Date(e3.target.result.ts).toLocaleDateString('id-ID') : '';
+          var cnt  = Object.keys(_mpsData).length;
+          var el3  = document.getElementById('mps-status');
+          if(el3) { el3.textContent = '✓ MPS tersimpan: ' + cnt + ' FG (' + ts3 + ')'; el3.style.color='var(--green)'; }
+          _mrpCheckReady();
+        }
+      };
+    } catch(e3) {}
     // Load MRP result
     var tx2 = db.transaction('mrp','readonly');
     tx2.objectStore('mrp').get('mrp_data').onsuccess = function(e) {
