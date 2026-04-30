@@ -1008,6 +1008,14 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
   </div>
 
+  <!-- Progress bar -->
+  <div id="mrp-progress-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="mrp-progress-label">Menghitung...</div>
+    <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+      <div id="mrp-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width .2s;border-radius:3px"></div>
+    </div>
+  </div>
+
   <!-- Result summary -->
   <div id="mrp-result"></div>
 
@@ -7460,9 +7468,11 @@ function _mrpCheckReady() {
 function _mpsMrpCalculate() {
   if(!_mpsData || !_bomData) { toast('Upload MPS dan BOM terlebih dahulu','err'); return; }
 
+  console.log('[MRP] Starting calc, bomData:', _bomData ? _bomData.length : 'null', 'mpsData:', _mpsData ? Object.keys(_mpsData).length : 'null');
   var progWrap = document.getElementById('mrp-progress-wrap');
   var progBar  = document.getElementById('mrp-progress-bar');
   var progLbl  = document.getElementById('mrp-progress-label');
+  console.log('[MRP] progWrap:', progWrap, 'mrp-result:', document.getElementById('mrp-result'));
   if(progWrap) progWrap.style.display = 'block';
 
   // Async chunked to avoid UI freeze
