@@ -686,15 +686,41 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div id="fc-kpi-under" style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--red)">—</div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">DOI bulan ini &lt; target</div>
     </div>
-    <div style="padding:14px 18px">
+    <div style="padding:14px 18px;position:relative">
       <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">DOI Target</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-        <input type="number" id="fc-doi-target" value="30" min="1" max="180"
-          style="width:65px;font-size:20px;font-weight:700;font-family:var(--mono);background:transparent;border:none;border-bottom:2px solid var(--border2);color:var(--teal);outline:none;padding:2px 0;text-align:center"
-          oninput="_fcDOIChange(this.value)" title="Target maksimum DOI">
-        <span style="font-size:11px;color:var(--muted)">hari</span>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <!-- Target 1 -->
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:9px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">General</span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <input type="number" id="fc-doi-target" value="30" min="1" max="180"
+              style="width:55px;font-size:18px;font-weight:700;font-family:var(--mono);background:transparent;border:none;border-bottom:2px solid var(--border2);color:var(--teal);outline:none;padding:2px 0;text-align:center"
+              oninput="_fcDOIChange(this.value)" title="Target DOI general">
+            <span style="font-size:10px;color:var(--muted)">hr</span>
+          </div>
+        </div>
+        <!-- Divider -->
+        <div style="width:1px;height:36px;background:var(--border)"></div>
+        <!-- Target 2 -->
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:9px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Impor</span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <input type="number" id="fc-doi2-target" value="60" min="1" max="360"
+              style="width:55px;font-size:18px;font-weight:700;font-family:var(--mono);background:transparent;border:none;border-bottom:2px solid var(--border2);color:var(--amber);outline:none;padding:2px 0;text-align:center"
+              oninput="_fcDOI2Change(this.value)" title="Target DOI untuk supplier impor">
+            <span style="font-size:10px;color:var(--muted)">hr</span>
+            <button onclick="_fcOpenDOI2Panel()" title="Pilih supplier untuk DOI Target 2"
+              style="position:relative;width:26px;height:26px;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted)">
+              ⚙
+              <span id="fc-doi2-badge" style="display:none;position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;background:var(--amber);color:#fff;font-size:9px;font-weight:700;border-radius:8px;align-items:center;justify-content:center;font-family:var(--mono);padding:0 3px">0</span>
+            </button>
+          </div>
+        </div>
       </div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px">ubah & auto recalc</div>
+      <!-- DOI2 supplier panel -->
+      <div id="fc-doi2-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:12px;width:260px;box-shadow:0 4px 16px rgba(0,0,0,.18)">
+      </div>
     </div>
   </div>
 
@@ -6463,13 +6489,107 @@ var _fcAutoPropose   = localStorage.getItem('fc_autopropose') === '1';
 var _fcOspoOverride  = (function(){ try{ return JSON.parse(localStorage.getItem('fc_ospo_ovr')||'{}'); }catch(e){return {};} })();
 var _fcOsprOverride  = (function(){ try{ return JSON.parse(localStorage.getItem('fc_ospr_ovr')||'{}'); }catch(e){return {};} })();
 var _fcDOI       = 30;
+var _fcDOI2      = (function(){ return parseInt(localStorage.getItem('fc_doi2')||'60')||60; })();
+var _fcDOI2Suppliers = (function(){ try{ return JSON.parse(localStorage.getItem('fc_doi2_suppliers')||'[]'); }catch(e){return [];} })();
 
 function _fcGetDOI() {
   var el = document.getElementById('fc-doi-target');
   return el ? (parseInt(el.value) || 30) : (_fcDOI || 30);
 }
+function _fcGetDOI2() {
+  var el = document.getElementById('fc-doi2-target');
+  return el ? (parseInt(el.value) || 60) : (_fcDOI2 || 60);
+}
+function _fcGetDOIForItem(itemCode) {
+  // Cek apakah supplier item ini masuk DOI Target 2
+  if(_fcDOI2Suppliers.length === 0) return _fcGetDOI();
+  var sup = (_fcSupplierByItemCache || {})[itemCode] || '';
+  if(sup && _fcDOI2Suppliers.indexOf(sup) !== -1) return _fcGetDOI2();
+  return _fcGetDOI();
+}
+var _fcSupplierByItemCache = {};
+
 function _fcDOIChange(val) {
   _fcDOI = parseInt(val) || 30;
+  renderForecast();
+}
+function _fcDOI2Change(val) {
+  _fcDOI2 = parseInt(val) || 60;
+  localStorage.setItem('fc_doi2', String(_fcDOI2));
+  renderForecast();
+}
+function _fcToggleDOI2Supplier(sup, checked) {
+  if(checked) {
+    if(_fcDOI2Suppliers.indexOf(sup) === -1) _fcDOI2Suppliers.push(sup);
+  } else {
+    _fcDOI2Suppliers = _fcDOI2Suppliers.filter(function(s){ return s !== sup; });
+  }
+  localStorage.setItem('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
+  // Update badge
+  var badge = document.getElementById('fc-doi2-badge');
+  if(badge) { badge.textContent = _fcDOI2Suppliers.length; badge.style.display = _fcDOI2Suppliers.length ? 'inline-flex' : 'none'; }
+  renderForecast();
+}
+function _fcOpenDOI2Panel() {
+  var panel = document.getElementById('fc-doi2-panel');
+  if(!panel) return;
+  var visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  if(!visible) _fcRenderDOI2Panel();
+}
+function _fcRenderDOI2Panel() {
+  var panel = document.getElementById('fc-doi2-panel');
+  if(!panel) return;
+  // Kumpulkan supplier unik dari supplierByItem cache
+  var sups = [];
+  Object.values(_fcSupplierByItemCache).forEach(function(s){ if(s && sups.indexOf(s)===-1) sups.push(s); });
+  // Fallback dari OSPO+PO
+  if(sups.length === 0) {
+    var seen = {};
+    (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName && !seen[o.supplierName]){ seen[o.supplierName]=1; sups.push(o.supplierName); } });
+    (STATE.poData||[]).forEach(function(p){ if(p.supplierName && !seen[p.supplierName]){ seen[p.supplierName]=1; sups.push(p.supplierName); } });
+  }
+  sups.sort();
+  var html = '<div style="font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Supplier → DOI Target 2</div>';
+  if(sups.length === 0) {
+    html += '<div style="font-size:11px;color:var(--muted)">Belum ada data supplier (sync dulu)</div>';
+  } else {
+    html += '<div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">';
+    sups.forEach(function(s){
+      var chk = _fcDOI2Suppliers.indexOf(s) !== -1;
+      var sid = 'doi2sup_' + s.replace(/[^a-zA-Z0-9]/g,'_');
+      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(20,184,166,.12);color:var(--teal)':'color:var(--text)')+'">'
+            + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\''+s.replace(/'/g,"\\'")+'\'  ,this.checked)" style="accent-color:var(--teal)">'
+            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'
+            + '</label>';
+    });
+    html += '</div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-top:8px;gap:6px">'
+          + '<button onclick="_fcDOI2SelectAll()" style="flex:1;font-size:10px;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">Pilih Semua</button>'
+          + '<button onclick="_fcDOI2ClearAll()" style="flex:1;font-size:10px;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Hapus Semua</button>'
+          + '</div>';
+  }
+  panel.innerHTML = html;
+}
+function _fcDOI2SelectAll() {
+  var sups = [];
+  var seen = {};
+  Object.values(_fcSupplierByItemCache).forEach(function(s){ if(s && !seen[s]){ seen[s]=1; sups.push(s); } });
+  (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName && !seen[o.supplierName]){ seen[o.supplierName]=1; sups.push(o.supplierName); } });
+  (STATE.poData||[]).forEach(function(p){ if(p.supplierName && !seen[p.supplierName]){ seen[p.supplierName]=1; sups.push(p.supplierName); } });
+  _fcDOI2Suppliers = sups;
+  localStorage.setItem('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
+  _fcRenderDOI2Panel();
+  var badge = document.getElementById('fc-doi2-badge');
+  if(badge){ badge.textContent = _fcDOI2Suppliers.length; badge.style.display = 'inline-flex'; }
+  renderForecast();
+}
+function _fcDOI2ClearAll() {
+  _fcDOI2Suppliers = [];
+  localStorage.setItem('fc_doi2_suppliers', JSON.stringify([]));
+  _fcRenderDOI2Panel();
+  var badge = document.getElementById('fc-doi2-badge');
+  if(badge){ badge.style.display = 'none'; }
   renderForecast();
 }
 function _fcSetView(v) {
@@ -6561,7 +6681,7 @@ function _calcForecast(code, ospoIdx) {
   var snapYear = nowReal.getFullYear();
   var snapMon  = nowReal.getMonth() + 1; // 1-12
 
-  var maxDOI  = _fcGetDOI();
+  var maxDOI  = _fcGetDOIForItem(code);
   var master  = (STATE.masterData || {})[code] || {};
   var mrp     = (STATE.mrpData    || {})[code] || {};
 
@@ -6861,6 +6981,19 @@ function generateProposePR() {
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
   var isRealtime = true;
+  // Sync DOI2 input & badge
+  var _doi2inp = document.getElementById('fc-doi2-target');
+  if(_doi2inp && _doi2inp.value !== String(_fcDOI2)) _doi2inp.value = _fcDOI2;
+  var _doi2badge = document.getElementById('fc-doi2-badge');
+  if(_doi2badge){ if(_fcDOI2Suppliers.length){ _doi2badge.textContent=_fcDOI2Suppliers.length; _doi2badge.style.display='inline-flex'; } else { _doi2badge.style.display='none'; } }
+  // Build supplier-by-item cache untuk DOI2 logic
+  _fcSupplierByItemCache = {};
+  Object.keys(STATE.masterData||{}).forEach(function(code){
+    if((STATE.masterData[code]||{}).supplier) _fcSupplierByItemCache[code] = STATE.masterData[code].supplier;
+  });
+  (STATE.ospoData||[]).forEach(function(o){ if(o.itemCode && o.supplierName && !_fcSupplierByItemCache[o.itemCode]) _fcSupplierByItemCache[o.itemCode] = o.supplierName; });
+  (STATE.poData||[]).forEach(function(p){ if(p.itemCode && p.supplierName && !_fcSupplierByItemCache[p.itemCode]) _fcSupplierByItemCache[p.itemCode] = p.supplierName; });
+
   // Sync view toggle button label
   var _vtBtn = document.getElementById('fc-view-toggle');
   if(_vtBtn) _vtBtn.textContent = '⇄ ' + (_fcGridViewMode === 'forecast' ? 'Forecast' : 'Aktual');
@@ -6904,7 +7037,7 @@ function renderForecast(isGenerate) {
   allItems.forEach(function(code) { fcData[code] = _calcForecast(code, ospoIdx); });
 
   if(fRows==='propose') allItems = allItems.filter(function(c){ return fcData[c].propose.some(function(v){return v>0;}); });
-  else if(fRows==='under') allItems = allItems.filter(function(c){ return fcData[c].doi[0]>=0 && fcData[c].doi[0]<_fcGetDOI(); });
+  else if(fRows==='under') allItems = allItems.filter(function(c){ return fcData[c].doi[0]>=0 && fcData[c].doi[0]<_fcGetDOIForItem(c); });
 
   _fcUpdateKPIs(allItems, fcData);
 
@@ -6912,8 +7045,9 @@ function renderForecast(isGenerate) {
   var syncTs = localStorage.getItem('last_sync') || '';
   var snapLabel = syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)';
   var matcomTs  = STATE.matcomMonthly ? ' &nbsp;·&nbsp; Matcom: <b>'+Object.keys(STATE.matcomMonthly).length+' item</b>' : ' &nbsp;·&nbsp; <span style="color:var(--amber)">Matcom belum dimuat</span>';
+  var doi2Label = _fcDOI2Suppliers.length ? ' &nbsp;·&nbsp; DOI-2: <b>'+_fcGetDOI2()+' hari</b> ('+_fcDOI2Suppliers.length+' supplier)' : '';
   if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + matcomTs + '</span>'
-    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b> &nbsp;·&nbsp; klik baris untuk detail</span>';
+    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b>'+doi2Label+' &nbsp;·&nbsp; klik baris untuk detail</span>';
 
   if(!allItems.length) {
     el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Ubah filter atau klik Generate</p></div>';
@@ -6927,11 +7061,11 @@ function renderForecast(isGenerate) {
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────
 function _fcUpdateKPIs(items, fcData) {
-  var rm=0, pm=0, propose=0, under=0, doi=_fcGetDOI();
+  var rm=0, pm=0, propose=0, under=0;
   items.forEach(function(code) {
     if(/^3/.test(code)) rm++; else pm++;
     if(fcData[code].propose.some(function(v){return v>0;})) propose++;
-    var d=fcData[code].doi[0]; if(d>=0 && d<doi) under++;
+    var d=fcData[code].doi[0]; if(d>=0 && d<_fcGetDOIForItem(code)) under++;
   });
   var s=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
   s('fc-kpi-total',items.length); s('fc-kpi-total-sub',rm+' RM · '+pm+' PM');
@@ -6980,11 +7114,11 @@ function _fcRenderDetail(el, items, fcData, fRows) {
       if(fRows==='forecast') {
         var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(v):'—')+'</td>';
       } else if(fRows==='stock') {
-        var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOI()*daily;
+        var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOIForItem(code)*daily;
         var cl=v2<0?'var(--red)':v2<minS?'var(--amber)':'var(--text)';
         return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(v2)+'</td>';
       } else if(fRows==='doi') {
-        var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOI()?'var(--amber)':d>99?'var(--muted)':'var(--green)';
+        var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOIForItem(code)?'var(--amber)':d>99?'var(--muted)':'var(--green)';
         return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d===999?'∞':d)+'</td>';
       } else {
         // propose (default)
@@ -7143,11 +7277,11 @@ function _fcDetailRow(code, fc, master) {
 
   var isFcView = (_fcGridViewMode === 'forecast');
   var stockClsFn = function(v,i){
-    var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOI()/25) : 0;
+    var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOIForItem(code)/25) : 0;
     return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
   };
   var doiClsFn = function(v){
-    return v<0?'color:var(--red)':v<_fcGetDOI()?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
+    return v<0?'color:var(--red)':v<_fcGetDOIForItem(code)?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
   };
   var toggleBtn = '<button onclick="_fcToggleGridView()" '
     + 'style="font-size:10px;padding:2px 10px;border-radius:3px;cursor:pointer;font-weight:600;border:1px solid;font-family:var(--font);'
@@ -7942,6 +8076,14 @@ document.addEventListener('click', function(e) {
     menu.style.display = 'none';
 });
 
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('fc-doi2-panel');
+  if(!panel || panel.style.display === 'none') return;
+  // Jika klik di luar panel dan bukan tombol ⚙
+  if(!panel.contains(e.target) && !e.target.closest('button[onclick*="_fcOpenDOI2Panel"]'))
+    panel.style.display = 'none';
+});
+
 function _mrpFallbackCopy(text, count) {
   var ta = document.createElement('textarea');
   ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
@@ -8509,7 +8651,7 @@ function _fcLiveRecalc(code) {
   var detEl   = document.getElementById('fc-detail-' + code);
   if(!detEl) return;
   var isFcV   = (_fcGridViewMode === 'forecast');
-  var doi_t   = _fcGetDOI();
+  var doi_t   = _fcGetDOIForItem(code);
   var stockVals = isFcV ? fc.stockFc : fc.stock;
   var doiVals   = isFcV ? fc.doiFc   : fc.doi;
 
