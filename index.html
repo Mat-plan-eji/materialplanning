@@ -2222,7 +2222,10 @@ async function loadMatcomSAP() {
   if(_mbtn) { _mbtn.disabled = true; _mbtn.textContent = '⏳ Loading...'; }
   _setSyncItem('matcom', 'loading');
   try {
-    var startDate = '2026-04-01T00:00:00.000Z';
+  var _nowM = new Date(); var _yr = _nowM.getFullYear();
+  var _mo   = String(_nowM.getMonth()+1).padStart(2,'0');
+  var startDate = _yr + '-' + _mo + '-01T00:00:00.000Z';
+  var endDate   = _yr + '-12-31T00:00:00.000Z';
     var endDate   = '2026-12-31T00:00:00.000Z';
     var raw = await sapFetchTO(80, { '[%0]': startDate, '[%1]': endDate });
     if(!Array.isArray(raw)) throw new Error('Format data tidak valid');
@@ -2239,8 +2242,8 @@ async function loadMatcomSAP() {
       if(!code || !/^\d/.test(code)) return;
       Object.keys(MONTH_MAP).forEach(function(mName) {
         var mo  = MONTH_MAP[mName];
-        if(mo < 4 || mo > 12) return; // hanya Apr-Des
-        var qty = parseFloat(r[mName]) || 0;
+        var curMo = new Date().getMonth() + 1;
+        if(mo < curMo || mo > 12) return; // hanya bulan berjalan-Des
         if(qty <= 0) return;
         if(!byItem[code]) byItem[code] = {};
         byItem[code][mo] = (byItem[code][mo] || 0) + qty;
@@ -6360,9 +6363,24 @@ function _appInit() {
 // 📅 FORECAST & PROPOSE PR  — no Firebase, session-only state
 // ═══════════════════════════════════════════════════════════════════════════════
 
-var FC_MONTHS    = ['April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-var FC_DAYS      = [30, 31, 30, 31, 31, 30, 31, 30, 31];
-var FC_MONTH_NUMS= [4,5,6,7,8,9,10,11,12];
+// FC_MONTHS dynamic — start from current month (max Des)
+(function() {
+  var _now     = new Date();
+  var _startM  = _now.getMonth() + 1; // current month 1-12
+  var _allNames= ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var _allDays = [0,31,28,31,30,31,30,31,31,30,31,30,31];
+  var _allNums = [0,1,2,3,4,5,6,7,8,9,10,11,12];
+  // If past Dec, just use Dec as last
+  _startM = Math.min(_startM, 12);
+  window.FC_MONTHS    = [];
+  window.FC_DAYS      = [];
+  window.FC_MONTH_NUMS= [];
+  for(var _m = _startM; _m <= 12; _m++) {
+    window.FC_MONTHS.push(_allNames[_m]);
+    window.FC_DAYS.push(_allDays[_m]);
+    window.FC_MONTH_NUMS.push(_m);
+  }
+})();
 var _fcView      = 'detail';
 var _fcExpanded  = {};
 var _fcGridViewMode = 'aktual'; // 'aktual' | 'forecast' — global
