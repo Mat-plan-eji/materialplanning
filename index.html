@@ -7462,19 +7462,29 @@ function _bomUpload(input) {
       var qtyCol  = headers.indexOf('Qty per pcs');
       var typeCol = headers.indexOf('BOM Type');
 
+      // Also find RM/PM description column
+      var rmDescCol = headers.findIndex(function(h,i){ return i > rmCol && /desc/i.test(h); });
+      var uomCol    = headers.findIndex(function(h){ return /^uom$/i.test(h); });
+      var whseCol   = headers.findIndex(function(h){ return /^whse$/i.test(h); });
+
       _bomData = [];
       var count = 0;
       for(var r=hdrIdx+1; r<rows.length; r++) {
-        var row = rows[r];
+        var row  = rows[r];
         var fg   = String(row[fgCol]||'').trim();
         var rm   = String(row[rmCol]||'').trim();
         var type = String(row[typeCol]||'').trim();
-        var qty  = parseFloat(row[qtyCol]) || 0;
-        // Only RM (3xxx) and PM (4xxx), BOM Type N
-        if(type !== 'N') continue;
-        if(!/^[34]/.test(rm)) continue;
-        if(!fg || !rm || !qty) continue;
-        _bomData.push({ fg:fg, rm:rm, qty:qty });
+        var qty  = parseFloat(row[qtyCol]);
+        if(!fg || !rm) continue; // skip completely empty rows
+        _bomData.push({
+          fg:   fg,
+          rm:   rm,
+          qty:  isNaN(qty) ? 0 : qty,
+          type: type,
+          rmDesc: rmDescCol >= 0 ? String(row[rmDescCol]||'').trim() : '',
+          uom:  uomCol  >= 0 ? String(row[uomCol]||'').trim()  : '',
+          whse: whseCol >= 0 ? String(row[whseCol]||'').trim()  : ''
+        });
         count++;
       }
 
@@ -7519,6 +7529,7 @@ function _mpsMrpCalculate() {
     var end = Math.min(idx + chunk, total);
     for(var i=idx; i<end; i++) {
       var b = _bomData[i];
+      if(!b || b.type !== 'N' || !/^[34]/.test(b.rm||'')) continue;
       var mps = _mpsData[b.fg];
       if(!mps) continue;
       if(!result[b.rm]) {
@@ -7674,16 +7685,17 @@ function _mpsMrpSaveToFirebase() {
 // ── Export Detail (per item × per bulan, like BOM sheet) ─────────────────────
 function _mrpExportDetail() {
   if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
-  if(!_bomData) { toast('Upload BOM terlebih dahulu','err'); return; }
-  if(!_mrpResult) { toast('Hitung MRP dulu sebelum export','err'); return; }
+  if(!_bomData || !_bomData.length) { toast('Upload BOM terlebih dahulu','err'); return; }
   try {
-  var master  = STATE.masterData || {};
-  var mrpM    = STATE.mrpData    || {};
-  var fgDescs = _fgDescFromMps   || {};
+  var fgDescs = _fgDescFromMps || {};
   var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
   var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
 
-  // Header: FG | FG Desc | RM/PM | RM Desc | UoM | BOM Type | Qty per pcs | Plan Mei | Mat req Mei | ...
+  // Build MPS lookup: { fgCode: { Mei: plan, Jun: plan, ... } }
+  // Use _mpsData if available
+  var mpsLookup = _mpsData || {};
+
+  // Header
   var hdr = ['Item (FG)','Item Description (FG)','Item (RM/PM)','Item Description (RM/PM)','UoM','BOM Type','Qty per pcs'];
   months.forEach(function(m) {
     hdr.push('Plan ' + (MONTH_ID[m]||m));
@@ -7691,39 +7703,22 @@ function _mrpExportDetail() {
   });
   var rows = [hdr];
 
-  // Group BOM by FG
-  var bomByFG = {};
+  // Export ALL BOM rows — no filter
   _bomData.forEach(function(b) {
-    if(!bomByFG[b.fg]) bomByFG[b.fg] = [];
-    bomByFG[b.fg].push(b);
-  });
+    var fgD    = fgDescs[b.fg] || '';
+    var rmDesc = b.rmDesc || '';
+    var uom    = b.uom || '';
+    var row    = [b.fg, fgD, b.rm, rmDesc, uom, b.type||'', b.qty];
 
-  // Only export FGs that are in _mpsData (have a production plan)
-  // This gives accurate Plan + Mat req per FG × RM combination
-  var mpsKeys = _mpsData ? Object.keys(_mpsData) : [];
-  var fgList  = mpsKeys.filter(function(fg){ return bomByFG[fg]; }).sort();
-
-  if(!fgList.length) {
-    toast('MPS tidak tersedia — buka menu MPS→MRP dulu lalu tunggu loading selesai','err');
-    return;
-  }
-
-  fgList.forEach(function(fg) {
-    var fgD   = fgDescs[fg] || (master[fg] && master[fg].desc) || '';
-    var plans = _mpsData[fg];
-    bomByFG[fg].forEach(function(b) {
-      var rmM    = master[b.rm] || mrpM[b.rm] || {};
-      var rmDesc = rmM.desc || '';
-      var uom    = rmM.uom  || 'KG';
-      var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
-      months.forEach(function(mn) {
-        var plan   = parseFloat(plans[mn]) || 0;
-        var matreq = plan > 0 ? Math.round(plan * b.qty) : '';
-        row.push(plan > 0 ? plan : '');
-        row.push(matreq || '');
-      });
-      rows.push(row);
+    // SUMIF: find plan for this FG from MPS
+    var plans = mpsLookup[b.fg] || null;
+    months.forEach(function(mn) {
+      var plan   = plans ? (parseFloat(plans[mn]) || 0) : 0;
+      var matreq = (plan > 0 && b.qty > 0) ? Math.round(plan * b.qty * 100) / 100 : '';
+      row.push(plan > 0 ? plan : '');
+      row.push(matreq || '');
     });
+    rows.push(row);
   });
 
   var ws = XLSX.utils.aoa_to_sheet(rows);
@@ -7843,11 +7838,12 @@ function _mrpUpdateDetailStatus() {
   var el = document.getElementById('mrp-detail-status');
   if(!el) return;
   var hasBom    = _bomData && _bomData.length > 0;
+  var bomCount  = hasBom ? _bomData.length : 0;
   var hasMps    = _mpsData && Object.keys(_mpsData).length > 0;
   var hasResult = _mrpResult && Object.keys(_mrpResult).length > 0;
 
   if(hasBom && hasMps && hasResult) {
-    el.textContent = '✓ Siap (' + _bomData.length.toLocaleString('id-ID') + ' baris BOM + MPS)';
+    el.textContent = '✓ Siap (' + bomCount.toLocaleString('id-ID') + ' baris BOM + MPS)';
     el.style.color = 'var(--green)';
   } else if(hasBom && hasResult) {
     el.textContent = '⚠ BOM+MRP ada, MPS belum load (Plan kosong)';
