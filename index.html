@@ -7691,8 +7691,21 @@ function _mrpExportDetail() {
   var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
   var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
 
-  // Build MPS lookup: { fgCode: { Mei: plan, Jun: plan, ... } }
-  // Use _mpsData if available
+  // Debug info
+  var _dbg_mpsKeys  = _mpsData ? Object.keys(_mpsData).length : 0;
+  var _dbg_bomLen   = _bomData ? _bomData.length : 0;
+  var _dbg_months   = months.join(',');
+  var _dbg_firstFG  = _bomData && _bomData[0] ? _bomData[0].fg : 'null';
+  var _dbg_inMps    = _mpsData && _bomData && _bomData[0] ? !!_mpsData[_bomData[0].fg] : false;
+  var _dbg_mpsFirst = _mpsData ? Object.keys(_mpsData)[0] : 'null';
+  var _dbg_plan     = _mpsData && _dbg_mpsFirst ? JSON.stringify(_mpsData[_dbg_mpsFirst]).slice(0,60) : 'null';
+
+  console.log('[Export Debug] bomLen:', _dbg_bomLen, 'mpsKeys:', _dbg_mpsKeys, 'months:', _dbg_months);
+  console.log('[Export Debug] firstBomFG:', _dbg_firstFG, 'inMps?', _dbg_inMps);
+  console.log('[Export Debug] firstMpsKey:', _dbg_mpsFirst, 'plans:', _dbg_plan);
+  toast('Debug: BOM=' + _dbg_bomLen + ' MPS=' + _dbg_mpsKeys + ' months=' + _dbg_months + ' firstFG=' + _dbg_firstFG + ' inMPS?=' + _dbg_inMps, 'inf');
+
+  // Build MPS lookup
   var mpsLookup = _mpsData || {};
 
   // Header
