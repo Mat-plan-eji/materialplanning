@@ -6750,7 +6750,7 @@ function _calcForecast(code, ospoIdx) {
   for(var am = snapMoIdx; am < FC_MONTHS.length; am++) {
     var req_a  = forecast[am];
     var ospr_a = ospr[am];
-    var ospo_a = ospo[am] + ospoPulled[am]; // OSPO asli + yang ditarik dari depan
+    var ospo_a = ospoPool2[am] + ospoPulled[am]; // OSPO sisa (setelah pull) + yang ditarik masuk
     var stockEnd = prevSt2 + ospo_a + ospr_a - req_a;
     var minSt2 = req_a > 0 ? req_a * (maxDOI / WD) : 0;
 
