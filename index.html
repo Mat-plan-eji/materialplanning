@@ -6624,10 +6624,8 @@ function _calcForecast(code, ospoIdx) {
 
   // ── Stock awal bulan snapshot ─────────────────────────────────────────────
   var stockAwalM = 0;
-  if(snapMon === 4 && snapYear === nowReal.getFullYear()) {
-    // April: pakai STOCK_AWAL_APR yang hardcoded
-    var sa = (typeof STOCK_AWAL_APR !== 'undefined' && STOCK_AWAL_APR[code]) ? STOCK_AWAL_APR[code] : null;
-    stockAwalM = sa ? (sa.btg||0)+(sa.sng||0) : soh;
+  if(false) { // STOCK_AWAL_APR removed — always use realtime SOH
+    stockAwalM = soh;
   } else {
     // Bulan lain: cari snapshot paling awal di bulan itu dari stockHistory
     var moPrefix = snapYear+'-'+String(snapMon).padStart(2,'0');
@@ -8457,7 +8455,7 @@ function _fcOsprEdit(input) {
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat(input.value) || 0;
   var base = parseFloat(input.getAttribute('data-base')) || 0;
-  if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(9).fill(null);
+  if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOsprOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
   var isEd = (_fcOsprOverride[code][mi] != null);
@@ -8508,7 +8506,7 @@ function _fcOspoEdit(input) {
   var mi   = parseInt(input.getAttribute('data-mi'));
   var base    = parseFloat(input.getAttribute('data-base')) || 0;
   var qty  = parseFloat(input.value) || 0;
-  if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(9).fill(null);
+  if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
   var isEdited = (_fcOspoOverride[code][mi] != null);
