@@ -6782,8 +6782,11 @@ function _calcForecast(code, ospoIdx) {
   // Total propose: manual override prioritas, lalu auto (hanya setelah pool habis)
   // Ensure manual values are also rounded to multiple/moq
   var _step = multiple > 0 ? multiple : 1;
+  var hasPropOverride = !!_fcPropose[code]; // user has set at least something
   var totalProp = FC_MONTHS.map(function(_, i) {
-    var v = (manProp[i] > 0) ? manProp[i] : (_fcAutoPropose ? proposeAuto[i] : 0);
+    // If user has an entry for this item: always use manual (even if 0)
+    // Only use auto if no manual entry exists for this item
+    var v = hasPropOverride ? (manProp[i] || 0) : (_fcAutoPropose ? proposeAuto[i] : 0);
     if(v <= 0) return 0;
     // Re-round to multiple and enforce MOQ
     return Math.max(moq, Math.ceil(v / _step) * _step);
@@ -8471,32 +8474,34 @@ function _fcGenerateItem(btn) {
   var code = btn.getAttribute('data-code');
   if(!code) return;
   if(!_fcPropose) _fcPropose = {};
-  // Run auto-propose for single item
+
+  // Calculate auto-propose without touching global state
+  var prevAuto = _fcAutoPropose;
+  delete _fcPropose[code];
   _fcAutoPropose = true;
   var ospoIdx = _buildOSPOIndex();
   var fc = _calcForecast(code, ospoIdx);
-  // Apply suggested proposals
-  if(fc.propose) {
-    _fcPropose[code] = fc.propose.slice();
-    try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
-  }
-  // Re-render this item's row
-  _fcLiveRecalc(code);
-  // Update propose inputs in the grid
+  _fcAutoPropose = prevAuto;
+
+  // Store propose values for this item only
+  _fcPropose[code] = (fc.propose || new Array(FC_MONTHS.length).fill(0)).slice();
+  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
+
+  // Update propose inputs in DOM
   var detEl = document.getElementById('fc-detail-' + code);
   if(detEl) {
-    var inputs = detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]');
-    inputs.forEach(function(inp) {
-      var mi = parseInt(inp.getAttribute('data-mi'));
-      var val = (fc.propose && fc.propose[mi]) ? fc.propose[mi] : 0;
+    detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]').forEach(function(inp) {
+      var mi  = parseInt(inp.getAttribute('data-mi'));
+      var val = _fcPropose[code][mi] || 0;
       inp.value = val > 0 ? n_id(val) : '0';
       inp.style.color = val > 0 ? 'var(--amber)' : 'var(--muted)';
       inp.style.fontWeight = val > 0 ? '700' : '400';
     });
   }
-  toast('Propose PR generated untuk ' + code, 'ok');
-  _fcAutoPropose = false;
+  _fcLiveRecalc(code);
+  toast('Propose PR generated: ' + code, 'ok');
 }
+
 
 function _fcLiveRecalc(code) {
   var ospoIdx = _buildOSPOIndex();
