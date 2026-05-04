@@ -7692,17 +7692,10 @@ function _mrpExportDetail() {
   var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
 
   // Debug info
-  var _dbg_mpsKeys  = _mpsData ? Object.keys(_mpsData).length : 0;
-  var _dbg_bomLen   = _bomData ? _bomData.length : 0;
-  var _dbg_months   = months.join(',');
-  var _dbg_firstFG  = _bomData && _bomData[0] ? _bomData[0].fg : 'null';
-  var _dbg_inMps    = _mpsData && _bomData && _bomData[0] ? !!_mpsData[_bomData[0].fg] : false;
-  var _dbg_mpsFirst = _mpsData ? Object.keys(_mpsData)[0] : 'null';
-  var _dbg_plan     = _mpsData && _dbg_mpsFirst ? JSON.stringify(_mpsData[_dbg_mpsFirst]).slice(0,60) : 'null';
 
-  console.log('[Export Debug] bomLen:', _dbg_bomLen, 'mpsKeys:', _dbg_mpsKeys, 'months:', _dbg_months);
-  console.log('[Export Debug] firstBomFG:', _dbg_firstFG, 'inMps?', _dbg_inMps);
-  console.log('[Export Debug] firstMpsKey:', _dbg_mpsFirst, 'plans:', _dbg_plan);
+  // console.log('[Export Debug] bomLen:', _dbg_bomLen, 'mpsKeys:', _dbg_mpsKeys, 'months:', _dbg_months);
+  // console.log('[Export Debug] firstBomFG:', _dbg_firstFG, 'inMps?', _dbg_inMps);
+  // console.log('[Export Debug] firstMpsKey:', _dbg_mpsFirst, 'plans:', _dbg_plan);
   toast('Debug: BOM=' + _dbg_bomLen + ' MPS=' + _dbg_mpsKeys + ' months=' + _dbg_months + ' firstFG=' + _dbg_firstFG + ' inMPS?=' + _dbg_inMps, 'inf');
 
   // Build MPS lookup
@@ -7716,15 +7709,6 @@ function _mrpExportDetail() {
   });
   var rows = [hdr];
 
-  // Debug: check first few BOM rows vs MPS keys
-  var _dbgBomSample = _bomData.slice(0,3).map(function(b){ return b.fg + '→' + (mpsLookup[b.fg]?'FOUND':'MISS'); });
-  var _dbgMpsSample = Object.keys(mpsLookup).slice(0,3);
-  console.log('[Export] BOM sample FGs:', _dbgBomSample);
-  console.log('[Export] MPS sample keys:', _dbgMpsSample);
-  console.log('[Export] months:', months);
-  console.log('[Export] _mpsData type:', typeof _mpsData, 'keys:', Object.keys(mpsLookup).length);
-  toast('[Debug] BOM FG[0]=' + (_bomData[0]&&_bomData[0].fg) + ' inMPS=' + !!mpsLookup[_bomData[0]&&_bomData[0].fg] + ' mpsKeys=' + Object.keys(mpsLookup).length + ' months=' + months.slice(0,2), 'inf');
-
   // Export ALL BOM rows — no filter
   _bomData.forEach(function(b) {
     var fgD    = fgDescs[b.fg] || '';
@@ -7735,10 +7719,10 @@ function _mrpExportDetail() {
     // SUMIF: find plan for this FG from MPS
     var plans = mpsLookup[b.fg] || null;
     months.forEach(function(mn) {
-      var plan   = plans ? (parseFloat(plans[mn]) || 0) : 0;
-      var matreq = (plan > 0 && b.qty > 0) ? Math.round(plan * b.qty * 100) / 100 : '';
-      row.push(plan > 0 ? plan : '');
-      row.push(matreq || '');
+      var plan   = plans ? parseFloat(plans[mn]) : '';
+      var matreq = (plan !== '' && b.qty > 0) ? Math.round(plan * b.qty * 100) / 100 : '';
+      row.push(plan !== '' ? plan : '');
+      row.push(matreq !== '' ? matreq : '');
     });
     rows.push(row);
   });
