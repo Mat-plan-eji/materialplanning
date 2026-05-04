@@ -842,6 +842,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div class="fg"><label style="font-size:11px">Google Sheets URL</label><input id="mrp-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;font-size:11px"></div>
         <div class="fg"><label style="font-size:11px">Nama Tab (opsional)</label><input id="mrp-sheet" placeholder="Sheet1" style="width:100%;font-size:11px"></div>
         <button class="btn btn-sm btn-primary" onclick="loadSheetData('mrp')" style="width:100%;margin-top:6px">Muat MRP</button>
+        <div id="mrp-source-badge" style="display:none;margin-top:6px;padding:5px 8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:5px;font-size:10.5px;color:var(--amber)">
+          ⚡ MRP <b>months</b> dari MPS→MRP (GSheet hanya update max3MRP)
+          <button onclick="localStorage.removeItem('mrp_source');document.getElementById('mrp-source-badge').style.display='none';toast('Flag reset. Muat ulang untuk pakai GSheet.','ok')"
+            style="margin-left:8px;font-size:9.5px;padding:1px 7px;border-radius:3px;border:1px solid rgba(245,158,11,.5);background:transparent;color:var(--amber);cursor:pointer">Reset</button>
+        </div>
         <div id="mrp-info" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
         <div id="mrp-ts" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
       </div>
@@ -1710,7 +1715,7 @@ function appStart() {
       if((!STATE.masterData || !STATE.mrpData) &&
          (localStorage.getItem('sheet_url_master') || localStorage.getItem('sheet_url_mrp'))){
         toast('Memuat data Sheets...','inf');
-        loadAllSheets(true);
+        loadAllSheets(true); // loadSheetData('mrp') sudah handle merge kalau mrp_source=mps
       }
     }, 500);
   }
@@ -1823,13 +1828,32 @@ function loadSheetData(type) {
       toast('Master Data: '+cnt+' item ✓','ok');
 
     } else if(type==='mrp'){
-      STATE.mrpData = processMRP(rows, headers);
-      localStorage.setItem('mrp_data', JSON.stringify(STATE.mrpData));
-      localStorage.setItem('mrp_upload_ts', ts);
-      var cnt = Object.keys(STATE.mrpData).length;
-      if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
-      if(dotEl) dotEl.className='dot';
-      toast('MRP: '+cnt+' item ✓','ok');
+      if(localStorage.getItem('mrp_source') === 'mps') {
+        // MRP months sudah dari MPS→MRP — hanya ambil max3MRP dari GSheet, jangan overwrite months
+        var gsheetMRP = processMRP(rows, headers);
+        var merged = JSON.parse(JSON.stringify(STATE.mrpData || {}));
+        Object.keys(gsheetMRP).forEach(function(code){
+          if(!merged[code]) merged[code] = {};
+          merged[code].max3MRP = gsheetMRP[code].max3MRP || 0;
+          merged[code].desc    = merged[code].desc || gsheetMRP[code].desc;
+          // months TIDAK disentuh — tetap dari MPS→MRP
+        });
+        STATE.mrpData = merged;
+        localStorage.setItem('mrp_data', JSON.stringify(merged));
+        localStorage.setItem('mrp_upload_ts', ts);
+        var cnt = Object.keys(merged).length;
+        if(infoEl) infoEl.textContent = cnt+' item — max3MRP diperbarui dari GSheet, months dari MPS→MRP';
+        if(dotEl) dotEl.className='dot';
+        toast('MRP: max3MRP diperbarui dari GSheet ✓ (months tetap dari MPS→MRP)', 'ok');
+      } else {
+        STATE.mrpData = processMRP(rows, headers);
+        localStorage.setItem('mrp_data', JSON.stringify(STATE.mrpData));
+        localStorage.setItem('mrp_upload_ts', ts);
+        var cnt = Object.keys(STATE.mrpData).length;
+        if(infoEl) infoEl.textContent = cnt+' item dimuat ✓';
+        if(dotEl) dotEl.className='dot';
+        toast('MRP: '+cnt+' item ✓','ok');
+      }
 
     } else if(type==='matcom'){
       STATE.matcomData = processMatcom(rows, headers, 'Average 3 months');
@@ -1881,6 +1905,9 @@ function _restoreSheetUrls() {
     var ts=localStorage.getItem(t+'_upload_ts'), te=document.getElementById(t+'-ts');
     if(ts&&te) te.textContent='Dimuat: '+ts;
   });
+  // Tampilkan badge kalau MRP dari MPS→MRP
+  var badge = document.getElementById('mrp-source-badge');
+  if(badge) badge.style.display = localStorage.getItem('mrp_source')==='mps' ? 'block' : 'none';
 }
 // ─── PERF UTILS ──────────────────────────────────────────────────────────────
 function debounce(fn, ms) {
@@ -7921,6 +7948,7 @@ function _mrpApplyToState(result) {
   });
   STATE.mrpData = mrpData;
   localStorage.setItem('mrp_data', JSON.stringify(mrpData));
+  localStorage.setItem('mrp_source', 'mps'); // flag: jangan overwrite dari GSheet
   // Refresh forecast & projection if currently open
   if(document.getElementById('fc-table')) renderForecast();
   if(document.getElementById('proj-tbody') || document.getElementById('proj-table')) { buildProjection(); renderProjection(); }
