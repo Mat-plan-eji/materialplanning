@@ -7462,10 +7462,11 @@ function _bomUpload(input) {
       var qtyCol  = headers.indexOf('Qty per pcs');
       var typeCol = headers.indexOf('BOM Type');
 
-      // Also find RM/PM description column
+      var fgDescCol = 1; // Item Description (FG) always col 1
       var rmDescCol = headers.findIndex(function(h,i){ return i > rmCol && /desc/i.test(h); });
       var uomCol    = headers.findIndex(function(h){ return /^uom$/i.test(h); });
       var whseCol   = headers.findIndex(function(h){ return /^whse$/i.test(h); });
+      var depthCol  = headers.findIndex(function(h){ return /^depth$/i.test(h); });
 
       _bomData = [];
       var count = 0;
@@ -7476,14 +7477,22 @@ function _bomUpload(input) {
         var type = String(row[typeCol]||'').trim();
         var qty  = parseFloat(row[qtyCol]);
         if(!fg || !rm) continue; // skip completely empty rows
+        var fgDesc  = fgDescCol >= 0 ? String(row[fgDescCol]||'').trim() : '';
+        var depth   = depthCol  >= 0 ? parseInt(row[depthCol]||0)      : 0;
+        // Package rule: FG desc contains "Package" AND depth 4 or 5 → qty = 0
+        var effQty  = (fgDesc && /package/i.test(fgDesc) && (depth===4||depth===5))
+                      ? 0 : (isNaN(qty) ? 0 : qty);
         _bomData.push({
-          fg:   fg,
-          rm:   rm,
-          qty:  isNaN(qty) ? 0 : qty,
-          type: type,
+          fg:     fg,
+          fgDesc: fgDesc,
+          rm:     rm,
+          qty:    effQty,
+          rawQty: isNaN(qty) ? 0 : qty,
+          type:   type,
+          depth:  depth,
           rmDesc: rmDescCol >= 0 ? String(row[rmDescCol]||'').trim() : '',
-          uom:  uomCol  >= 0 ? String(row[uomCol]||'').trim()  : '',
-          whse: whseCol >= 0 ? String(row[whseCol]||'').trim()  : ''
+          uom:    uomCol  >= 0 ? String(row[uomCol]||'').trim()  : '',
+          whse:   whseCol >= 0 ? String(row[whseCol]||'').trim()  : ''
         });
         count++;
       }
@@ -7707,9 +7716,9 @@ function _mrpExportDetail() {
 
   // Export ALL BOM rows — no filter
   _bomData.forEach(function(b) {
-    var fgD    = fgDescs[b.fg] || '';
+    var fgD    = b.fgDesc || fgDescs[b.fg] || '';
     var rmDesc = b.rmDesc || '';
-    var uom    = b.uom || '';
+    var uom    = b.uom || 'KG';
     var row    = [b.fg, fgD, b.rm, rmDesc, uom, b.type||'', b.qty];
 
     // SUMIF: find plan for this FG from MPS
@@ -7827,7 +7836,7 @@ function _mrpIdbSaveMps(data, months) {
   _mrpIdbOpen(function(db) {
     if(!db) return;
     var tx = db.transaction('mps', 'readwrite');
-    tx.objectStore('mps').put({ id:'mps_data', data: data, months: months, ts: new Date().toISOString() });
+    tx.objectStore('mps').put({ id:'mps_data', data: data, months: months, fgDescs: _fgDescFromMps||{}, ts: new Date().toISOString() });
   });
 }
 function _mrpIdbSaveMrp(data) {
@@ -7892,7 +7901,8 @@ function _mrpIdbLoad() {
       tx3.objectStore('mps').get('mps_data').onsuccess = function(e3) {
         if(e3.target.result) {
           _mpsData = e3.target.result.data;
-          if(e3.target.result.months) _mpsActiveMonths = e3.target.result.months;
+          if(e3.target.result.months)   _mpsActiveMonths = e3.target.result.months;
+          if(e3.target.result.fgDescs)  _fgDescFromMps   = e3.target.result.fgDescs;
           var ts3  = e3.target.result.ts ? new Date(e3.target.result.ts).toLocaleDateString('id-ID') : '';
           var cnt  = Object.keys(_mpsData).length;
           var el3  = document.getElementById('mps-status');
