@@ -6659,7 +6659,7 @@ function _calcForecast(code, ospoIdx) {
   var stockProj = new Array(FC_MONTHS.length).fill(0);
   for(var pre=0; pre<snapMoIdx; pre++) { stockProj[pre] = 0; }
   stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] - remainingMRP;
-  for(var m = snapMoIdx+1; m < 9; m++) {
+  for(var m = snapMoIdx+1; m < FC_MONTHS.length; m++) {
     stockProj[m] = stockProj[m-1] + ospo[m] + ospr[m] - forecast[m];
   }
 
@@ -6708,7 +6708,7 @@ function _calcForecast(code, ospoIdx) {
   }
 
   var prevStFc = soh;
-  for(var fm = snapMoIdx; fm < 9; fm++) {
+  for(var fm = snapMoIdx; fm < FC_MONTHS.length; fm++) {
     var req_m  = forecast[fm];
     var ospr_m = ospr[fm];
     var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
@@ -6749,7 +6749,7 @@ function _calcForecast(code, ospoIdx) {
   var stockAktualFw = new Array(FC_MONTHS.length).fill(0);
   var ospoPulled    = new Array(FC_MONTHS.length).fill(0); // OSPO yang ditarik ke bulan lebih awal
   var prevSt2 = soh;
-  for(var am = snapMoIdx; am < 9; am++) {
+  for(var am = snapMoIdx; am < FC_MONTHS.length; am++) {
     var req_a  = forecast[am];
     var ospr_a = ospr[am];
     var ospo_a = ospo[am] + ospoPulled[am]; // OSPO asli + yang ditarik dari depan
@@ -6759,7 +6759,7 @@ function _calcForecast(code, ospoIdx) {
     // Jika stock kurang, coba tarik OSPO dari bulan berikutnya
     if(stockEnd < minSt2 && _fcAutoPropose) {
       var shortage2 = minSt2 - stockEnd;
-      for(var nx = am+1; nx < 9; nx++) {
+      for(var nx = am+1; nx < FC_MONTHS.length; nx++) {
         if(ospoPool2[nx] <= 0) continue;
         var pull = Math.min(shortage2, ospoPool2[nx]);
         var step2 = multiple > 0 ? multiple : 1;
@@ -6810,9 +6810,9 @@ function _calcForecast(code, ospoIdx) {
 
   // Add propose into stock for display (stock + propose rolling forward)
   var stockWithProp = stockAktualFw.slice();
-  for(var wp = snapMoIdx; wp < 9; wp++) {
+  for(var wp = snapMoIdx; wp < FC_MONTHS.length; wp++) {
     if(totalProp[wp] > 0) {
-      for(var wn = wp; wn < 9; wn++) stockWithProp[wn] += totalProp[wp];
+      for(var wn = wp; wn < FC_MONTHS.length; wn++) stockWithProp[wn] += totalProp[wp];
     }
   }
   var doiAktual = calcDOI(stockWithProp);
@@ -6826,8 +6826,11 @@ function _calcForecast(code, ospoIdx) {
   }
   var doiFc = calcDOI(stockFcWithProp);
 
+  // Build effective OSPO display = remaining at original + pulled-in
+  var ospoEffective = ospoPool2.map(function(v, i) { return v + ospoPulled[i]; });
+
   return {
-    forecast: forecast, ospo: ospo, ospoBase: ospoBase, ospr: ospr, ospr_base: ospr_base,
+    forecast: forecast, ospo: ospoEffective, ospoBase: ospoBase, ospr: ospr, ospr_base: ospr_base,
     stock: stockWithProp, doi: doiAktual, stockBase: stockProj,
     forecastOspo: forecastOspo, stockFc: stockFcWithProp, doiFc: doiFc,
     propose: totalProp, pullNotifs: pullNotifs,
