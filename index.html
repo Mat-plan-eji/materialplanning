@@ -497,7 +497,13 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <button class="btn btn-sm" onclick="clearHistoryView()">Hari Ini</button>
       <button class="btn btn-sm" onclick="buildProjection()">↺ Rebuild</button>
       <button class="btn btn-sm btn-primary" onclick="generateSchedule()">⚡ Generate Jadwal</button>
-      <button class="btn btn-sm" onclick="exportProjectionCSV()">↓ CSV</button>
+      <div style="position:relative;display:inline-block">
+        <button class="btn btn-sm" onclick="_projExportDropdown()">&#x2193; Export &#x25BE;</button>
+        <div id="proj-export-menu" style="display:none;position:absolute;top:calc(100%+4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);min-width:180px">
+          <button class="btn btn-sm" onclick="exportProjectionExcel();_projCloseExportMenu()" style="width:100%;text-align:left;margin-bottom:3px;font-size:11.5px">&#x2193; Excel</button>
+          <button class="btn btn-sm" onclick="exportProjectionGSheet();_projCloseExportMenu()" style="width:100%;text-align:left;font-size:11.5px">&#x1F4CA; Google Sheets</button>
+        </div>
+      </div>
       <div style="position:relative;display:inline-block">
         <button class="btn btn-sm" onclick="toggleColMenu()" id="btn-col-menu">⚙ Kolom</button>
         <div id="col-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:8px;z-index:50;min-width:200px;max-height:340px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">
@@ -970,15 +976,18 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <span id="mrp-last-calc-label" style="font-size:11px;color:var(--muted);padding:0 4px"></span>
       <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11px" disabled>&#x2713; Terapkan MRP</button>
       <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11px" disabled>&#x2601; Simpan ke Firebase</button>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:10.5px;color:var(--muted);font-weight:600">Detail:</span>
-        <button class="btn btn-sm" onclick="_mrpExportDetail('excel')" id="btn-export-detail" style="font-size:11px" disabled>&#x2193; Excel</button>
-        <button class="btn btn-sm" onclick="_mrpExportDetail('gsheet')" id="btn-export-detail-gs" style="font-size:11px" disabled>&#x1F4CA; GSheet</button>
-        <span id="mrp-detail-status" style="font-size:10.5px;color:var(--muted)"></span>
-        <span style="font-size:10.5px;color:var(--muted);font-weight:600;margin-left:6px">Rekap:</span>
-        <button class="btn btn-sm" onclick="_mrpExportRekap('excel')" id="btn-export-rekap" style="font-size:11px" disabled>&#x2193; Excel</button>
-        <button class="btn btn-sm" onclick="_mrpExportRekap('gsheet')" id="btn-export-rekap-gs" style="font-size:11px" disabled>&#x1F4CA; GSheet</button>
+      <div style="position:relative;display:inline-block">
+        <button class="btn btn-sm" id="btn-export-detail" onclick="_mrpExportDropdown()" style="font-size:11px" disabled>&#x2193; Export &#x25BE;</button>
+        <div id="mrp-export-menu" style="display:none;position:absolute;top:calc(100%+4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);min-width:200px">
+          <div style="font-size:9.5px;color:var(--muted);padding:2px 8px 4px;text-transform:uppercase;letter-spacing:.08em">Detail</div>
+          <button class="btn btn-sm" onclick="_mrpExportDetail('excel');_mrpCloseExportMenu()" style="width:100%;text-align:left;margin-bottom:3px;font-size:11.5px">&#x2193; Detail Format Excel</button>
+          <button class="btn btn-sm" onclick="_mrpExportDetail('gsheet');_mrpCloseExportMenu()" style="width:100%;text-align:left;margin-bottom:6px;font-size:11.5px">&#x1F4CA; Detail Format GSheet</button>
+          <div style="font-size:9.5px;color:var(--muted);padding:2px 8px 4px;text-transform:uppercase;letter-spacing:.08em;border-top:1px solid var(--border);margin-top:2px;padding-top:6px">Rekap</div>
+          <button class="btn btn-sm" onclick="_mrpExportRekap('excel');_mrpCloseExportMenu()" style="width:100%;text-align:left;margin-bottom:3px;font-size:11.5px">&#x2193; Rekap Format Excel</button>
+          <button class="btn btn-sm" onclick="_mrpExportRekap('gsheet');_mrpCloseExportMenu()" style="width:100%;text-align:left;font-size:11.5px">&#x1F4CA; Rekap Format GSheet</button>
+        </div>
       </div>
+      <span id="mrp-detail-status" style="font-size:10.5px;color:var(--muted)"></span>
     </div>
   </div>
   <!-- Upload cards -->
@@ -5344,21 +5353,70 @@ function clearManualComment(code) {
 
 
 // ─── EXPORT ──────────────────────────────────────────────────────────────────
-function exportProjectionCSV() {
-  if(!STATE.projectionData.length){toast('Tidak ada data untuk diexport','err');return;}
-  function esc(v){var s=String(v===null||v===undefined?'':v);return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;}
-  var headers = ['Product Code','Description','Real Name','UOM','Supplier','Site','Stock BTG','Stock SNG','DOI FC','DOI Matcom','Est Usg/day MRP','Actual MRP','MRP 2+1','Avg Usg','GRPO Bln Ini','Actual Usg','OSPR','Est Coverage','Kategori','End Stock vs MRP','OSPO Sd Apr','OSPO Mei','OSPO Juni','OSPO Jul+','% Usg vs FC','Comment'];
-  var rows = STATE.projectionData.map(function(p){
-    var pct = p.pctUsageVsForecast !== undefined ? (Math.round(p.pctUsageVsForecast*1000)/10) : 0;
-    return [p.productCode,p.description,p.realName||'',p.uom,p.supplier||'',p.site||'',p.stockBTG,p.stockSNG,p.doiFC,p.doiMatcom,p.estUsageMRP,p.actualMRP,p.max3MRP,p.totalIncoming,p.actualUsageDaily||0,p.totalOSPR||0,p.coverageDateStr,p.category,p.endStock,p.ospoSdApr||0,p.ospoMei||0,p.ospoJuni||0,p.ospoJulDst||0,pct+'%',p.comment||''].map(esc).join(',');
-  });
-  var csv = headers.map(esc).join(',') + '\n' + rows.join('\n');
-  var a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-  a.download = 'projection_stock_' + new Date().toISOString().split('T')[0] + '.csv';
-  a.click();
-  toast('Export CSV berhasil ✓','ok');
+function _projExportDropdown() {
+  var m = document.getElementById('proj-export-menu');
+  if(m) m.style.display = m.style.display==='none'?'block':'none';
 }
+function _projCloseExportMenu() {
+  var m = document.getElementById('proj-export-menu');
+  if(m) m.style.display='none';
+}
+document.addEventListener('click', function(e) {
+  var m = document.getElementById('proj-export-menu');
+  if(m && !e.target.closest('#proj-export-menu') && !e.target.closest('button[onclick*="_projExportDropdown"]'))
+    m.style.display='none';
+});
+
+function _projBuildRows() {
+  var headers = ['Product Code','Description','Real Name','UOM','Supplier','Site','Stock BTG','Stock SNG','DOI FC','DOI Matcom','Est Usg/day MRP','Actual MRP','MRP 2+1','Avg Usg','GRPO Bln Ini','Actual Usg','OSPR','Est Coverage','Kategori','End Stock','Comment'];
+  var data = STATE.projectionData.map(function(p) {
+    var pct = p.pctUsageVsForecast !== undefined ? Math.round(p.pctUsageVsForecast*1000)/10 : 0;
+    return [p.productCode,p.description,p.realName||'',p.uom,p.supplier||'',p.site||'',p.stockBTG,p.stockSNG,p.doiFC,p.doiMatcom,p.estUsageMRP,p.actualMRP,p.max3MRP,p.totalIncoming,p.actualUsageDaily||0,p.totalOSPR||0,p.coverageDateStr,p.category,p.endStock,p.comment||''];
+  });
+  return { headers: headers, data: data };
+}
+
+function exportProjectionExcel() {
+  if(!STATE.projectionData.length){toast('Tidak ada data','err');return;}
+  if(typeof XLSX==='undefined'){toast('XLSX tidak tersedia','err');return;}
+  var r = _projBuildRows();
+  var ws = XLSX.utils.aoa_to_sheet([r.headers].concat(r.data));
+  ws['!cols'] = r.headers.map(function(h,i){ return {wch: i<2?30:i<4?8:14}; });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Projection Stock');
+  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  var blob = new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='projection_stock_'+new Date().toISOString().split('T')[0]+'.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Excel downloaded ✓','ok');
+}
+
+function exportProjectionGSheet() {
+  if(!STATE.projectionData.length){toast('Tidak ada data','err');return;}
+  var r = _projBuildRows();
+  var tsv = [r.headers].concat(r.data).map(function(row){
+    return row.map(function(v){var s=String(v==null?'':v);return s.indexOf('\t')>=0?'"'+s+'"':s;}).join('\t');
+  }).join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(tsv).then(function(){
+      window.open('https://sheets.new','_blank');
+      toast('Data disalin! Buka Sheets → A1 → Ctrl+V','ok');
+    }).catch(function(){ _projFallbackCopy(tsv); });
+  } else { _projFallbackCopy(tsv); }
+}
+function _projFallbackCopy(text) {
+  var ta=document.createElement('textarea'); ta.value=text;
+  ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy'); toast('Disalin! Buka sheets.new lalu paste','ok');}
+  catch(e){toast('Gagal copy','err');}
+  document.body.removeChild(ta);
+  window.open('https://sheets.new','_blank');
+}
+
+// Keep old name for compatibility
+function exportProjectionCSV() { exportProjectionExcel(); }
 
 // ─── SUPPLIERS ───────────────────────────────────────────────────────────────
 function openSupModal(idx) {
@@ -7863,6 +7921,21 @@ function _mrpExportRekap(fmt) {
   } catch(e) { console.error('Export Rekap error:', e); toast('Export error: ' + e.message, 'err'); }
 }
 
+function _mrpExportDropdown() {
+  var menu = document.getElementById('mrp-export-menu');
+  if(menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function _mrpCloseExportMenu() {
+  var menu = document.getElementById('mrp-export-menu');
+  if(menu) menu.style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+  var btn = document.getElementById('btn-export-detail');
+  var menu = document.getElementById('mrp-export-menu');
+  if(menu && btn && !btn.contains(e.target) && !menu.contains(e.target))
+    menu.style.display = 'none';
+});
+
 function _mrpFallbackCopy(text, count) {
   var ta = document.createElement('textarea');
   ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
@@ -7914,12 +7987,9 @@ function _mrpUpdateDetailStatus() {
   var hasMps    = _mpsData && Object.keys(_mpsData).length > 0;
   var hasResult = _mrpResult && Object.keys(_mrpResult).length > 0;
 
-  var detBtn   = document.getElementById('btn-export-detail');
-  var detBtnGs = document.getElementById('btn-export-detail-gs');
-  var rekBtn   = document.getElementById('btn-export-rekap');
-  var rekBtnGs = document.getElementById('btn-export-rekap-gs');
+  var detBtn = document.getElementById('btn-export-detail');
   function _setExportBtns(enabled) {
-    [detBtn, detBtnGs, rekBtn, rekBtnGs].forEach(function(b){ if(b) b.disabled = !enabled; });
+    if(detBtn) detBtn.disabled = !enabled;
   }
 
   if(hasBom && hasMps && hasResult) {
