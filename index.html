@@ -7059,6 +7059,8 @@ function _fcDetailRow(code, fc, master) {
     });
     sug += '</div>';
   }
+  // Per-item generate button
+  sug += '<button class="btn btn-sm" onclick="_fcGenerateItem(this)" data-code="'+code+'" style="font-size:10.5px;margin-top:8px;width:100%">&#x26A1; Generate Propose PR</button>';
 
   // Forecast grid
   var mhdr = FC_MONTHS.map(function(m) {
@@ -8465,6 +8467,37 @@ function _fcOsprEdit(input) {
 }
 
 // ─── Live recalc: update Stock/DOI rows in-place after any edit ─────────────
+function _fcGenerateItem(btn) {
+  var code = btn.getAttribute('data-code');
+  if(!code) return;
+  if(!_fcPropose) _fcPropose = {};
+  // Run auto-propose for single item
+  _fcAutoPropose = true;
+  var ospoIdx = _buildOSPOIndex();
+  var fc = _calcForecast(code, ospoIdx);
+  // Apply suggested proposals
+  if(fc.propose) {
+    _fcPropose[code] = fc.propose.slice();
+    try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
+  }
+  // Re-render this item's row
+  _fcLiveRecalc(code);
+  // Update propose inputs in the grid
+  var detEl = document.getElementById('fc-detail-' + code);
+  if(detEl) {
+    var inputs = detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]');
+    inputs.forEach(function(inp) {
+      var mi = parseInt(inp.getAttribute('data-mi'));
+      var val = (fc.propose && fc.propose[mi]) ? fc.propose[mi] : 0;
+      inp.value = val > 0 ? n_id(val) : '0';
+      inp.style.color = val > 0 ? 'var(--amber)' : 'var(--muted)';
+      inp.style.fontWeight = val > 0 ? '700' : '400';
+    });
+  }
+  toast('Propose PR generated untuk ' + code, 'ok');
+  _fcAutoPropose = false;
+}
+
 function _fcLiveRecalc(code) {
   var ospoIdx = _buildOSPOIndex();
   var fc      = _calcForecast(code, ospoIdx);
