@@ -7698,25 +7698,28 @@ function _mrpExportDetail() {
     bomByFG[b.fg].push(b);
   });
 
-  // Export all BOM rows, use _mpsData for plan if available
-  var fgList = Object.keys(bomByFG).sort();
+  // Only export FGs that are in _mpsData (have a production plan)
+  // This gives accurate Plan + Mat req per FG × RM combination
+  var mpsKeys = _mpsData ? Object.keys(_mpsData) : [];
+  var fgList  = mpsKeys.filter(function(fg){ return bomByFG[fg]; }).sort();
+
+  if(!fgList.length) {
+    toast('MPS tidak tersedia — buka menu MPS→MRP dulu lalu tunggu loading selesai','err');
+    return;
+  }
+
   fgList.forEach(function(fg) {
-    // FG description: try fgDescs (from MPS upload) → masterData → blank
     var fgD   = fgDescs[fg] || (master[fg] && master[fg].desc) || '';
-    var plans = (_mpsData && _mpsData[fg]) ? _mpsData[fg] : null;
+    var plans = _mpsData[fg];
     bomByFG[fg].forEach(function(b) {
       var rmM    = master[b.rm] || mrpM[b.rm] || {};
       var rmDesc = rmM.desc || '';
       var uom    = rmM.uom  || 'KG';
       var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
       months.forEach(function(mn) {
-        var plan   = plans ? (parseFloat(plans[mn]) || 0) : '';
-        // Mat req: plan × qty if plan available, else estimate from total MRP ÷ by proportional
-        var matreq = '';
-        if(plan !== '' && plan > 0 && b.qty > 0) {
-          matreq = Math.round(plan * b.qty);
-        }
-        row.push(plan !== '' && plan > 0 ? plan : '');
+        var plan   = parseFloat(plans[mn]) || 0;
+        var matreq = plan > 0 ? Math.round(plan * b.qty) : '';
+        row.push(plan > 0 ? plan : '');
         row.push(matreq || '');
       });
       rows.push(row);
