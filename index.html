@@ -6553,9 +6553,10 @@ function _fcRenderDOI2Panel(q) {
     filtered.forEach(function(s){
       var chk = _fcDOI2Suppliers.indexOf(s)!==-1;
       var sid = 'doi2sup_'+s.replace(/[^a-zA-Z0-9]/g,'_');
-      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(245,158,11,.12);color:var(--amber)':'color:var(--text)')+'">'\
-            + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\''+s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',this.checked)" style="accent-color:var(--amber)">'\
-            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'\
+      var esc = s.replace(/'/g, "\\'");
+      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(245,158,11,.12);color:var(--amber)':'color:var(--text)')+'">'
+            + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\'' + esc + '\',this.checked)" style="accent-color:var(--amber)">'
+            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'
             + '</label>';
     });
     html += '</div>';
