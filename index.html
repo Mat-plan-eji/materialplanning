@@ -7790,7 +7790,7 @@ function _mrpExportDetail(fmt) {
   var mpsLookup = _mpsData || {};
 
   // Header
-  var hdr = ['Item (FG)','Item Description (FG)','Item (RM/PM)','Item Description (RM/PM)','UoM','BOM Type','Qty per pcs'];
+  var hdr = ['Item (FG)','Item Description (FG)','Item (RM/PM)','Item Description (RM/PM)','UoM','BOM Type','Depth','Qty per pcs'];
   months.forEach(function(m) {
     hdr.push('Plan ' + (MONTH_ID[m]||m));
     hdr.push('Mat req ' + (MONTH_ID[m]||m));
@@ -7802,7 +7802,7 @@ function _mrpExportDetail(fmt) {
     var fgD    = b.fgDesc || fgDescs[b.fg] || '';
     var rmDesc = b.rmDesc || '';
     var uom    = b.uom || 'KG';
-    var row    = [b.fg, fgD, b.rm, rmDesc, uom, b.type||'', b.qty];
+    var row    = [b.fg, fgD, b.rm, rmDesc, uom, b.type||'', b.depth||'', b.qty];
 
     // SUMIF: find plan for this FG from MPS
     var plans = mpsLookup[b.fg] || null;
@@ -7857,33 +7857,10 @@ function _mrpExportRekap(fmt) {
 
   var wb = XLSX.utils.book_new();
 
-  // Sheet 1: Rekap per Supplier (total requirement)
-  var bySupplier = {};
-  Object.keys(_mrpResult).forEach(function(code) {
-    var m   = master[code] || {};
-    var sup = m.supplier || '—';
-    if(!bySupplier[sup]) bySupplier[sup] = [];
-    bySupplier[sup].push(code);
-  });
-
-  var hdrSum = ['Supplier','Jumlah Item'].concat(months.map(function(m){ return 'Req '+(MONTH_ID[m]||m); }));
-  var rowsSum = [hdrSum];
-  Object.keys(bySupplier).sort().forEach(function(sup) {
-    var codes = bySupplier[sup];
-    var row = [sup, codes.length];
-    months.forEach(function(mn) {
-      var total = codes.reduce(function(s,c){ return s + ((_mrpResult[c]||{})[mn]||0); }, 0);
-      row.push(Math.round(total) || '');
-    });
-    rowsSum.push(row);
-  });
-  var wsSum = XLSX.utils.aoa_to_sheet(rowsSum);
-  wsSum['!cols'] = [{wch:35},{wch:10}].concat(months.map(function(){ return {wch:14}; }));
-  XLSX.utils.book_append_sheet(wb, wsSum, 'Rekap Supplier');
-
-  // Sheet 2: Detail per RM/PM dengan supplier, sesuai format tampilan web
+  // Only Detail RM-PM sheet
   var hdrDet = ['Item Code','Deskripsi','ABC','Supplier','UoM','Tipe'].concat(months.map(function(m){ return 'Req '+(MONTH_ID[m]||m); }));
   var rowsDet = [hdrDet];
+  var rowsSum = []; var hdrSum = [];
   var codes = Object.keys(_mrpResult).sort(function(a,b){ return a.localeCompare(b); });
   codes.forEach(function(code) {
     var m   = master[code] || mrpM[code] || {};
@@ -7900,16 +7877,13 @@ function _mrpExportRekap(fmt) {
 
   if(fmt === 'gsheet') {
     // Combine both sheets as TSV with sheet separator
-    var tsv1 = [hdrSum].concat(rowsSum).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
-    var tsv2 = [hdrDet].concat(rowsDet).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
-    var combined = 'REKAP SUPPLIER\n' + tsv1 + '\n\n\nDETAIL RM-PM\n' + tsv2;
-    if(navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(combined).then(function(){
+    var tsv = [hdrDet].concat(rowsDet).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
+    if(navigator.clipboard&&navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsv).then(function(){
         window.open('https://sheets.new','_blank');
-        toast('Rekap disalin! Buka Sheets → A1 → Ctrl+V','ok');
-      }).catch(function(){ _mrpFallbackCopy(combined, rowsSum.length+rowsDet.length); });
-    } else { _mrpFallbackCopy(combined, rowsSum.length+rowsDet.length); }
-  } else {
+        toast('Rekap disalin! Buka Sheets → A1 → Ctrl+V (' + rowsDet.length + ' baris)','ok');
+      }).catch(function(){ _mrpFallbackCopy(tsv, rowsDet.length); });
+    } else { _mrpFallbackCopy(tsv, rowsDet.length); }
     var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var a = document.createElement('a');
