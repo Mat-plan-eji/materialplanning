@@ -8490,7 +8490,7 @@ function _fcGenerateItem(btn) {
   // Update propose inputs in DOM
   var detEl = document.getElementById('fc-detail-' + code);
   if(detEl) {
-    detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]').forEach(function(inp) {
+    detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]:not([data-rowtype])').forEach(function(inp) {
       var mi  = parseInt(inp.getAttribute('data-mi'));
       var val = _fcPropose[code][mi] || 0;
       inp.value = val > 0 ? n_id(val) : '0';
