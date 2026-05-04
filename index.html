@@ -7876,21 +7876,22 @@ function _mrpExportRekap(fmt) {
   XLSX.utils.book_append_sheet(wb, wsDet, 'Detail RM-PM');
 
   if(fmt === 'gsheet') {
-    // Combine both sheets as TSV with sheet separator
-    var tsv = [hdrDet].concat(rowsDet).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
+    // rowsDet already has header at index 0, use as-is
+    var tsv = rowsDet.map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
     if(navigator.clipboard&&navigator.clipboard.writeText) {
       navigator.clipboard.writeText(tsv).then(function(){
         window.open('https://sheets.new','_blank');
-        toast('Rekap disalin! Buka Sheets → A1 → Ctrl+V (' + rowsDet.length + ' baris)','ok');
-      }).catch(function(){ _mrpFallbackCopy(tsv, rowsDet.length); });
-    } else { _mrpFallbackCopy(tsv, rowsDet.length); }
+        toast('Rekap disalin! Buka Sheets → A1 → Ctrl+V (' + (rowsDet.length-1) + ' baris)','ok');
+      }).catch(function(){ _mrpFallbackCopy(tsv, rowsDet.length-1); });
+    } else { _mrpFallbackCopy(tsv, rowsDet.length-1); }
+  } else {
     var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'MRP_Rekap_' + new Date().toISOString().slice(0,10) + '.xlsx';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    toast('Export Rekap ✓','ok');
+    toast('Export Rekap ✓ · ' + (rowsDet.length-1) + ' item','ok');
   }
   } catch(e) { console.error('Export Rekap error:', e); toast('Export error: ' + e.message, 'err'); }
 }
