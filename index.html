@@ -6485,7 +6485,7 @@ function _fcSetView(v) {
 function _buildOSPOIndex() {
   var idx = {};
   var now2 = new Date(); now2.setHours(0,0,0,0);
-  var firstFcYYMM = now2.getFullYear() * 100 + 4; // April = bulan pertama forecast (hardcoded Apr-Des)
+  var firstFcYYMM = now2.getFullYear() * 100 + (now2.getMonth() + 1); // bulan berjalan = bulan pertama forecast
 
   (STATE.ospoData || []).forEach(function(o) {
     var code = o.itemCode; if(!code) return;
