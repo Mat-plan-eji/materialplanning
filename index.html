@@ -6537,39 +6537,71 @@ function _fcOpenDOI2Panel() {
   panel.style.display = visible ? 'none' : 'block';
   if(!visible) _fcRenderDOI2Panel();
 }
-function _fcRenderDOI2Panel() {
-  var panel = document.getElementById('fc-doi2-panel');
-  if(!panel) return;
-  // Kumpulkan supplier unik dari supplierByItem cache
+var _fcDOI2AllSups = [];
+
+function _fcDOI2GetAllSups() {
   var sups = [];
   Object.values(_fcSupplierByItemCache).forEach(function(s){ if(s && sups.indexOf(s)===-1) sups.push(s); });
-  // Fallback dari OSPO+PO
   if(sups.length === 0) {
     var seen = {};
     (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName && !seen[o.supplierName]){ seen[o.supplierName]=1; sups.push(o.supplierName); } });
     (STATE.poData||[]).forEach(function(p){ if(p.supplierName && !seen[p.supplierName]){ seen[p.supplierName]=1; sups.push(p.supplierName); } });
   }
   sups.sort();
-  var html = '<div style="font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Supplier → DOI Target 2</div>';
-  if(sups.length === 0) {
+  return sups;
+}
+
+function _fcRenderDOI2Panel(q) {
+  var panel = document.getElementById('fc-doi2-panel');
+  if(!panel) return;
+  _fcDOI2AllSups = _fcDOI2GetAllSups();
+  var srchEl = document.getElementById('doi2-search');
+  var query = (q !== undefined ? q : (srchEl ? srchEl.value : '')).toLowerCase().trim();
+  var filtered = query ? _fcDOI2AllSups.filter(function(s){ return s.toLowerCase().indexOf(query) !== -1; }) : _fcDOI2AllSups;
+
+  var html = '<div style="font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Supplier \u2192 DOI Target 2</div>';
+
+  html += '<div style="position:relative;margin-bottom:8px">'
+        + '<input id="doi2-search" type="text" placeholder="Cari supplier..." value="'+query.replace(/"/g,'&quot;')+'"'
+        + ' oninput="_fcDOI2FilterPanel(this.value)"'
+        + ' onclick="event.stopPropagation()"'
+        + ' style="width:100%;box-sizing:border-box;font-size:11.5px;padding:5px 28px 5px 8px;border:1.5px solid var(--border2);border-radius:5px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font)">'
+        + '<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;pointer-events:none">\uD83D\uDD0D</span>'
+        + '</div>';
+
+  if(_fcDOI2AllSups.length === 0) {
     html += '<div style="font-size:11px;color:var(--muted)">Belum ada data supplier (sync dulu)</div>';
+  } else if(filtered.length === 0) {
+    html += '<div style="font-size:11px;color:var(--muted);padding:8px 0;text-align:center">Tidak ditemukan</div>';
   } else {
-    html += '<div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">';
-    sups.forEach(function(s){
+    html += '<div id="doi2-list" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">';
+    filtered.forEach(function(s){
       var chk = _fcDOI2Suppliers.indexOf(s) !== -1;
       var sid = 'doi2sup_' + s.replace(/[^a-zA-Z0-9]/g,'_');
-      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(20,184,166,.12);color:var(--teal)':'color:var(--text)')+'">'
-            + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\''+s.replace(/'/g,"\\'")+'\'  ,this.checked)" style="accent-color:var(--teal)">'
-            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'
+      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:4px 5px;border-radius:4px;'+(chk?'background:rgba(245,158,11,.12);color:var(--amber)':'color:var(--text)')+'">'\
+            + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\''+s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',this.checked)" style="accent-color:var(--amber)">'\
+            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'\
             + '</label>';
     });
     html += '</div>';
-    html += '<div style="display:flex;justify-content:space-between;margin-top:8px;gap:6px">'
-          + '<button onclick="_fcDOI2SelectAll()" style="flex:1;font-size:10px;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">Pilih Semua</button>'
-          + '<button onclick="_fcDOI2ClearAll()" style="flex:1;font-size:10px;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Hapus Semua</button>'
-          + '</div>';
   }
+
+  var selCount = _fcDOI2Suppliers.length;
+  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+        + '<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'
+        + (selCount ? '<span style="color:var(--amber);font-weight:600">'+selCount+' supplier</span> dipilih dari '+_fcDOI2AllSups.length : 'Belum ada yang dipilih')
+        + '</div>'
+        + '<div style="display:flex;gap:6px">'
+        + '<button onclick="_fcDOI2SelectAll()" style="flex:1;font-size:10px;padding:4px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">Pilih Semua</button>'
+        + '<button onclick="_fcDOI2ClearAll()" style="flex:1;font-size:10px;padding:4px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Hapus Semua</button>'
+        + '</div></div>';
+
   panel.innerHTML = html;
+  if(query) { var si = document.getElementById('doi2-search'); if(si){ si.focus(); var l=si.value.length; si.setSelectionRange(l,l); } }
+}
+
+function _fcDOI2FilterPanel(val) {
+  _fcRenderDOI2Panel(val);
 }
 function _fcDOI2SelectAll() {
   var sups = [];
