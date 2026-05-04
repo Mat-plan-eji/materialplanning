@@ -3319,8 +3319,11 @@ function _doBuildProjection() {
     var mrp = STATE.mrpData ? (STATE.mrpData[code] || {}) : {};
     var matcom = STATE.matcomData ? (STATE.matcomData[code] || {}) : {};
 
-    var actualMRP = mrp.actualMRP || 0;
-    var max3MRP = mrp.max3MRP || 0;
+    // actualMRP: ONLY from MPS→MRP months[currentMonth]
+    var curMonthFC = _monthNamesID[new Date().getMonth()]; // e.g. 'Mei'
+    var actualMRP  = (mrp.months && mrp.months[curMonthFC]) ? mrp.months[curMonthFC] : 0;
+    // max3MRP: still from GSheets (mrp.max3MRP)
+    var max3MRP    = mrp.max3MRP || 0;
 
     // MRP bulan depan dari data months
     var mrpNextMonth = (mrp.months && mrp.months[nextMonthName]) ? mrp.months[nextMonthName] : 0;
