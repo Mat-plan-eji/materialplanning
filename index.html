@@ -6599,9 +6599,18 @@ function _calcForecast(code, ospoIdx) {
     return (ospoOvr && ospoOvr[i] != null) ? ospoOvr[i] : v;
   });
 
-  // OSPR per month — put total in first month, apply override
+  // OSPR per month — distribute by prReqDate like OSPO
   var ospr_base = new Array(FC_MONTHS.length).fill(0);
-  if(ospr_total > 0) ospr_base[0] = ospr_total;
+  var osprItems = (STATE.osprData || []).filter(function(r){ return r.itemCode === code; });
+  osprItems.forEach(function(r) {
+    if(!r.prReqDate) { ospr_base[0] += (r.openQty||0); return; }
+    // Parse prReqDate dd/mm/yyyy
+    var parts = r.prReqDate.split('/');
+    var reqMo = parts.length === 3 ? parseInt(parts[1]) : 0;
+    var fcIdx = FC_MONTH_NUMS.indexOf(reqMo);
+    if(fcIdx < 0) fcIdx = 0; // fallback ke bulan pertama
+    ospr_base[fcIdx] += (r.openQty || 0);
+  });
   var ospr = ospr_base.map(function(v, i) {
     var ovr = _fcOsprOverride[code];
     return (ovr && ovr[i] != null) ? ovr[i] : v;
@@ -6692,7 +6701,7 @@ function _calcForecast(code, ospoIdx) {
 
   // Bulan paling awal yang bisa di-deliver (hari ini + LT)
   var earliestDelivIdx = 8;
-  for(var ei = 0; ei < 9; ei++) {
+  for(var ei = 0; ei < FC_MONTHS.length; ei++) {
     var ed = new Date(curYear, FC_MONTH_NUMS[ei]-1, 1);
     var prDate = new Date(ed); prDate.setDate(prDate.getDate() - lt_days);
     if(prDate >= nowReal) { earliestDelivIdx = ei; break; }
@@ -6784,7 +6793,7 @@ function _calcForecast(code, ospoIdx) {
 
   // ── Tgl Create PR ─────────────────────────────────────────────────────────
   var suggestions = [];
-  for(var si = 0; si < 9; si++) {
+  for(var si = 0; si < FC_MONTHS.length; si++) {
     if(totalProp[si] <= 0) continue;
     var delivDate = new Date(curYear, FC_MONTH_NUMS[si]-1, 1);
     var createPR  = new Date(delivDate);
@@ -6810,9 +6819,9 @@ function _calcForecast(code, ospoIdx) {
 
   // Forecast view: also add propose into stockFc
   var stockFcWithProp = stockFc.slice();
-  for(var fp = snapMoIdx; fp < 9; fp++) {
+  for(var fp = snapMoIdx; fp < FC_MONTHS.length; fp++) {
     if(totalProp[fp] > 0) {
-      for(var fn2 = fp; fn2 < 9; fn2++) stockFcWithProp[fn2] += totalProp[fp];
+      for(var fn2 = fp; fn2 < FC_MONTHS.length; fn2++) stockFcWithProp[fn2] += totalProp[fp];
     }
   }
   var doiFc = calcDOI(stockFcWithProp);
