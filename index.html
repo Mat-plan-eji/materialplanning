@@ -971,6 +971,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11px" disabled>&#x2713; Terapkan MRP</button>
       <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11px" disabled>&#x2601; Simpan ke Firebase</button>
       <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11px" disabled>&#x2193; Export Detail</button>
+      <span id="mrp-detail-status" style="font-size:10.5px;color:var(--muted)"></span>
       <button class="btn btn-sm" onclick="_mrpExportRekap()" id="btn-export-rekap" style="font-size:11px" disabled>&#x2193; Export Rekap</button>
     </div>
   </div>
@@ -7421,6 +7422,7 @@ function _mpsUpload(input) {
 
       // Save MPS to IndexedDB
       _mrpIdbSaveMps(_mpsData, _mpsActiveMonths);
+      _mrpUpdateDetailStatus();
 
       statusEl.textContent = '✓ ' + count + ' FG item dari sheet "' + sheetName + '"';
       statusEl.style.color = 'var(--green)';
@@ -7554,6 +7556,7 @@ function _mpsMrpCalculate() {
       localStorage.setItem('mrp_last_calc', _calcTs);
       var _tsLabel = document.getElementById('mrp-last-calc-label');
       if(_tsLabel) _tsLabel.textContent = '· Terakhir: ' + _calcTs;
+      _mrpUpdateDetailStatus();
       toast('MRP selesai dihitung ✓ · ' + _calcTs, 'ok');
     }
   }
@@ -7833,6 +7836,28 @@ function _mrpIdbSaveMrp(data) {
     tx.objectStore('mrp').put({ id:'mrp_data', data: data, months: _mpsActiveMonths.slice(), ts: new Date().toISOString() });
   });
 }
+function _mrpUpdateDetailStatus() {
+  var el = document.getElementById('mrp-detail-status');
+  if(!el) return;
+  var hasBom    = _bomData && _bomData.length > 0;
+  var hasMps    = _mpsData && Object.keys(_mpsData).length > 0;
+  var hasResult = _mrpResult && Object.keys(_mrpResult).length > 0;
+
+  if(hasBom && hasMps && hasResult) {
+    el.textContent = '✓ Siap (' + _bomData.length.toLocaleString('id-ID') + ' baris BOM + MPS)';
+    el.style.color = 'var(--green)';
+  } else if(hasBom && hasResult) {
+    el.textContent = '⚠ BOM+MRP ada, MPS belum load (Plan kosong)';
+    el.style.color = 'var(--amber)';
+  } else if(!hasBom) {
+    el.textContent = '✗ BOM belum di-upload';
+    el.style.color = 'var(--red)';
+  } else if(!hasResult) {
+    el.textContent = '✗ Hitung MRP dulu';
+    el.style.color = 'var(--red)';
+  }
+}
+
 function _mrpIdbLoad() {
   _mrpIdbOpen(function(db) {
     if(!db) return;
@@ -7845,6 +7870,7 @@ function _mrpIdbLoad() {
         var el   = document.getElementById('bom-status');
         if(el) { el.textContent = '✓ BOM tersimpan: ' + _bomData.length + ' baris (' + ts + ')'; el.style.color='var(--green)'; }
         _mrpCheckReady();
+        _mrpUpdateDetailStatus();
       }
     };
     // Load MPS
@@ -7878,6 +7904,7 @@ function _mrpIdbLoad() {
         var rekBtn  = document.getElementById('btn-export-rekap');    if(rekBtn)  rekBtn.disabled   = false;
         var tepBtn  = document.getElementById('btn-terapkan-mrp');    if(tepBtn)  tepBtn.disabled   = false;
         _mrpShowResult();
+        _mrpUpdateDetailStatus();
       }
     };
   });
