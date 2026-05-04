@@ -6334,6 +6334,14 @@ function _appInit() {
         return o;
       });
     }
+    // Rebuild osprByItem from restored osprData
+    if(STATE.osprData && STATE.osprData.length) {
+      STATE.osprByItem = {};
+      STATE.osprData.forEach(function(r) {
+        if(!STATE.osprByItem[r.itemCode]) STATE.osprByItem[r.itemCode] = 0;
+        STATE.osprByItem[r.itemCode] += (r.openQty || 0);
+      });
+    }
     if(STATE.poData && STATE.poData.length) loadOSPO();
     console.log('[boot] SAP cache restored — stock:', Object.keys(STATE.stockData||{}).length, 'po:', (STATE.poData||[]).length);
   } catch(e) { console.warn('[boot] SAP cache restore error:', e.message); }
@@ -6592,7 +6600,7 @@ function _calcForecast(code, ospoIdx) {
   });
 
   // OSPR per month — put total in first month, apply override
-  var ospr_base = new Array(9).fill(0);
+  var ospr_base = new Array(FC_MONTHS.length).fill(0);
   if(ospr_total > 0) ospr_base[0] = ospr_total;
   var ospr = ospr_base.map(function(v, i) {
     var ovr = _fcOsprOverride[code];
@@ -6639,7 +6647,7 @@ function _calcForecast(code, ospoIdx) {
   var remainingMRP = Math.max(0, mrpSnapMo - usageToD);
 
   // ── Stock projection (pakai OSPO asli) ───────────────────────────────────
-  var stockProj = new Array(9).fill(0);
+  var stockProj = new Array(FC_MONTHS.length).fill(0);
   for(var pre=0; pre<snapMoIdx; pre++) { stockProj[pre] = 0; }
   stockProj[snapMoIdx] = soh + ospo[snapMoIdx] + ospr[snapMoIdx] - remainingMRP;
   for(var m = snapMoIdx+1; m < 9; m++) {
@@ -6678,9 +6686,9 @@ function _calcForecast(code, ospoIdx) {
   // ── Forecast OSPO — realokasi pool OSPO untuk jaga DOI target ────────────
   // Pool = total semua OSPO yang ada
   var ospoPool = ospo.reduce(function(a,v){ return a+v; }, 0);
-  var forecastOspo  = new Array(9).fill(0);
-  var stockFc       = new Array(9).fill(0);
-  var proposeAuto   = new Array(9).fill(0); // propose setelah pool habis
+  var forecastOspo  = new Array(FC_MONTHS.length).fill(0);
+  var stockFc       = new Array(FC_MONTHS.length).fill(0);
+  var proposeAuto   = new Array(FC_MONTHS.length).fill(0); // propose setelah pool habis
 
   // Bulan paling awal yang bisa di-deliver (hari ini + LT)
   var earliestDelivIdx = 8;
@@ -6729,8 +6737,8 @@ function _calcForecast(code, ospoIdx) {
   var stockAktual = stockProj.slice(); // stock pakai OSPO asli
 
   // Pass 1: recompute stockAktual with pull-forwards
-  var stockAktualFw = new Array(9).fill(0);
-  var ospoPulled    = new Array(9).fill(0); // OSPO yang ditarik ke bulan lebih awal
+  var stockAktualFw = new Array(FC_MONTHS.length).fill(0);
+  var ospoPulled    = new Array(FC_MONTHS.length).fill(0); // OSPO yang ditarik ke bulan lebih awal
   var prevSt2 = soh;
   for(var am = snapMoIdx; am < 9; am++) {
     var req_a  = forecast[am];
@@ -6762,7 +6770,7 @@ function _calcForecast(code, ospoIdx) {
   }
 
   // ── Manual propose overrides ──────────────────────────────────────────────
-  var manProp = (_fcPropose[code] || new Array(9).fill(0)).slice();
+  var manProp = (_fcPropose[code] || new Array(FC_MONTHS.length).fill(0)).slice();
 
   // Total propose: manual override prioritas, lalu auto (hanya setelah pool habis)
   // Ensure manual values are also rounded to multiple/moq
@@ -8555,7 +8563,7 @@ function _fcProposeEdit(input) {
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
-  if(!_fcPropose[code]) _fcPropose[code] = new Array(9).fill(0);
+  if(!_fcPropose[code]) _fcPropose[code] = new Array(FC_MONTHS.length).fill(0);
   _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
   // Multiple validation
   if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
