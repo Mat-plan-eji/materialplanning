@@ -7855,18 +7855,29 @@ function _mrpUpdateDetailStatus() {
   var hasMps    = _mpsData && Object.keys(_mpsData).length > 0;
   var hasResult = _mrpResult && Object.keys(_mrpResult).length > 0;
 
+  var detBtn = document.getElementById('btn-export-detail');
+  var rekBtn = document.getElementById('btn-export-rekap');
+
   if(hasBom && hasMps && hasResult) {
     el.textContent = '✓ Siap (' + bomCount.toLocaleString('id-ID') + ' baris BOM + MPS)';
     el.style.color = 'var(--green)';
+    if(detBtn) detBtn.disabled = false;
+    if(rekBtn) rekBtn.disabled = false;
   } else if(hasBom && hasResult) {
     el.textContent = '⚠ BOM+MRP ada, MPS belum load (Plan kosong)';
     el.style.color = 'var(--amber)';
+    if(detBtn) detBtn.disabled = false;
+    if(rekBtn) rekBtn.disabled = false;
   } else if(!hasBom) {
     el.textContent = '✗ BOM belum di-upload';
     el.style.color = 'var(--red)';
+    if(detBtn) detBtn.disabled = true;
+    if(rekBtn) rekBtn.disabled = true;
   } else if(!hasResult) {
     el.textContent = '✗ Hitung MRP dulu';
     el.style.color = 'var(--red)';
+    if(detBtn) detBtn.disabled = true;
+    if(rekBtn) rekBtn.disabled = true;
   }
 }
 
