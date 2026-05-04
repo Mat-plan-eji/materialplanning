@@ -7692,21 +7692,21 @@ function _mrpExportDetail() {
     bomByFG[b.fg].push(b);
   });
 
-  // Only export FGs that are in MPS
-  var fgList = Object.keys(bomByFG).filter(function(fg){ return _mpsData[fg]; }).sort();
+  // Export all BOM rows, use _mpsData for plan if available
+  var fgList = Object.keys(bomByFG).sort();
   fgList.forEach(function(fg) {
     var fgD   = fgDescs[fg] || '';
-    var plans = _mpsData[fg] || {};
+    var plans = (_mpsData && _mpsData[fg]) ? _mpsData[fg] : null;
     bomByFG[fg].forEach(function(b) {
       var rmM    = master[b.rm] || mrpM[b.rm] || {};
       var rmDesc = rmM.desc || '';
       var uom    = rmM.uom  || 'KG';
       var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
       months.forEach(function(mn) {
-        var plan   = parseFloat(plans[mn]) || 0;
-        var matreq = Math.round(plan * b.qty);
-        row.push(plan > 0 ? plan : '');
-        row.push(matreq > 0 ? matreq : '');
+        var plan   = plans ? (parseFloat(plans[mn]) || 0) : '';
+        var matreq = (plan > 0 && b.qty > 0) ? Math.round(plan * b.qty) : '';
+        row.push(plan || '');
+        row.push(matreq || '');
       });
       rows.push(row);
     });
@@ -7767,9 +7767,11 @@ function _mrpExportRekap() {
   var rowsDet = [hdrDet];
   var codes = Object.keys(_mrpResult).sort(function(a,b){ return a.localeCompare(b); });
   codes.forEach(function(code) {
-    var m   = master[code] || {};
+    var m   = master[code] || mrpM[code] || {};
     var iT  = /^3/.test(code)?'RM':'PM';
-    var row = [code, m.desc||'', m.abc||'', m.supplier||'—', m.uom||'', iT];
+    var mDesc = m.desc || ((STATE.matcomData||{})[code] && (STATE.matcomData||{})[code].sapName) || '';
+    var mSup  = m.supplier || '';
+    var row = [code, mDesc, m.abc||'', mSup, m.uom||'', iT];
     months.forEach(function(mn) { row.push(Math.round((_mrpResult[code]||{})[mn]||0)||''); });
     rowsDet.push(row);
   });
