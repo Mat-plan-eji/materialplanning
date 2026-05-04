@@ -8611,7 +8611,18 @@ function _fcProposeEdit(input) {
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   var moqV = parseFloat(input.getAttribute('data-moq')) || 1;
-  if(!_fcPropose[code]) _fcPropose[code] = new Array(FC_MONTHS.length).fill(0);
+  // If no manual entry yet, populate from current DOM values first
+  // so editing one month doesn't zero out the others
+  if(!_fcPropose[code]) {
+    _fcPropose[code] = new Array(FC_MONTHS.length).fill(0);
+    var detEl = document.getElementById('fc-detail-' + code);
+    if(detEl) {
+      detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]:not([data-rowtype])').forEach(function(inp2) {
+        var mi2 = parseInt(inp2.getAttribute('data-mi'));
+        _fcPropose[code][mi2] = parseFloat((inp2.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
+      });
+    }
+  }
   _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
   // Multiple validation
   if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
