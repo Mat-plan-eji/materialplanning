@@ -7693,10 +7693,6 @@ function _mrpExportDetail() {
 
   // Debug info
 
-  // console.log('[Export Debug] bomLen:', _dbg_bomLen, 'mpsKeys:', _dbg_mpsKeys, 'months:', _dbg_months);
-  // console.log('[Export Debug] firstBomFG:', _dbg_firstFG, 'inMps?', _dbg_inMps);
-  // console.log('[Export Debug] firstMpsKey:', _dbg_mpsFirst, 'plans:', _dbg_plan);
-  toast('Debug: BOM=' + _dbg_bomLen + ' MPS=' + _dbg_mpsKeys + ' months=' + _dbg_months + ' firstFG=' + _dbg_firstFG + ' inMPS?=' + _dbg_inMps, 'inf');
 
   // Build MPS lookup
   var mpsLookup = _mpsData || {};
@@ -7750,6 +7746,7 @@ function _mrpExportRekap() {
   if(!_mrpResult) { toast('Hitung MRP dulu sebelum export','err'); return; }
   try {
   var master  = STATE.masterData || {};
+  var mrpM    = STATE.mrpData    || {};
   var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
   var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
   var fgDescs = _fgDescFromMps || {};
