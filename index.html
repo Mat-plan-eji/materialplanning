@@ -689,7 +689,6 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <div style="padding:14px 18px;position:relative">
       <div style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">DOI Target</div>
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-        <!-- Target 1 -->
         <div style="display:flex;flex-direction:column;gap:2px">
           <span style="font-size:9px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">General</span>
           <div style="display:flex;align-items:center;gap:5px">
@@ -699,28 +698,21 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
             <span style="font-size:10px;color:var(--muted)">hr</span>
           </div>
         </div>
-        <!-- Divider -->
         <div style="width:1px;height:36px;background:var(--border)"></div>
-        <!-- Target 2 -->
         <div style="display:flex;flex-direction:column;gap:2px">
           <span style="font-size:9px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Impor</span>
           <div style="display:flex;align-items:center;gap:5px">
             <input type="number" id="fc-doi2-target" value="60" min="1" max="360"
               style="width:55px;font-size:18px;font-weight:700;font-family:var(--mono);background:transparent;border:none;border-bottom:2px solid var(--border2);color:var(--amber);outline:none;padding:2px 0;text-align:center"
-              oninput="_fcDOI2Change(this.value)" title="Target DOI untuk supplier impor">
+              oninput="_fcDOI2Change(this.value)" title="Target DOI supplier impor">
             <span style="font-size:10px;color:var(--muted)">hr</span>
-            <button onclick="_fcOpenDOI2Panel()" title="Pilih supplier untuk DOI Target 2"
-              style="position:relative;width:26px;height:26px;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted)">
-              ⚙
-              <span id="fc-doi2-badge" style="display:none;position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;background:var(--amber);color:#fff;font-size:9px;font-weight:700;border-radius:8px;align-items:center;justify-content:center;font-family:var(--mono);padding:0 3px">0</span>
-            </button>
+            <button onclick="_fcOpenDOI2Panel()" title="Pilih supplier untuk DOI Target Impor"
+              style="position:relative;width:24px;height:24px;border-radius:5px;border:1.5px solid var(--border2);background:var(--bg3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted)">⚙<span id="fc-doi2-badge" style="display:none;position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;background:var(--amber);color:#fff;font-size:9px;font-weight:700;border-radius:8px;align-items:center;justify-content:center;font-family:var(--mono);padding:0 2px">0</span></button>
           </div>
         </div>
       </div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px">ubah & auto recalc</div>
-      <!-- DOI2 supplier panel -->
-      <div id="fc-doi2-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:12px;width:260px;box-shadow:0 4px 16px rgba(0,0,0,.18)">
-      </div>
+      <div id="fc-doi2-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:12px;width:260px;box-shadow:0 4px 16px rgba(0,0,0,.18)"></div>
     </div>
   </div>
 
@@ -6491,6 +6483,7 @@ var _fcOsprOverride  = (function(){ try{ return JSON.parse(localStorage.getItem(
 var _fcDOI       = 30;
 var _fcDOI2      = (function(){ return parseInt(localStorage.getItem('fc_doi2')||'60')||60; })();
 var _fcDOI2Suppliers = (function(){ try{ return JSON.parse(localStorage.getItem('fc_doi2_suppliers')||'[]'); }catch(e){return [];} })();
+var _fcSupplierByItemCache = {};
 
 function _fcGetDOI() {
   var el = document.getElementById('fc-doi-target');
@@ -6501,14 +6494,11 @@ function _fcGetDOI2() {
   return el ? (parseInt(el.value) || 60) : (_fcDOI2 || 60);
 }
 function _fcGetDOIForItem(itemCode) {
-  // Cek apakah supplier item ini masuk DOI Target 2
   if(_fcDOI2Suppliers.length === 0) return _fcGetDOI();
   var sup = (_fcSupplierByItemCache || {})[itemCode] || '';
   if(sup && _fcDOI2Suppliers.indexOf(sup) !== -1) return _fcGetDOI2();
   return _fcGetDOI();
 }
-var _fcSupplierByItemCache = {};
-
 function _fcDOIChange(val) {
   _fcDOI = parseInt(val) || 30;
   renderForecast();
@@ -6519,15 +6509,11 @@ function _fcDOI2Change(val) {
   renderForecast();
 }
 function _fcToggleDOI2Supplier(sup, checked) {
-  if(checked) {
-    if(_fcDOI2Suppliers.indexOf(sup) === -1) _fcDOI2Suppliers.push(sup);
-  } else {
-    _fcDOI2Suppliers = _fcDOI2Suppliers.filter(function(s){ return s !== sup; });
-  }
+  if(checked) { if(_fcDOI2Suppliers.indexOf(sup)===-1) _fcDOI2Suppliers.push(sup); }
+  else { _fcDOI2Suppliers = _fcDOI2Suppliers.filter(function(s){ return s!==sup; }); }
   localStorage.setItem('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
-  // Update badge
   var badge = document.getElementById('fc-doi2-badge');
-  if(badge) { badge.textContent = _fcDOI2Suppliers.length; badge.style.display = _fcDOI2Suppliers.length ? 'inline-flex' : 'none'; }
+  if(badge){ badge.textContent=_fcDOI2Suppliers.length; badge.style.display=_fcDOI2Suppliers.length?'inline-flex':'none'; }
   renderForecast();
 }
 function _fcOpenDOI2Panel() {
@@ -6535,93 +6521,76 @@ function _fcOpenDOI2Panel() {
   if(!panel) return;
   var visible = panel.style.display !== 'none';
   panel.style.display = visible ? 'none' : 'block';
-  if(!visible) _fcRenderDOI2Panel();
+  if(!visible) _fcRenderDOI2Panel('');
 }
-var _fcDOI2AllSups = [];
-
-function _fcDOI2GetAllSups() {
-  var sups = [];
-  Object.values(_fcSupplierByItemCache).forEach(function(s){ if(s && sups.indexOf(s)===-1) sups.push(s); });
-  if(sups.length === 0) {
-    var seen = {};
-    (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName && !seen[o.supplierName]){ seen[o.supplierName]=1; sups.push(o.supplierName); } });
-    (STATE.poData||[]).forEach(function(p){ if(p.supplierName && !seen[p.supplierName]){ seen[p.supplierName]=1; sups.push(p.supplierName); } });
-  }
-  sups.sort();
-  return sups;
-}
-
 function _fcRenderDOI2Panel(q) {
   var panel = document.getElementById('fc-doi2-panel');
   if(!panel) return;
-  _fcDOI2AllSups = _fcDOI2GetAllSups();
-  var srchEl = document.getElementById('doi2-search');
-  var query = (q !== undefined ? q : (srchEl ? srchEl.value : '')).toLowerCase().trim();
-  var filtered = query ? _fcDOI2AllSups.filter(function(s){ return s.toLowerCase().indexOf(query) !== -1; }) : _fcDOI2AllSups;
+  // Kumpulkan supplier unik
+  var sups = [], seen = {};
+  Object.keys(_fcSupplierByItemCache).forEach(function(c){ var s=_fcSupplierByItemCache[c]; if(s&&!seen[s]){seen[s]=1;sups.push(s);} });
+  if(sups.length===0){
+    (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName&&!seen[o.supplierName]){seen[o.supplierName]=1;sups.push(o.supplierName);} });
+    (STATE.poData||[]).forEach(function(p){ if(p.supplierName&&!seen[p.supplierName]){seen[p.supplierName]=1;sups.push(p.supplierName);} });
+  }
+  sups.sort();
+  var query = (q||'').toLowerCase().trim();
+  var filtered = query ? sups.filter(function(s){ return s.toLowerCase().indexOf(query)!==-1; }) : sups;
 
   var html = '<div style="font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Supplier \u2192 DOI Target 2</div>';
-
+  // Search box
   html += '<div style="position:relative;margin-bottom:8px">'
-        + '<input id="doi2-search" type="text" placeholder="Cari supplier..." value="'+query.replace(/"/g,'&quot;')+'"'
-        + ' oninput="_fcDOI2FilterPanel(this.value)"'
-        + ' onclick="event.stopPropagation()"'
-        + ' style="width:100%;box-sizing:border-box;font-size:11.5px;padding:5px 28px 5px 8px;border:1.5px solid var(--border2);border-radius:5px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font)">'
-        + '<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;pointer-events:none">\uD83D\uDD0D</span>'
+        + '<input id="doi2-srch" type="text" placeholder="Cari supplier..." value="'+query.replace(/"/g,'&quot;')+'"'
+        + ' oninput="_fcRenderDOI2Panel(this.value)" onclick="event.stopPropagation()"'
+        + ' style="width:100%;box-sizing:border-box;font-size:11.5px;padding:5px 8px;border:1.5px solid var(--border2);border-radius:5px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font)">'
         + '</div>';
-
-  if(_fcDOI2AllSups.length === 0) {
+  if(sups.length===0){
     html += '<div style="font-size:11px;color:var(--muted)">Belum ada data supplier (sync dulu)</div>';
-  } else if(filtered.length === 0) {
+  } else if(filtered.length===0){
     html += '<div style="font-size:11px;color:var(--muted);padding:8px 0;text-align:center">Tidak ditemukan</div>';
   } else {
-    html += '<div id="doi2-list" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">';
+    html += '<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">';
     filtered.forEach(function(s){
-      var chk = _fcDOI2Suppliers.indexOf(s) !== -1;
-      var sid = 'doi2sup_' + s.replace(/[^a-zA-Z0-9]/g,'_');
-      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:4px 5px;border-radius:4px;'+(chk?'background:rgba(245,158,11,.12);color:var(--amber)':'color:var(--text)')+'">'\
+      var chk = _fcDOI2Suppliers.indexOf(s)!==-1;
+      var sid = 'doi2sup_'+s.replace(/[^a-zA-Z0-9]/g,'_');
+      html += '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(245,158,11,.12);color:var(--amber)':'color:var(--text)')+'">'\
             + '<input type="checkbox" id="'+sid+'" '+(chk?'checked':'')+' onchange="_fcToggleDOI2Supplier(\''+s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',this.checked)" style="accent-color:var(--amber)">'\
             + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+s+'">'+s+'</span>'\
             + '</label>';
     });
     html += '</div>';
   }
-
   var selCount = _fcDOI2Suppliers.length;
-  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
-        + '<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'
-        + (selCount ? '<span style="color:var(--amber);font-weight:600">'+selCount+' supplier</span> dipilih dari '+_fcDOI2AllSups.length : 'Belum ada yang dipilih')
+  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);margin-bottom:6px">'
+        + (selCount?'<span style="color:var(--amber);font-weight:600">'+selCount+' supplier</span> dipilih':'Belum ada yang dipilih')
         + '</div>'
         + '<div style="display:flex;gap:6px">'
         + '<button onclick="_fcDOI2SelectAll()" style="flex:1;font-size:10px;padding:4px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">Pilih Semua</button>'
         + '<button onclick="_fcDOI2ClearAll()" style="flex:1;font-size:10px;padding:4px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Hapus Semua</button>'
-        + '</div></div>';
-
+        + '</div>';
   panel.innerHTML = html;
-  if(query) { var si = document.getElementById('doi2-search'); if(si){ si.focus(); var l=si.value.length; si.setSelectionRange(l,l); } }
-}
-
-function _fcDOI2FilterPanel(val) {
-  _fcRenderDOI2Panel(val);
+  // Refocus search & preserve cursor
+  var si = document.getElementById('doi2-srch');
+  if(si && query){ si.focus(); var l=si.value.length; si.setSelectionRange(l,l); }
 }
 function _fcDOI2SelectAll() {
-  var sups = [];
-  var seen = {};
-  Object.values(_fcSupplierByItemCache).forEach(function(s){ if(s && !seen[s]){ seen[s]=1; sups.push(s); } });
-  (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName && !seen[o.supplierName]){ seen[o.supplierName]=1; sups.push(o.supplierName); } });
-  (STATE.poData||[]).forEach(function(p){ if(p.supplierName && !seen[p.supplierName]){ seen[p.supplierName]=1; sups.push(p.supplierName); } });
-  _fcDOI2Suppliers = sups;
-  localStorage.setItem('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
-  _fcRenderDOI2Panel();
-  var badge = document.getElementById('fc-doi2-badge');
-  if(badge){ badge.textContent = _fcDOI2Suppliers.length; badge.style.display = 'inline-flex'; }
+  var sups=[], seen={};
+  Object.keys(_fcSupplierByItemCache).forEach(function(c){ var s=_fcSupplierByItemCache[c]; if(s&&!seen[s]){seen[s]=1;sups.push(s);} });
+  (STATE.ospoData||[]).forEach(function(o){ if(o.supplierName&&!seen[o.supplierName]){seen[o.supplierName]=1;sups.push(o.supplierName);} });
+  (STATE.poData||[]).forEach(function(p){ if(p.supplierName&&!seen[p.supplierName]){seen[p.supplierName]=1;sups.push(p.supplierName);} });
+  _fcDOI2Suppliers=sups;
+  localStorage.setItem('fc_doi2_suppliers',JSON.stringify(_fcDOI2Suppliers));
+  _fcRenderDOI2Panel(document.getElementById('doi2-srch')?document.getElementById('doi2-srch').value:'');
+  var badge=document.getElementById('fc-doi2-badge');
+  if(badge){badge.textContent=_fcDOI2Suppliers.length;badge.style.display='inline-flex';}
   renderForecast();
 }
 function _fcDOI2ClearAll() {
-  _fcDOI2Suppliers = [];
-  localStorage.setItem('fc_doi2_suppliers', JSON.stringify([]));
-  _fcRenderDOI2Panel();
-  var badge = document.getElementById('fc-doi2-badge');
-  if(badge){ badge.style.display = 'none'; }
+  _fcDOI2Suppliers=[];
+  localStorage.setItem('fc_doi2_suppliers',JSON.stringify([]));
+  _fcRenderDOI2Panel(document.getElementById('doi2-srch')?document.getElementById('doi2-srch').value:'');
+  var badge=document.getElementById('fc-doi2-badge');
+  if(badge){badge.style.display='none';}
   renderForecast();
 }
 function _fcSetView(v) {
@@ -7013,18 +6982,14 @@ function generateProposePR() {
 // ─── Main render ──────────────────────────────────────────────────────────────
 function renderForecast(isGenerate) {
   var isRealtime = true;
-  // Sync DOI2 input & badge
-  var _doi2inp = document.getElementById('fc-doi2-target');
-  if(_doi2inp && _doi2inp.value !== String(_fcDOI2)) _doi2inp.value = _fcDOI2;
-  var _doi2badge = document.getElementById('fc-doi2-badge');
-  if(_doi2badge){ if(_fcDOI2Suppliers.length){ _doi2badge.textContent=_fcDOI2Suppliers.length; _doi2badge.style.display='inline-flex'; } else { _doi2badge.style.display='none'; } }
-  // Build supplier-by-item cache untuk DOI2 logic
+  // Build supplier cache untuk DOI2
   _fcSupplierByItemCache = {};
-  Object.keys(STATE.masterData||{}).forEach(function(code){
-    if((STATE.masterData[code]||{}).supplier) _fcSupplierByItemCache[code] = STATE.masterData[code].supplier;
-  });
-  (STATE.ospoData||[]).forEach(function(o){ if(o.itemCode && o.supplierName && !_fcSupplierByItemCache[o.itemCode]) _fcSupplierByItemCache[o.itemCode] = o.supplierName; });
-  (STATE.poData||[]).forEach(function(p){ if(p.itemCode && p.supplierName && !_fcSupplierByItemCache[p.itemCode]) _fcSupplierByItemCache[p.itemCode] = p.supplierName; });
+  Object.keys(STATE.masterData||{}).forEach(function(c){ if((STATE.masterData[c]||{}).supplier) _fcSupplierByItemCache[c]=STATE.masterData[c].supplier; });
+  (STATE.ospoData||[]).forEach(function(o){ if(o.itemCode&&o.supplierName&&!_fcSupplierByItemCache[o.itemCode]) _fcSupplierByItemCache[o.itemCode]=o.supplierName; });
+  (STATE.poData||[]).forEach(function(p){ if(p.itemCode&&p.supplierName&&!_fcSupplierByItemCache[p.itemCode]) _fcSupplierByItemCache[p.itemCode]=p.supplierName; });
+  // Sync DOI2 input & badge
+  var _d2i=document.getElementById('fc-doi2-target'); if(_d2i&&_d2i.value!==String(_fcDOI2)) _d2i.value=_fcDOI2;
+  var _d2b=document.getElementById('fc-doi2-badge'); if(_d2b){if(_fcDOI2Suppliers.length){_d2b.textContent=_fcDOI2Suppliers.length;_d2b.style.display='inline-flex';}else{_d2b.style.display='none';}}
 
   // Sync view toggle button label
   var _vtBtn = document.getElementById('fc-view-toggle');
@@ -7077,9 +7042,8 @@ function renderForecast(isGenerate) {
   var syncTs = localStorage.getItem('last_sync') || '';
   var snapLabel = syncTs ? 'SOH Live, sync: <b>' + syncTs + '</b>' : 'SOH Live (belum disync)';
   var matcomTs  = STATE.matcomMonthly ? ' &nbsp;·&nbsp; Matcom: <b>'+Object.keys(STATE.matcomMonthly).length+' item</b>' : ' &nbsp;·&nbsp; <span style="color:var(--amber)">Matcom belum dimuat</span>';
-  var doi2Label = _fcDOI2Suppliers.length ? ' &nbsp;·&nbsp; DOI-2: <b>'+_fcGetDOI2()+' hari</b> ('+_fcDOI2Suppliers.length+' supplier)' : '';
   if(info) info.innerHTML = '<span>Menampilkan <b>'+allItems.length+'</b> item &nbsp;·&nbsp; ' + snapLabel + matcomTs + '</span>'
-    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b>'+doi2Label+' &nbsp;·&nbsp; klik baris untuk detail</span>';
+    + '<span>DOI target: <b>'+_fcGetDOI()+' hari</b>'+(_fcDOI2Suppliers.length?' &nbsp;·&nbsp; Impor: <b>'+_fcGetDOI2()+' hari</b> ('+_fcDOI2Suppliers.length+' supplier)':'')+' &nbsp;·&nbsp; klik baris untuk detail</span>';
 
   if(!allItems.length) {
     el.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-ico">✅</div><h3>Tidak ada item</h3><p>Ubah filter atau klik Generate</p></div>';
@@ -8106,14 +8070,10 @@ document.addEventListener('click', function(e) {
   var menu = document.getElementById('mrp-export-menu');
   if(menu && btn && !btn.contains(e.target) && !menu.contains(e.target))
     menu.style.display = 'none';
-});
-
-document.addEventListener('click', function(e) {
-  var panel = document.getElementById('fc-doi2-panel');
-  if(!panel || panel.style.display === 'none') return;
-  // Jika klik di luar panel dan bukan tombol ⚙
-  if(!panel.contains(e.target) && !e.target.closest('button[onclick*="_fcOpenDOI2Panel"]'))
-    panel.style.display = 'none';
+  // Close DOI2 panel jika klik di luar
+  var doi2panel = document.getElementById('fc-doi2-panel');
+  if(doi2panel && doi2panel.style.display!=='none' && !doi2panel.contains(e.target) && !(e.target.closest && e.target.closest('[onclick*="_fcOpenDOI2Panel"]')))
+    doi2panel.style.display = 'none';
 });
 
 function _mrpFallbackCopy(text, count) {
