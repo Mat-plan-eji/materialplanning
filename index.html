@@ -6341,6 +6341,8 @@ function _appInit() {
   scheduleAutoRefresh();
   _startGRPOPoll();
   _updateLoginUI();
+  // Restore MPS/BOM/MRP from IndexedDB silently on startup
+  setTimeout(function(){ _mrpIdbLoad(); }, 500);
   // Reset RM display mode jika tidak admin
   if(!_isAdmin && _rmDisplayMode === 'realname') {
     _rmDisplayMode = 'description';
@@ -7668,9 +7670,10 @@ function _mpsMrpSaveToFirebase() {
 
 // ── Export Detail (per item × per bulan, like BOM sheet) ─────────────────────
 function _mrpExportDetail() {
-  if(!_bomData || !_mpsData || !_mrpResult || typeof XLSX === 'undefined') {
-    toast('Butuh MPS, BOM dan hasil MRP — hitung MRP dulu','err'); return;
-  }
+  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+  if(!_bomData) { toast('Upload BOM terlebih dahulu','err'); return; }
+  if(!_mrpResult) { toast('Hitung MRP dulu sebelum export','err'); return; }
+  try {
   var master  = STATE.masterData || {};
   var mrpM    = STATE.mrpData    || {};
   var fgDescs = _fgDescFromMps   || {};
@@ -7695,7 +7698,8 @@ function _mrpExportDetail() {
   // Export all BOM rows, use _mpsData for plan if available
   var fgList = Object.keys(bomByFG).sort();
   fgList.forEach(function(fg) {
-    var fgD   = fgDescs[fg] || '';
+    // FG description: try fgDescs (from MPS upload) → masterData → blank
+    var fgD   = fgDescs[fg] || (master[fg] && master[fg].desc) || '';
     var plans = (_mpsData && _mpsData[fg]) ? _mpsData[fg] : null;
     bomByFG[fg].forEach(function(b) {
       var rmM    = master[b.rm] || mrpM[b.rm] || {};
@@ -7704,8 +7708,12 @@ function _mrpExportDetail() {
       var row    = [fg, fgD, b.rm, rmDesc, uom, 'N', b.qty];
       months.forEach(function(mn) {
         var plan   = plans ? (parseFloat(plans[mn]) || 0) : '';
-        var matreq = (plan > 0 && b.qty > 0) ? Math.round(plan * b.qty) : '';
-        row.push(plan || '');
+        // Mat req: plan × qty if plan available, else estimate from total MRP ÷ by proportional
+        var matreq = '';
+        if(plan !== '' && plan > 0 && b.qty > 0) {
+          matreq = Math.round(plan * b.qty);
+        }
+        row.push(plan !== '' && plan > 0 ? plan : '');
         row.push(matreq || '');
       });
       rows.push(row);
@@ -7725,12 +7733,15 @@ function _mrpExportDetail() {
   a.download = 'MRP_Detail_BOM_' + new Date().toISOString().slice(0,10) + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   toast('Export Detail BOM ✓ · ' + (rows.length-1) + ' baris','ok');
+  } catch(e) { console.error('Export Detail error:', e); toast('Export error: ' + e.message, 'err'); }
 }
 
 
 // ── Export Rekap — format sesuai tampilan web ─────────────────────────────────
 function _mrpExportRekap() {
-  if(!_mrpResult || typeof XLSX === 'undefined') { toast('Tidak ada data MRP','err'); return; }
+  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+  if(!_mrpResult) { toast('Hitung MRP dulu sebelum export','err'); return; }
+  try {
   var master  = STATE.masterData || {};
   var months  = (_mpsActiveMonths && _mpsActiveMonths.length) ? _mpsActiveMonths : MRP_MONTHS;
   var MONTH_ID= {'Apr':'Apr','May':'Mei','Jun':'Jun','Jul':'Jul','Aug':'Agu','Sep':'Sep','Oct':'Okt','Nov':'Nov','Dec':'Des'};
@@ -7786,6 +7797,7 @@ function _mrpExportRekap() {
   a.download = 'MRP_Rekap_' + new Date().toISOString().slice(0,10) + '.xlsx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   toast('Export Rekap ✓','ok');
+  } catch(e) { console.error('Export Rekap error:', e); toast('Export error: ' + e.message, 'err'); }
 }
 
 // ── IndexedDB helpers for BOM (large data, local only) ────────────────────────
