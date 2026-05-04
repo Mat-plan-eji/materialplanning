@@ -970,9 +970,15 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <span id="mrp-last-calc-label" style="font-size:11px;color:var(--muted);padding:0 4px"></span>
       <button class="btn btn-primary btn-sm" onclick="_mrpTerapkan()" id="btn-terapkan-mrp" style="font-size:11px" disabled>&#x2713; Terapkan MRP</button>
       <button class="btn btn-sm" onclick="_mpsMrpSaveToFirebase()" id="btn-save-mrp" style="font-size:11px" disabled>&#x2601; Simpan ke Firebase</button>
-      <button class="btn btn-sm" onclick="_mrpExportDetail()" id="btn-export-detail" style="font-size:11px" disabled>&#x2193; Export Detail</button>
-      <span id="mrp-detail-status" style="font-size:10.5px;color:var(--muted)"></span>
-      <button class="btn btn-sm" onclick="_mrpExportRekap()" id="btn-export-rekap" style="font-size:11px" disabled>&#x2193; Export Rekap</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="font-size:10.5px;color:var(--muted);font-weight:600">Detail:</span>
+        <button class="btn btn-sm" onclick="_mrpExportDetail('excel')" id="btn-export-detail" style="font-size:11px" disabled>&#x2193; Excel</button>
+        <button class="btn btn-sm" onclick="_mrpExportDetail('gsheet')" id="btn-export-detail-gs" style="font-size:11px" disabled>&#x1F4CA; GSheet</button>
+        <span id="mrp-detail-status" style="font-size:10.5px;color:var(--muted)"></span>
+        <span style="font-size:10.5px;color:var(--muted);font-weight:600;margin-left:6px">Rekap:</span>
+        <button class="btn btn-sm" onclick="_mrpExportRekap('excel')" id="btn-export-rekap" style="font-size:11px" disabled>&#x2193; Excel</button>
+        <button class="btn btn-sm" onclick="_mrpExportRekap('gsheet')" id="btn-export-rekap-gs" style="font-size:11px" disabled>&#x1F4CA; GSheet</button>
+      </div>
     </div>
   </div>
   <!-- Upload cards -->
@@ -7710,8 +7716,9 @@ function _mpsMrpSaveToFirebase() {
 
 
 // ── Export Detail (per item × per bulan, like BOM sheet) ─────────────────────
-function _mrpExportDetail() {
-  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+function _mrpExportDetail(fmt) {
+  fmt = fmt || 'excel';
+  if(fmt === 'excel' && typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
   if(!_bomData || !_bomData.length) { toast('Upload BOM terlebih dahulu','err'); return; }
   try {
   var fgDescs = _fgDescFromMps || {};
@@ -7742,34 +7749,46 @@ function _mrpExportDetail() {
     // SUMIF: find plan for this FG from MPS
     var plans = mpsLookup[b.fg] || null;
     months.forEach(function(mn) {
-      var plan   = plans ? parseFloat(plans[mn]) : '';
-      var matreq = (plan !== '' && b.qty > 0) ? Math.round(plan * b.qty * 100) / 100 : '';
-      row.push(plan !== '' ? plan : '');
-      row.push(matreq !== '' ? matreq : '');
+      var plan   = plans ? (parseFloat(plans[mn]) || 0) : 0;
+      var matreq = b.qty > 0 ? Math.round(plan * b.qty * 100) / 100 : 0;
+      row.push(plan);
+      row.push(matreq);
     });
     rows.push(row);
   });
 
-  var ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:14},{wch:35},{wch:14},{wch:35},{wch:6},{wch:8},{wch:12}].concat(
-    MRP_MONTHS.reduce(function(acc){ return acc.concat([{wch:12},{wch:14}]); }, [])
-  );
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'MRP Detail');
-  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'MRP_Detail_BOM_' + new Date().toISOString().slice(0,10) + '.xlsx';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('Export Detail BOM ✓ · ' + (rows.length-1) + ' baris','ok');
+  if(fmt === 'gsheet') {
+    // Copy as TSV to clipboard → open Sheets
+    var tsv = rows.map(function(r){ return r.map(function(v){ var s=String(v==null?'':v); return s.indexOf('\t')>=0?'"'+s+'"':s; }).join('\t'); }).join('\n');
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsv).then(function(){
+        window.open('https://sheets.new','_blank');
+        toast('Data disalin! Buka Sheets → A1 → Ctrl+V (' + (rows.length-1) + ' baris)','ok');
+      }).catch(function(){ _mrpFallbackCopy(tsv, rows.length-1); });
+    } else { _mrpFallbackCopy(tsv, rows.length-1); }
+  } else {
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:14},{wch:35},{wch:14},{wch:35},{wch:6},{wch:8},{wch:12}].concat(
+      months.reduce(function(acc){ return acc.concat([{wch:12},{wch:14}]); }, [])
+    );
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MRP Detail');
+    var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'MRP_Detail_BOM_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast('Export Detail BOM ✓ · ' + (rows.length-1) + ' baris','ok');
+  }
   } catch(e) { console.error('Export Detail error:', e); toast('Export error: ' + e.message, 'err'); }
 }
 
 
 // ── Export Rekap — format sesuai tampilan web ─────────────────────────────────
-function _mrpExportRekap() {
-  if(typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
+function _mrpExportRekap(fmt) {
+  fmt = fmt || 'excel';
+  if(fmt === 'excel' && typeof XLSX === 'undefined') { toast('XLSX library tidak tersedia','err'); return; }
   if(!_mrpResult) { toast('Hitung MRP dulu sebelum export','err'); return; }
   try {
   var master  = STATE.masterData || {};
@@ -7814,21 +7833,44 @@ function _mrpExportRekap() {
     var mDesc = m.desc || ((STATE.matcomData||{})[code] && (STATE.matcomData||{})[code].sapName) || '';
     var mSup  = m.supplier || '';
     var row = [code, mDesc, m.abc||'', mSup, m.uom||'', iT];
-    months.forEach(function(mn) { row.push(Math.round((_mrpResult[code]||{})[mn]||0)||''); });
+    months.forEach(function(mn) { row.push(Math.round((_mrpResult[code]||{})[mn]||0)); });
     rowsDet.push(row);
   });
   var wsDet = XLSX.utils.aoa_to_sheet(rowsDet);
   wsDet['!cols'] = [{wch:14},{wch:35},{wch:4},{wch:30},{wch:6},{wch:4}].concat(months.map(function(){ return {wch:14}; }));
   XLSX.utils.book_append_sheet(wb, wsDet, 'Detail RM-PM');
 
-  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'MRP_Rekap_' + new Date().toISOString().slice(0,10) + '.xlsx';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('Export Rekap ✓','ok');
+  if(fmt === 'gsheet') {
+    // Combine both sheets as TSV with sheet separator
+    var tsv1 = [hdrSum].concat(rowsSum).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
+    var tsv2 = [hdrDet].concat(rowsDet).map(function(r){ return r.map(function(v){ return String(v==null?'':v); }).join('\t'); }).join('\n');
+    var combined = 'REKAP SUPPLIER\n' + tsv1 + '\n\n\nDETAIL RM-PM\n' + tsv2;
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(combined).then(function(){
+        window.open('https://sheets.new','_blank');
+        toast('Rekap disalin! Buka Sheets → A1 → Ctrl+V','ok');
+      }).catch(function(){ _mrpFallbackCopy(combined, rowsSum.length+rowsDet.length); });
+    } else { _mrpFallbackCopy(combined, rowsSum.length+rowsDet.length); }
+  } else {
+    var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    var blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'MRP_Rekap_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast('Export Rekap ✓','ok');
+  }
   } catch(e) { console.error('Export Rekap error:', e); toast('Export error: ' + e.message, 'err'); }
+}
+
+function _mrpFallbackCopy(text, count) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('Data disalin! Buka sheets.new lalu paste (' + count + ' baris)','ok'); }
+  catch(e) { toast('Gagal copy, coba download Excel','err'); }
+  document.body.removeChild(ta);
+  window.open('https://sheets.new','_blank');
 }
 
 // ── IndexedDB helpers for BOM (large data, local only) ────────────────────────
@@ -7872,29 +7914,30 @@ function _mrpUpdateDetailStatus() {
   var hasMps    = _mpsData && Object.keys(_mpsData).length > 0;
   var hasResult = _mrpResult && Object.keys(_mrpResult).length > 0;
 
-  var detBtn = document.getElementById('btn-export-detail');
-  var rekBtn = document.getElementById('btn-export-rekap');
+  var detBtn   = document.getElementById('btn-export-detail');
+  var detBtnGs = document.getElementById('btn-export-detail-gs');
+  var rekBtn   = document.getElementById('btn-export-rekap');
+  var rekBtnGs = document.getElementById('btn-export-rekap-gs');
+  function _setExportBtns(enabled) {
+    [detBtn, detBtnGs, rekBtn, rekBtnGs].forEach(function(b){ if(b) b.disabled = !enabled; });
+  }
 
   if(hasBom && hasMps && hasResult) {
     el.textContent = '✓ Siap (' + bomCount.toLocaleString('id-ID') + ' baris BOM + MPS)';
     el.style.color = 'var(--green)';
-    if(detBtn) detBtn.disabled = false;
-    if(rekBtn) rekBtn.disabled = false;
+    _setExportBtns(true);
   } else if(hasBom && hasResult) {
-    el.textContent = '⚠ BOM+MRP ada, MPS belum load (Plan kosong)';
+    el.textContent = '⚠ BOM+MRP ada, MPS belum load';
     el.style.color = 'var(--amber)';
-    if(detBtn) detBtn.disabled = false;
-    if(rekBtn) rekBtn.disabled = false;
+    _setExportBtns(true);
   } else if(!hasBom) {
     el.textContent = '✗ BOM belum di-upload';
     el.style.color = 'var(--red)';
-    if(detBtn) detBtn.disabled = true;
-    if(rekBtn) rekBtn.disabled = true;
+    _setExportBtns(false);
   } else if(!hasResult) {
     el.textContent = '✗ Hitung MRP dulu';
     el.style.color = 'var(--red)';
-    if(detBtn) detBtn.disabled = true;
-    if(rekBtn) rekBtn.disabled = true;
+    _setExportBtns(false);
   }
 }
 
