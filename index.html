@@ -3447,7 +3447,7 @@ function _doBuildProjection() {
     var description = master.desc || mrp.desc || '';
     var uom = master.uom || mrp.uom || matcom.uom || '';
 
-    // Comment from PO overrides (confDate + confQty)
+    // Comment: selalu hitung fresh dari poOverrides, projComments hanya kalau _manual:true
     var comment = '';
     var confQtyTotal = 0;
     var confDateList = [];
@@ -3465,10 +3465,12 @@ function _doBuildProjection() {
       comment = (confDateList.length ? confDateList.map(function(d){return d.split('-').reverse().join('/')}).join(',') : '') +
         (confQtyTotal > 0 ? ' Qty:' + n_id(confQtyTotal) : '');
     }
-    // Manual comment override takes priority
+    // Manual comment (_manual:true) selalu menang — auto lama (_manual:false) diabaikan
     if(STATE.projComments && STATE.projComments[code]) {
       var pc = STATE.projComments[code];
-      comment = (typeof pc === 'object' && pc !== null) ? (pc.text || '') : pc;
+      if(pc && (typeof pc !== 'object' || pc._manual)) {
+        comment = (typeof pc === 'object' && pc !== null) ? (pc.text || '') : pc;
+      }
     }
 
     var itemType = /^3/.test(code) ? 'RM' : (/^4/.test(code) ? 'PM' : (/^1/.test(code) ? 'FG' : 'OTHER'));
