@@ -6911,10 +6911,7 @@ function _calcForecast(code, ospoIdx) {
     var req_m  = forecast[fm];
     var ospr_m = ospr[fm];
     var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
-    // Include propose already placed in previous months into running stock
-    var propSoFar = 0;
-    for(var pp = snapMoIdx; pp <= fm; pp++) propSoFar += (proposeAuto[pp] || 0);
-    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m - propSoFar);
+    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m);
     var step    = multiple > 0 ? multiple : 1;
     var neededR = needed > 0 ? Math.max(moq, Math.ceil(needed / step) * step) : 0;
 
@@ -6923,15 +6920,15 @@ function _calcForecast(code, ospoIdx) {
     ospoPool -= fromPool;
     forecastOspo[fm] = fromPool;
 
-    // Sisa shortage → propose di bulan shortage itu sendiri
-    // (bukan earliest feasible — planner harus tahu bulan mana yang butuh)
+    // Sisa shortage → propose di bulan ini
     var remainShort = Math.max(0, needed - fromPool);
     if(remainShort > 0 && _fcAutoPropose) {
       var propQty = Math.max(moq, Math.ceil(remainShort / step) * step);
       proposeAuto[fm] = (proposeAuto[fm] || 0) + propQty;
     }
 
-    stockFc[fm] = prevStFc + forecastOspo[fm] + ospr_m - req_m;
+    // prevStFc ikut naik dari propose bulan ini (propose dianggap datang di bulan itu)
+    stockFc[fm] = prevStFc + forecastOspo[fm] + ospr_m + (proposeAuto[fm] || 0) - req_m;
     prevStFc = stockFc[fm];
   }
 
