@@ -6779,12 +6779,14 @@ function _calcForecast(code, ospoIdx) {
   // Forecast per month = MRP - matcom already consumed
   // For snapshot month: subtract matcom up to snapDate; past months: skip (already consumed)
   var matcomM = (STATE.matcomMonthly || {})[code] || {};
+  // Konversi gram → kg untuk matcom jika UOM item adalah gram
+  var _matcomUom = ((STATE.masterData||{})[code]||{}).uom || '';
+  var _matcomFactor = (/^(g|gr|gram)$/i.test(_matcomUom.trim())) ? 0.001 : 1;
   var forecast = FC_MONTHS.map(function(m, i) {
     var mrpVal = (mrp.months && mrp.months[m]) || 0;
     var moNum  = FC_MONTH_NUMS[i];
     // Hanya kurangi matcom untuk bulan berjalan saja
-    // Bulan future belum ada consumption → pakai full MRP
-    var consumed = (moNum === snapMon) ? (matcomM[moNum] || 0) : 0;
+    var consumed = (moNum === snapMon) ? ((matcomM[moNum] || 0) * _matcomFactor) : 0;
     return Math.max(0, mrpVal - consumed);
   });
 
@@ -7236,14 +7238,19 @@ function _fcDetailRow(code, fc, master) {
   var matcomM = (STATE.matcomMonthly || {})[code] || {};
   var _MNAME = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
   var curMo = new Date().getMonth() + 1;
-  // Ambil semua bulan matcom yang ada (dari bulan ini hingga akhir tahun)
+  // Hanya bulan berjalan, konversi gram → kg jika perlu
   var matcomRows = [];
-  for(var _mi = curMo; _mi <= 12; _mi++) {
-    if(matcomM[_mi] > 0) {
-      matcomRows.push(['Matcom '+_MNAME[_mi],
-        '<span style="color:var(--teal);font-weight:600">'+n_id(matcomM[_mi])+'</span>'
-        +' <small style="color:var(--muted)">'+(master.uom||'')+'</small>']);
+  if(matcomM[curMo] > 0) {
+    var _mcUom = (master.uom||'').toLowerCase();
+    var _mcQty = matcomM[curMo];
+    var _mcUomDisplay = master.uom || '';
+    if(_mcUom === 'g' || _mcUom === 'gr' || _mcUom === 'gram') {
+      _mcQty = _mcQty / 1000;
+      _mcUomDisplay = 'KG';
     }
+    matcomRows.push(['Matcom '+_MNAME[curMo],
+      '<span style="color:var(--teal);font-weight:600">'+n_id(_mcQty)+'</span>'
+      +' <small style="color:var(--muted)">'+_mcUomDisplay+'</small>']);
   }
   var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
     ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
