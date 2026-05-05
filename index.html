@@ -1107,6 +1107,10 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
           <strong style="color:var(--text)">Tersimpan di cloud:</strong> Schedule, PO overrides, Comments, History, URL Sheets, Settings, Highlighted items.<br>
           <strong style="color:var(--amber)">Ditarik ulang otomatis:</strong> Data SAP (Stock, PO, GRPO, OSPR) dan Google Sheets (Master, MRP, Real Name).
         </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px">Maintenance — jika cloudSave gagal karena data terlalu besar:</div>
+          <button class="btn btn-sm" onclick="cleanupProjHistory()" style="font-size:11px;color:var(--amber);border-color:var(--amber)">🗑 Pangkas History (simpan 14 hari)</button>
+        </div>
       </div>
     </div>
 
@@ -1388,7 +1392,8 @@ var CLOUD_KEYS = [
   'sap_url','sap_user','sap_pass','fonnte','wn','workdays','last_sync','proj_highlighted',
   'sap_cache_stock','sap_cache_po','sap_cache_grpo','sap_cache_ospr',
   'admin_user','admin_pass',
-  'master_data','mrp_data','realname_data'
+  'master_data','mrp_data','realname_data',
+  'fc_propose','fc_ospo_ovr','fc_ospr_ovr','fc_doi2','fc_doi2_suppliers','mrp_source'
 ];
 
 // ── Sync indicator di header ──────────────────────────────────────────────────
@@ -1637,6 +1642,24 @@ function _applyRealtimeChanges(keys) {
             if(o.d !== undefined) return {docNum:o.d,itemCode:o.i,itemName:o.n,supplierName:o.s,openQty:o.q,uom:o.u,prReqDate:fmtSAPDate(o.r),site:o.t};
             return o;
           });
+          break;
+        case 'fc_propose':
+          try { _fcPropose = JSON.parse(val || '{}'); localStorage.setItem('fc_propose', val); } catch(e) {}
+          break;
+        case 'fc_ospo_ovr':
+          try { _fcOspoOverride = JSON.parse(val || '{}'); localStorage.setItem('fc_ospo_ovr', val); } catch(e) {}
+          break;
+        case 'fc_ospr_ovr':
+          try { _fcOsprOverride = JSON.parse(val || '{}'); localStorage.setItem('fc_ospr_ovr', val); } catch(e) {}
+          break;
+        case 'fc_doi2':
+          try { _fcDOI2 = parseInt(val) || 60; localStorage.setItem('fc_doi2', val); } catch(e) {}
+          break;
+        case 'fc_doi2_suppliers':
+          try { _fcDOI2Suppliers = JSON.parse(val || '[]'); localStorage.setItem('fc_doi2_suppliers', val); } catch(e) {}
+          break;
+        case 'mrp_source':
+          try { localStorage.setItem('mrp_source', val || ''); } catch(e) {}
           break;
       }
     } catch(e) { console.warn('Realtime apply error for', k, e.message); }
@@ -2715,11 +2738,14 @@ function updateProjComment(key) {
   var existing = STATE.projComments[itemCode];
   if(existing && (typeof existing === 'object') && existing._manual) return;
 
-  // Build comment from all PO overrides for this item
+  // Build comment dari PO yg masih open saja
   var totalQty = 0; var confDates = [];
+  var _activePOKeys2 = {};
+  (STATE.poData || []).forEach(function(p){ _activePOKeys2[p.docNum + '_' + p.itemCode] = true; });
   Object.keys(STATE.poOverrides).forEach(function(k){
     var u2 = k.indexOf('_');
     if(u2 < 0 || k.slice(u2+1) !== itemCode) return;
+    if(!_activePOKeys2[k]) return; // PO sudah datang — skip
     var ovr = STATE.poOverrides[k];
     if(ovr && ovr.confQty) totalQty += parseFloat(ovr.confQty)||0;
     if(ovr && ovr.confDate && confDates.indexOf(ovr.confDate) < 0) confDates.push(ovr.confDate);
@@ -2773,6 +2799,18 @@ function savePOChanges() {
   if(!_requireAdmin('simpan perubahan')) return;
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
   toast('Perubahan PO disimpan ✓', 'ok');
+}
+
+function cleanupProjHistory() {
+  if(!STATE.projectionHistory) STATE.projectionHistory = {};
+  var keys = Object.keys(STATE.projectionHistory).sort();
+  var before = keys.length;
+  while(keys.length > 14) { delete STATE.projectionHistory[keys.shift()]; keys = Object.keys(STATE.projectionHistory).sort(); }
+  var after = Object.keys(STATE.projectionHistory).length;
+  try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {}
+  // Push ke Firestore
+  cloudSave('proj_history', JSON.stringify(STATE.projectionHistory));
+  toast('History dipangkas: ' + before + ' → ' + after + ' hari. Tersimpan ke cloud ✓', 'ok');
 }
 
 function resetPOOverrides() {
@@ -3447,13 +3485,17 @@ function _doBuildProjection() {
     var description = master.desc || mrp.desc || '';
     var uom = master.uom || mrp.uom || matcom.uom || '';
 
-    // Comment: selalu hitung fresh dari poOverrides, projComments hanya kalau _manual:true
+    // Comment: hanya dari poOverrides yg PO-nya masih open (ada di STATE.poData)
+    // Kalau PO sudah datang (hilang dari poData) → tidak diikutkan
     var comment = '';
     var confQtyTotal = 0;
     var confDateList = [];
+    var _activePOKeys = {};
+    (STATE.poData || []).forEach(function(p){ _activePOKeys[p.docNum + '_' + p.itemCode] = true; });
     Object.keys(STATE.poOverrides).forEach(function(k){
       var kp = k.split('_');
       if(kp.length >= 2 && kp.slice(1).join('_') === code) {
+        if(!_activePOKeys[k]) return; // PO sudah datang/hilang — skip
         var ovr = STATE.poOverrides[k];
         if(ovr) {
           if(ovr.confQty) confQtyTotal += parseFloat(ovr.confQty) || 0;
@@ -3523,11 +3565,10 @@ function _doBuildProjection() {
       coverageDateStr:p.coverageDateStr,category:p.category,endStock:p.endStock,
       mrpNextMonth:p.mrpNextMonth,endStockNext:p.endStockNext,comment:p.comment,itemType:p.itemType};
   });
-  try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {
-    var keys = Object.keys(STATE.projectionHistory).sort();
-    while(keys.length > 30) { delete STATE.projectionHistory[keys.shift()]; }
-    try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e2) {}
-  }
+  // Selalu prune ke max 14 hari sebelum save (Firestore limit 1MB per field)
+  var _phKeys = Object.keys(STATE.projectionHistory).sort();
+  while(_phKeys.length > 14) { delete STATE.projectionHistory[_phKeys.shift()]; _phKeys = Object.keys(STATE.projectionHistory).sort(); }
+  try { localStorage.setItem('proj_history', JSON.stringify(STATE.projectionHistory)); } catch(e) {}
 
   var urgentCount = projection.filter(function(p){return p.isUrgent}).length;
   document.getElementById('s-urgent').textContent = urgentCount;
@@ -5377,11 +5418,14 @@ function clearManualComment(code) {
   // Remove manual flag so auto-comment can take over
   var existing = STATE.projComments[code];
   if(existing && typeof existing === 'object') {
-    // Rebuild auto-comment from PO overrides
+    // Rebuild auto-comment dari PO yg masih open saja
     var totalQty = 0; var confDates = [];
+    var _activePOKeys3 = {};
+    (STATE.poData || []).forEach(function(p){ _activePOKeys3[p.docNum + '_' + p.itemCode] = true; });
     Object.keys(STATE.poOverrides).forEach(function(k){
       var us = k.indexOf('_');
       if(us < 0 || k.slice(us+1) !== code) return;
+      if(!_activePOKeys3[k]) return; // PO sudah datang — skip
       var ovr = STATE.poOverrides[k];
       if(ovr && ovr.confQty) totalQty += parseFloat(ovr.confQty)||0;
       if(ovr && ovr.confDate && confDates.indexOf(ovr.confDate) < 0) confDates.push(ovr.confDate);
@@ -6535,12 +6579,14 @@ function _fcDOIChange(val) {
 function _fcDOI2Change(val) {
   _fcDOI2 = parseInt(val) || 60;
   localStorage.setItem('fc_doi2', String(_fcDOI2));
+  cloudSave('fc_doi2', String(_fcDOI2));
   renderForecast();
 }
 function _fcToggleDOI2Supplier(sup, checked) {
   if(checked) { if(_fcDOI2Suppliers.indexOf(sup)===-1) _fcDOI2Suppliers.push(sup); }
   else { _fcDOI2Suppliers = _fcDOI2Suppliers.filter(function(s){ return s!==sup; }); }
   localStorage.setItem('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
+  cloudSave('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
   var badge = document.getElementById('fc-doi2-badge');
   if(badge){ badge.textContent=_fcDOI2Suppliers.length; badge.style.display=_fcDOI2Suppliers.length?'inline-flex':'none'; }
   renderForecast();
@@ -6610,6 +6656,7 @@ function _fcDOI2SelectAll() {
   (STATE.poData||[]).forEach(function(p){ if(p.supplierName&&!seen[p.supplierName]){seen[p.supplierName]=1;sups.push(p.supplierName);} });
   _fcDOI2Suppliers=sups;
   localStorage.setItem('fc_doi2_suppliers',JSON.stringify(_fcDOI2Suppliers));
+  cloudSave('fc_doi2_suppliers', JSON.stringify(_fcDOI2Suppliers));
   _fcRenderDOI2Panel(document.getElementById('doi2-srch')?document.getElementById('doi2-srch').value:'');
   var badge=document.getElementById('fc-doi2-badge');
   if(badge){badge.textContent=_fcDOI2Suppliers.length;badge.style.display='inline-flex';}
@@ -6618,6 +6665,7 @@ function _fcDOI2SelectAll() {
 function _fcDOI2ClearAll() {
   _fcDOI2Suppliers=[];
   localStorage.setItem('fc_doi2_suppliers',JSON.stringify([]));
+  cloudSave('fc_doi2_suppliers', JSON.stringify([]));
   _fcRenderDOI2Panel(document.getElementById('doi2-srch')?document.getElementById('doi2-srch').value:'');
   var badge=document.getElementById('fc-doi2-badge');
   if(badge){badge.style.display='none';}
@@ -7002,7 +7050,7 @@ function generateProposePR() {
   setTimeout(function() {
     renderForecast(true);
     if(btn) { btn.disabled = false; btn.textContent = '⚡ Generate Propose PR'; }
-    try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); localStorage.setItem('fc_autopropose','1'); } catch(e){}
+    try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); localStorage.setItem('fc_autopropose','1'); cloudSave('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
     var badge = document.getElementById('fc-gen-badge');
     if(badge) { badge.style.display = 'inline'; setTimeout(function(){ badge.style.display='none'; }, 5000); }
     toast('Propose PR di-generate ✓','ok');
@@ -7186,14 +7234,22 @@ function _fcDetailRow(code, fc, master) {
   // Meta panel
   var meta = '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">';
   var matcomM = (STATE.matcomMonthly || {})[code] || {};
-  var matcomApril = matcomM[4] || 0; // bulan berjalan (April)
-  var matcomRow = matcomApril > 0
-    ? ['Matcom Apr','<span style="color:var(--teal);font-weight:600">'+n_id(matcomApril)+'</span> <small style="color:var(--muted)">'+(master.uom||'')+'</small>']
-    : null;
+  var _MNAME = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
+  var curMo = new Date().getMonth() + 1;
+  // Ambil semua bulan matcom yang ada (dari bulan ini hingga akhir tahun)
+  var matcomRows = [];
+  for(var _mi = curMo; _mi <= 12; _mi++) {
+    if(matcomM[_mi] > 0) {
+      matcomRows.push(['Matcom '+_MNAME[_mi],
+        '<span style="color:var(--teal);font-weight:600">'+n_id(matcomM[_mi])+'</span>'
+        +' <small style="color:var(--muted)">'+(master.uom||'')+'</small>']);
+    }
+  }
   var mRows = [['Kode','<span style="font-family:var(--mono)">'+code+'</span>'],['Tipe',iType],['UoM',master.uom||'—'],
     ['MOQ',n_id(master.moq||0)],['Multiple',n_id(master.multiple||1)],['Lead Time',fc.lt_days+' hari'],
     ['SOH',n_id(fc.soh)],['ABC','<span style="font-weight:700;color:'+abcColor+'">'+( abc||'—')+'</span>']];
-  if(matcomRow) mRows.splice(mRows.length-1, 0, matcomRow);
+  // Sisipkan matcom rows sebelum ABC
+  matcomRows.forEach(function(r,i){ mRows.splice(mRows.length-1, 0, r); });
   if(rn && _isAdmin) mRows.splice(1,0,['Real Name','<span style="color:var(--teal)">'+rn+'</span>']);
   mRows.forEach(function(r){
     meta += '<dt style="color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:2px">'+r[0]+'</dt>'
@@ -7951,6 +8007,7 @@ function _mrpApplyToState(result) {
   STATE.mrpData = mrpData;
   localStorage.setItem('mrp_data', JSON.stringify(mrpData));
   localStorage.setItem('mrp_source', 'mps'); // flag: jangan overwrite dari GSheet
+  cloudSave('mrp_source', 'mps');
   // Refresh forecast & projection if currently open
   if(document.getElementById('fc-table')) renderForecast();
   if(document.getElementById('proj-tbody') || document.getElementById('proj-table')) { buildProjection(); renderProjection(); }
@@ -8590,8 +8647,8 @@ function _fcResetOspoOspr(code) {
     // Per-item reset
     delete _fcOspoOverride[code];
     delete _fcOsprOverride[code];
-    try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
-    try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
+    try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
+    try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); cloudSave('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
     renderForecast();
     toast('OSPO & OSPR item ' + code + ' direset ✓', 'ok');
   } else {
@@ -8627,7 +8684,7 @@ function _fcOsprEdit(input) {
   var base = parseFloat(input.getAttribute('data-base')) || 0;
   if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOsprOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
-  try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
+  try { localStorage.setItem('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); cloudSave('fc_ospr_ovr', JSON.stringify(_fcOsprOverride)); } catch(e){}
   var isEd = (_fcOsprOverride[code][mi] != null);
   input.style.color      = isEd ? '#8b5cf6' : (qty > 0 ? 'var(--accent)' : 'var(--muted)');
   input.style.fontWeight = qty > 0 ? '600' : '400';
@@ -8650,7 +8707,7 @@ function _fcGenerateItem(btn) {
 
   // Store propose values for this item only
   _fcPropose[code] = (fc.propose || new Array(FC_MONTHS.length).fill(0)).slice();
-  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
+  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); cloudSave('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
 
   // Update propose inputs in DOM
   var detEl = document.getElementById('fc-detail-' + code);
@@ -8711,7 +8768,7 @@ function _fcOspoEdit(input) {
   var qty  = parseFloat(input.value) || 0;
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
-  try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
+  try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
   var isEdited = (_fcOspoOverride[code][mi] != null);
   input.style.color      = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
   input.style.fontWeight = qty > 0 ? '600' : '400';
@@ -8802,7 +8859,7 @@ function _fcProposeEdit(input) {
   input.style.color = qty > 0 ? 'var(--amber)' : 'var(--muted)';
   input.style.fontWeight = qty > 0 ? '700' : '400';
   // Persist to localStorage
-  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
+  try { localStorage.setItem('fc_propose', JSON.stringify(_fcPropose)); cloudSave('fc_propose', JSON.stringify(_fcPropose)); } catch(e){}
   _fcLiveRecalc(code);
 }
 
