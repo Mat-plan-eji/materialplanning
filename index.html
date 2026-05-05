@@ -6892,74 +6892,26 @@ function _calcForecast(code, ospoIdx) {
   var doi = calcDOI(stockProj);
 
   // ── Forecast OSPO — realokasi pool OSPO untuk jaga DOI target ────────────
-  // Pool = total semua OSPO yang ada
-  var ospoPool = ospo.reduce(function(a,v){ return a+v; }, 0);
-  var forecastOspo  = new Array(FC_MONTHS.length).fill(0);
-  var stockFc       = new Array(FC_MONTHS.length).fill(0);
-  var proposeAuto   = new Array(FC_MONTHS.length).fill(0); // propose setelah pool habis
-
-  // Bulan paling awal yang bisa di-deliver (hari ini + LT)
-  var earliestDelivIdx = 8;
-  for(var ei = 0; ei < FC_MONTHS.length; ei++) {
-    var ed = new Date(curYear, FC_MONTH_NUMS[ei]-1, 1);
-    var prDate = new Date(ed); prDate.setDate(prDate.getDate() - lt_days);
-    if(prDate >= nowReal) { earliestDelivIdx = ei; break; }
-  }
-
-  var prevStFc = soh;
-  for(var fm = snapMoIdx; fm < FC_MONTHS.length; fm++) {
-    var req_m  = forecast[fm];
-    var ospr_m = ospr[fm];
-    var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
-    var needed = Math.max(0, minSt + req_m - prevStFc - ospr_m);
-    var step    = multiple > 0 ? multiple : 1;
-    var neededR = needed > 0 ? Math.max(moq, Math.ceil(needed / step) * step) : 0;
-
-    // Ambil dari pool OSPO
-    var fromPool = Math.min(neededR, ospoPool);
-    ospoPool -= fromPool;
-    forecastOspo[fm] = fromPool;
-
-    // Sisa shortage → propose di bulan ini
-    var remainShort = Math.max(0, needed - fromPool);
-    if(remainShort > 0 && _fcAutoPropose) {
-      var propQty = Math.max(moq, Math.ceil(remainShort / step) * step);
-      proposeAuto[fm] = (proposeAuto[fm] || 0) + propQty;
-    }
-
-    // prevStFc ikut naik dari propose bulan ini (propose dianggap datang di bulan itu)
-    stockFc[fm] = prevStFc + forecastOspo[fm] + ospr_m + (proposeAuto[fm] || 0) - req_m;
-    prevStFc = stockFc[fm];
-  }
-
-  // DOI dari Forecast OSPO (baris DOI Forecast)
-  var doiFc = calcDOI(stockFc);
-
-  // ── Pull-forward logic (Aktual view) — tarik OSPO berikutnya utk cover shortage ──
-  // Pool OSPO yg belum dipakai per bulan (berdasarkan OSPO asli)
-  var ospoPool2 = ospo.slice(); // copy per bulan
-  var pullNotifs = []; // { fromMonth, toMonth, qty }
-  var stockAktual = stockProj.slice(); // stock pakai OSPO asli
-
-  // Pass 1: recompute stockAktual with pull-forwards
+  // ── Pull-forward logic (Aktual view) ─────────────────────────────────────
+  var ospoPool2  = ospo.slice();
+  var pullNotifs = [];
+  var ospoPulled = new Array(FC_MONTHS.length).fill(0);
+  var prevSt2    = soh;
   var stockAktualFw = new Array(FC_MONTHS.length).fill(0);
-  var ospoPulled    = new Array(FC_MONTHS.length).fill(0); // OSPO yang ditarik ke bulan lebih awal
-  var prevSt2 = soh;
+
   for(var am = snapMoIdx; am < FC_MONTHS.length; am++) {
     var req_a  = forecast[am];
     var ospr_a = ospr[am];
-    var ospo_a = ospoPool2[am] + ospoPulled[am]; // OSPO sisa (setelah pull) + yang ditarik masuk
+    var ospo_a = ospoPool2[am] + ospoPulled[am];
     var stockEnd = prevSt2 + ospo_a + ospr_a - req_a;
     var minSt2 = req_a > 0 ? req_a * (maxDOI / WD) : 0;
 
-    // Jika stock kurang, coba tarik OSPO dari bulan berikutnya
-    if(stockEnd < minSt2 && _fcAutoPropose) {
+    if(stockEnd < minSt2) {
       var shortage2 = minSt2 - stockEnd;
       for(var nx = am+1; nx < FC_MONTHS.length; nx++) {
         if(ospoPool2[nx] <= 0) continue;
-        var pull = Math.min(shortage2, ospoPool2[nx]);
         var step2 = multiple > 0 ? multiple : 1;
-        pull = Math.ceil(pull / step2) * step2;
+        var pull = Math.ceil(Math.min(shortage2, ospoPool2[nx]) / step2) * step2;
         pull = Math.min(pull, ospoPool2[nx]);
         if(pull <= 0) continue;
         ospoPool2[nx] -= pull;
@@ -6970,25 +6922,77 @@ function _calcForecast(code, ospoIdx) {
         if(shortage2 <= 0) break;
       }
     }
+    // Stock rolling: carry forward secara natural (stock akhir = awal bulan depan)
     stockAktualFw[am] = prevSt2 + ospo[am] + ospoPulled[am] + ospr_a - req_a;
     prevSt2 = stockAktualFw[am];
   }
 
+  // ── Propose generator — satu pass, pakai stock rolling yang sama dengan display ──
+  var _step       = multiple > 0 ? multiple : 1;
+  var proposeAuto = new Array(FC_MONTHS.length).fill(0);
+  var prevStProp  = soh;
+  // Inflow per bulan = OSPO (sudah include pull-forward) + OSPR
+  for(var fm = snapMoIdx; fm < FC_MONTHS.length; fm++) {
+    var req_m  = forecast[fm];
+    var ospr_m = ospr[fm];
+    var ospo_m = ospo[fm] + ospoPulled[fm]; // OSPO termasuk yang ditarik maju
+    var minSt  = req_m > 0 ? req_m * (maxDOI / WD) : 0;
+
+    // Stock ending tanpa propose
+    var stockEnd2 = prevStProp + ospo_m + ospr_m - req_m;
+
+    // Propose hanya kalau stock ending < minStock
+    var propQty = 0;
+    if(stockEnd2 < minSt && _fcAutoPropose) {
+      var propNeeded = minSt - stockEnd2;
+      propQty = Math.max(moq, Math.ceil(propNeeded / _step) * _step);
+      proposeAuto[fm] = propQty;
+    }
+
+    // Stock rolling include propose (propose datang bulan ini)
+    prevStProp = stockEnd2 + propQty;
+  }
+
   // ── Manual propose overrides ──────────────────────────────────────────────
   var manProp = (_fcPropose[code] || new Array(FC_MONTHS.length).fill(0)).slice();
-
-  // Total propose: manual override prioritas, lalu auto (hanya setelah pool habis)
-  // Ensure manual values are also rounded to multiple/moq
-  var _step = multiple > 0 ? multiple : 1;
-  var hasPropOverride = !!_fcPropose[code]; // user has set at least something
+  var hasPropOverride = !!_fcPropose[code];
   var totalProp = FC_MONTHS.map(function(_, i) {
-    // If user has an entry for this item: always use manual (even if 0)
-    // Only use auto if no manual entry exists for this item
     var v = hasPropOverride ? (manProp[i] || 0) : (_fcAutoPropose ? proposeAuto[i] : 0);
     if(v <= 0) return 0;
-    // Re-round to multiple and enforce MOQ
     return Math.max(moq, Math.ceil(v / _step) * _step);
   });
+
+  // ── Stock display = stockAktualFw + propose masuk di bulan delivery (carry forward natural) ──
+  var stockWithProp = new Array(FC_MONTHS.length).fill(0);
+  var prevStDisp = soh;
+  for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
+    var req_d  = forecast[dp];
+    var ospr_d = ospr[dp];
+    var ospo_d = ospo[dp] + ospoPulled[dp];
+    var prop_d = totalProp[dp] || 0;
+    stockWithProp[dp] = prevStDisp + ospo_d + ospr_d + prop_d - req_d;
+    prevStDisp = stockWithProp[dp];
+  }
+  var doiAktual = calcDOI(stockWithProp);
+
+  // ── Forecast view: OSPO pool realokasi + propose ───────────────────────────
+  var ospoPool   = ospo.reduce(function(a,v){ return a+v; }, 0);
+  var forecastOspo = new Array(FC_MONTHS.length).fill(0);
+  var stockFc    = new Array(FC_MONTHS.length).fill(0);
+  var prevStFc   = soh;
+  for(var fm2 = snapMoIdx; fm2 < FC_MONTHS.length; fm2++) {
+    var req_f  = forecast[fm2];
+    var ospr_f = ospr[fm2];
+    var minStF = req_f > 0 ? req_f * (maxDOI / WD) : 0;
+    var needF  = Math.max(0, minStF + req_f - prevStFc - ospr_f);
+    var fromPool = Math.min(needF > 0 ? Math.max(moq, Math.ceil(needF/_step)*_step) : 0, ospoPool);
+    ospoPool -= fromPool;
+    forecastOspo[fm2] = fromPool;
+    var prop_f = totalProp[fm2] || 0;
+    stockFc[fm2] = prevStFc + forecastOspo[fm2] + ospr_f + prop_f - req_f;
+    prevStFc = stockFc[fm2];
+  }
+  var doiFc = calcDOI(stockFc);
 
   // ── Tgl Create PR ─────────────────────────────────────────────────────────
   var suggestions = [];
@@ -7006,24 +7010,6 @@ function _calcForecast(code, ospoIdx) {
       isOverdue: daysLeft < 0
     });
   }
-
-  // Add propose into stock for display (stock + propose rolling forward)
-  var stockWithProp = stockAktualFw.slice();
-  for(var wp = snapMoIdx; wp < FC_MONTHS.length; wp++) {
-    if(totalProp[wp] > 0) {
-      for(var wn = wp; wn < FC_MONTHS.length; wn++) stockWithProp[wn] += totalProp[wp];
-    }
-  }
-  var doiAktual = calcDOI(stockWithProp);
-
-  // Forecast view: also add propose into stockFc
-  var stockFcWithProp = stockFc.slice();
-  for(var fp = snapMoIdx; fp < FC_MONTHS.length; fp++) {
-    if(totalProp[fp] > 0) {
-      for(var fn2 = fp; fn2 < FC_MONTHS.length; fn2++) stockFcWithProp[fn2] += totalProp[fp];
-    }
-  }
-  var doiFc = calcDOI(stockFcWithProp);
 
   // Build effective OSPO display = remaining at original + pulled-in
   var ospoEffective = ospoPool2.map(function(v, i) { return v + ospoPulled[i]; });
