@@ -6838,6 +6838,7 @@ function _calcForecast(code, ospoIdx) {
 
   // ── Stock awal bulan snapshot ─────────────────────────────────────────────
   var stockAwalM = 0;
+  if(snapMon === new Date().getMonth() + 1) {
     stockAwalM = soh;
   } else {
     // Bulan lain: cari snapshot paling awal di bulan itu dari stockHistory
