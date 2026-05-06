@@ -4156,18 +4156,24 @@ function renderDashboard() {
   var overdueCountEl = document.getElementById('s-overdue-count');
   if(overdueEl) {
     var todayISO2 = new Date().toISOString().split('T')[0];
-    var grpoReceivedCodes = {};
-    STATE.grpoData.forEach(function(g){ grpoReceivedCodes[g.itemCode] = true; });
+    // Build GRPO received set per baseRef+itemCode
+    var grpoReceivedKeys = {};
+    STATE.grpoData.forEach(function(g){
+      if(g.baseRef) grpoReceivedKeys[String(g.baseRef)+'_'+g.itemCode] = true;
+    });
     var overdue = [];
     Object.keys(STATE.poOverrides).forEach(function(key){
       var ovr = STATE.poOverrides[key];
       if(!ovr.confDate) return;
-      // confDate is ISO (YYYY-MM-DD), check if past
       if(ovr.confDate >= todayISO2) return;
       var parts = key.split('_');
+      var docNum = parts[0];
       var itemCode = parts.slice(1).join('_');
-      // Skip if GRPO already received for this item
-      if(grpoReceivedCodes[itemCode]) return;
+      // Hilang kalau PO sudah tidak ada di poData (fully received/closed)
+      var poStillOpen = STATE.poData.some(function(p){ return String(p.docNum)===String(docNum) && p.itemCode===itemCode; });
+      if(!poStillOpen) return;
+      // Hilang kalau GRPO sudah ada untuk PO+item ini
+      if(grpoReceivedKeys[docNum+'_'+itemCode]) return;
       // Filter by dashboard type
       if(_dashType !== 'ALL') {
         var t = /^3/.test(itemCode)?'RM':(/^4/.test(itemCode)?'PM':'FG');
@@ -4196,9 +4202,14 @@ function renderDashboard() {
         if(_anyPO) _ovName = _poName(_anyPO.itemCode, _anyPO.itemName);
       }
       if(!_ovName) _ovName = itemCode; // last resort
+      // Real name lookup
+      var _ovRealName = '';
+      if(STATE.realnameData && STATE.realnameData[itemCode]) _ovRealName = STATE.realnameData[itemCode];
+      else if(STATE.masterData && STATE.masterData[itemCode] && STATE.masterData[itemCode].realName) _ovRealName = STATE.masterData[itemCode].realName;
       overdue.push({
-        docNum: parts[0], itemCode: itemCode,
+        docNum: docNum, itemCode: itemCode,
         itemName: _ovName,
+        realName: _ovRealName,
         supplier: po ? po.supplierName : '—',
         confDate: ovr.confDate, confQty: ovr.confQty || 0
       });
@@ -4212,11 +4223,13 @@ function renderDashboard() {
       overdueEl.innerHTML = overdue.map(function(o){
         var daysLate = Math.floor((Date.now() - new Date(o.confDate).getTime()) / 86400000);
         var dateDisp = o.confDate.split('-').reverse().join('/');
-        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--border)">' +
+        var _dispName = o.realName || o.itemName;
+        return '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:0.5px solid var(--border)">' +
           '<div style="flex:1;min-width:0;overflow:hidden">' +
-            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">' + o.itemName + '</div>' +
-            '<div style="font-size:9px;color:var(--muted);font-family:var(--mono)">' + o.itemCode + '</div>' +
-            '<div style="font-size:9px;color:var(--muted)">' + o.supplier + ' · PO ' + o.docNum + '</div>' +
+            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)">' + _dispName + '</div>' +
+            (o.realName && o.realName !== o.itemName ? '<div style="font-size:9.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + o.itemName + '</div>' : '') +
+            '<div style="font-size:9.5px;font-family:var(--mono);color:var(--muted)">' + o.itemCode + '</div>' +
+            '<div style="font-size:9.5px;color:var(--muted)">' + o.supplier + ' · PO ' + o.docNum + '</div>' +
           '</div>' +
           '<div style="flex-shrink:0;text-align:right">' +
             '<div style="font-size:10px;color:var(--red);font-weight:500">' + dateDisp + '</div>' +
