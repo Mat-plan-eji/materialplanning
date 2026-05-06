@@ -6969,13 +6969,13 @@ function _calcForecast(code, ospoIdx) {
   // Kalau tidak pernah di-set → pakai auto
   var manProp = _fcPropose[code] || null;
   var totalProp = FC_MONTHS.map(function(_, i) {
-    if(manProp && manProp[i] != null && manProp[i] !== undefined) {
-      // User pernah set bulan ini — pakai nilai manual (bisa 0 = sengaja dihapus)
+    if(manProp && manProp[i] !== null && manProp[i] !== undefined) {
+      // User pernah set bulan ini (0 = sengaja dihapus, >0 = manual qty)
       var mv = manProp[i] || 0;
       if(mv <= 0) return 0;
       return Math.max(moq > 0 ? moq : 0, Math.ceil(mv / (_step||1)) * (_step||1));
     }
-    // Belum pernah di-set — pakai auto
+    // null/undefined = belum pernah di-set → pakai auto
     var av = _fcAutoPropose ? proposeAuto[i] : 0;
     if(av <= 0) return 0;
     return Math.max(moq > 0 ? moq : 0, Math.ceil(av / (_step||1)) * (_step||1));
@@ -8784,12 +8784,11 @@ function _fcLiveRecalc(code) {
           }
         });
       } else if(lbl === 'propose') {
-        // Selalu update dari totalProp hasil kalkulasi terbaru
         var inps2 = tr.querySelectorAll('input[data-code][data-mi]');
         inps2.forEach(function(inp) {
           var mi = parseInt(inp.getAttribute('data-mi'));
-          // Kalau bulan ini ada manual override, jangan overwrite input user
-          var hasManual = _fcPropose[code] && _fcPropose[code][mi] != null;
+          // Jangan overwrite kalau user sudah pernah set (termasuk 0)
+          var hasManual = _fcPropose[code] && _fcPropose[code][mi] !== null && _fcPropose[code][mi] !== undefined;
           if(!hasManual) {
             var pv = propVals[mi] || 0;
             inp.value = pv > 0 ? n_id(pv) : '0';
@@ -8878,16 +8877,17 @@ function _fcProposeEdit(input) {
   // If no manual entry yet, populate from current DOM values first
   // so editing one month doesn't zero out the others
   if(!_fcPropose[code]) {
-    _fcPropose[code] = new Array(FC_MONTHS.length).fill(0);
+    _fcPropose[code] = new Array(FC_MONTHS.length).fill(null);
     var detEl = document.getElementById('fc-detail-' + code);
     if(detEl) {
       detEl.querySelectorAll('input[data-code="'+code+'"][data-mi]:not([data-rowtype])').forEach(function(inp2) {
         var mi2 = parseInt(inp2.getAttribute('data-mi'));
-        _fcPropose[code][mi2] = parseFloat((inp2.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
+        var v2 = parseFloat((inp2.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
+        if(v2 > 0) _fcPropose[code][mi2] = v2;
       });
     }
   }
-  _fcPropose[code][mi] = qty > 0 ? qty : null; // null = kembali ke auto, bukan override 0
+  _fcPropose[code][mi] = qty; // 0 = paksa 0, null = belum pernah di-set (pakai auto)
   // Multiple validation
   if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
     input.style.outline = '1.5px solid var(--red)';
