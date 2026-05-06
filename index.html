@@ -2539,6 +2539,7 @@ function renderPO() {
   var hfName  = (document.getElementById('hf-name') ||{value:''}).value.toLowerCase();
   var hfSite  = (document.getElementById('hf-site2')||{value:''}).value.toLowerCase();
   var hfReq   = (document.getElementById('hf-req')  ||{value:''}).value.toLowerCase();
+  var _reqDates = window._poReqDateFilter || []; // array tanggal terpilih
   var hfConf  = (document.getElementById('hf-conf') ||{value:''}).value.toLowerCase();
   var hfNotes = (document.getElementById('hf-notes')||{value:''}).value.toLowerCase();
 
@@ -2558,7 +2559,8 @@ function renderPO() {
     if(hfCode  && !(p.itemCode||'').toLowerCase().includes(hfCode)) return false;
     if(hfName  && !(p.itemName||'').toLowerCase().includes(hfName)) return false;
     if(hfSite  && !(p.site||'').toLowerCase().includes(hfSite)) return false;
-    if(hfReq   && !(ovr.date||'').includes(hfReq)) return false;
+    if(_reqDates.length > 0 && _reqDates.indexOf(ovr.date||'') < 0) return false;
+    if(!_reqDates.length && hfReq && !(ovr.date||'').includes(hfReq)) return false;
     if(hfConf  && !(ovr.confDate||'').includes(hfConf)) return false;
     if(hfNotes && !(ovr.notes||'').toLowerCase().includes(hfNotes)) return false;
     return true;
@@ -2647,7 +2649,12 @@ function renderPO() {
     + '<th></th>'  // Open Qty
     + '<th></th>'  // UOM
     + '<th></th>'  // PR Req Date
-    + '<th><input class="th-filter" id="hf-req"   oninput="_poDeb()" placeholder="tgl..." value="' + hfReq   + '"></th>'
+    + '<th style="position:relative"><div id="hf-req-wrap" style="position:relative">'
+    + '<button id="hf-req" onclick="_poReqDateDropdown()" style="width:100%;text-align:left;font-size:11px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:' + (_reqDates.length?'var(--teal)':'var(--muted)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+    + (_reqDates.length ? _reqDates.map(function(d){return d.split('-').reverse().join('/')}).join(', ') : 'tgl...')
+    + '</button>'
+    + '<div id="hf-req-panel" style="display:none;position:absolute;top:100%;left:0;z-index:300;background:var(--bg2);border:1.5px solid var(--border2);border-radius:6px;padding:8px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.15)">'
+    + '</div></div></th>'
     + '<th></th>'  // Qty Konfirm
     + '<th><input class="th-filter" id="hf-conf"  oninput="_poDeb()" placeholder="tgl..." value="' + hfConf  + '"></th>'
     + '<th></th>'  // Tgl Update
@@ -2809,6 +2816,59 @@ function cleanupProjHistory() {
   // Push ke Firestore
   cloudSave('proj_history', JSON.stringify(STATE.projectionHistory));
   toast('History dipangkas: ' + before + ' → ' + after + ' hari. Tersimpan ke cloud ✓', 'ok');
+}
+
+function _poReqDateDropdown() {
+  var panel = document.getElementById('hf-req-panel');
+  if(!panel) return;
+  var visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  if(!visible) _poReqDateRender();
+}
+function _poReqDateRender() {
+  var panel = document.getElementById('hf-req-panel');
+  if(!panel) return;
+  // Kumpulkan semua tanggal unik dari poOverrides
+  var dates = [];
+  Object.keys(STATE.poOverrides||{}).forEach(function(k){
+    var d = (STATE.poOverrides[k]||{}).date;
+    if(d && dates.indexOf(d) < 0) dates.push(d);
+  });
+  dates.sort();
+  var sel = window._poReqDateFilter || [];
+  var html = '<div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">Filter Tgl Request Kirim</div>';
+  if(!dates.length) {
+    html += '<div style="font-size:11px;color:var(--muted)">Belum ada tanggal</div>';
+  } else {
+    html += '<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">';
+    window._poReqDates = dates;
+    dates.forEach(function(d, di){
+      var chk = sel.indexOf(d) >= 0;
+      var disp = d.split('-').reverse().join('/');
+      var cbId = 'req-date-cb-' + di;
+      html += '<label for="'+cbId+'" style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(20,184,166,.1);color:var(--teal)':'color:var(--text)')+'">'
+            + '<input type="checkbox" id="'+cbId+'" '+(chk?'checked':'')+' onchange="(function(el){_poReqDateToggle(window._poReqDates['+di+'],el.checked);})(this)" style="accent-color:var(--teal)">'
+            + disp + '</label>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+        + '<button onclick="_poReqDateClear()" style="flex:1;font-size:10px;padding:3px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Reset</button>'
+        + '</div>';
+  panel.innerHTML = html;
+}
+function _poReqDateToggle(d, checked) {
+  if(!window._poReqDateFilter) window._poReqDateFilter = [];
+  if(checked) { if(window._poReqDateFilter.indexOf(d)<0) window._poReqDateFilter.push(d); }
+  else { window._poReqDateFilter = window._poReqDateFilter.filter(function(x){return x!==d;}); }
+  _poReqDateRender();
+  renderPO();
+}
+function _poReqDateClear() {
+  window._poReqDateFilter = [];
+  var panel = document.getElementById('hf-req-panel');
+  if(panel) panel.style.display = 'none';
+  renderPO();
 }
 
 function resetPOOverrides() {
@@ -8218,6 +8278,9 @@ document.addEventListener('click', function(e) {
   var doi2panel = document.getElementById('fc-doi2-panel');
   if(doi2panel && doi2panel.style.display!=='none' && !doi2panel.contains(e.target) && !(e.target.closest && e.target.closest('[onclick*="_fcOpenDOI2Panel"]')))
     doi2panel.style.display = 'none';
+  var reqPanel = document.getElementById('hf-req-panel');
+  if(reqPanel && reqPanel.style.display!=='none' && !reqPanel.contains(e.target) && !(e.target.id==='hf-req'))
+    reqPanel.style.display = 'none';
 });
 
 function _mrpFallbackCopy(text, count) {
