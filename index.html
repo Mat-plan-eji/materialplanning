@@ -7193,8 +7193,8 @@ function _fcRenderDetail(el, items, fcData, fRows) {
       if(fRows==='forecast') {
         var v=fc.forecast[i]; return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:var(--muted)">'+(v?n_id(v):'—')+'</td>';
       } else if(fRows==='stock') {
-        var v2=fc.stock[i]; var daily=fc.forecast[i]>0?fc.forecast[i]/FC_DAYS[i]:0; var minS=_fcGetDOIForItem(code)*daily;
-        var cl=v2<0?'var(--red)':v2<minS?'var(--amber)':'var(--text)';
+        var v2=fc.stock[i]; var _doi_i=fc.doi[i]; var _tgt_i=_fcGetDOIForItem(code);
+        var cl=v2<0?'var(--red)':(_doi_i>=0&&_doi_i<_tgt_i)?'var(--amber)':'var(--text)';
         return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(v2)+'</td>';
       } else if(fRows==='doi') {
         var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOIForItem(code)?'var(--amber)':d>99?'var(--muted)':'var(--green)';
@@ -7367,8 +7367,8 @@ function _fcDetailRow(code, fc, master) {
 
   var isFcView = (_fcGridViewMode === 'forecast');
   var stockClsFn = function(v,i){
-    var minS = fc.forecast[i]>0 ? fc.forecast[i]*(_fcGetDOIForItem(code)/25) : 0;
-    return v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+    var _di = fc.doi[i]; var _ti = _fcGetDOIForItem(code);
+    return v<0?'color:var(--red);font-weight:600':(_di>=0&&_di<_ti)?'color:var(--amber);font-weight:500':'color:var(--green)';
   };
   var doiClsFn = function(v){
     return v<0?'color:var(--red)':v<_fcGetDOIForItem(code)?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
@@ -8753,8 +8753,7 @@ function _fcLiveRecalc(code) {
       if(lbl === 'stock') {
         stockVals.forEach(function(v, i) {
           if(!tds[i]) return;
-          var minS = fc.forecast[i]>0 ? fc.forecast[i]*(doi_t/25) : 0;
-          var cls  = v<0?'color:var(--red);font-weight:600':v<minS?'color:var(--amber);font-weight:500':'color:var(--green)';
+          var _di2 = doiVals[i]; var cls = v<0?'color:var(--red);font-weight:600':(_di2>=0&&_di2<doi_t)?'color:var(--amber);font-weight:500':'color:var(--green)';
           tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
         });
       } else if(lbl === 'doi') {
