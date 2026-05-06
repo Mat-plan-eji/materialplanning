@@ -4494,6 +4494,18 @@ function getWorkdays(from, n) {
 
 function generateSchedule() {
   if(!_requireAdmin('generate jadwal')) return;
+
+  // Cleanup: reset isManual untuk PO yang tanggalnya sudah lewat minggu ini
+  // Supaya tidak terbaca sebagai manual forced di generate berikutnya
+  var todayISO2 = new Date().toISOString().split('T')[0];
+  Object.keys(STATE.poOverrides||{}).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(ovr && ovr.isManual && ovr.date && ovr.date < todayISO2) {
+      ovr.isManual = false;
+      ovr.isAuto = true;
+    }
+  });
+
   // ── Helper: format tanggal lokal sebagai YYYY-MM-DD (bukan UTC) ──────────────
   function localISO(d) {
     return d.getFullYear() + '-' +
