@@ -6973,13 +6973,16 @@ function _calcForecast(code, ospoIdx) {
     return Math.max(moq, Math.ceil(v / _step) * _step);
   });
 
-  // ── Stock display = stockAktualFw + propose masuk di bulan delivery (carry forward natural) ──
+  // ── Stock display: pakai stockAktualFw (sudah include pull-forward) + propose ──
+  // stockAktualFw sudah dihitung di single-pass loop dengan OSPO+pull+propose
+  // Rebuild dengan totalProp (manual override mungkin beda dari proposeAuto)
   var stockWithProp = new Array(FC_MONTHS.length).fill(0);
   var prevStDisp = soh;
   for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
     var req_d  = forecast[dp];
     var ospr_d = ospr[dp];
-    var ospo_d = ospo[dp] + ospoPulled[dp];
+    // ospoEffective sudah dihitung: ospoPool2[dp] + ospoPulled[dp]
+    var ospo_d = ospoPool2[dp] + ospoPulled[dp];
     var prop_d = totalProp[dp] || 0;
     stockWithProp[dp] = prevStDisp + ospo_d + ospr_d + prop_d - req_d;
     prevStDisp = stockWithProp[dp];
