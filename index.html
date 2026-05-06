@@ -2828,22 +2828,28 @@ function _poReqDateDropdown() {
 function _poReqDateRender() {
   var panel = document.getElementById('hf-req-panel');
   if(!panel) return;
-  // Kumpulkan semua tanggal unik dari poOverrides
   var dates = [];
   Object.keys(STATE.poOverrides||{}).forEach(function(k){
     var d = (STATE.poOverrides[k]||{}).date;
     if(d && dates.indexOf(d) < 0) dates.push(d);
   });
   dates.sort();
-  var sel = window._poReqDateFilter || [];
+  window._poReqDates = dates;
+  // Pending = pilihan sementara sebelum OK
+  if(!window._poReqDatePending) window._poReqDatePending = (window._poReqDateFilter||[]).slice();
+  var pend = window._poReqDatePending;
+  var allChecked = dates.length > 0 && dates.every(function(d){ return pend.indexOf(d)>=0; });
   var html = '<div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">Filter Tgl Request Kirim</div>';
   if(!dates.length) {
     html += '<div style="font-size:11px;color:var(--muted)">Belum ada tanggal</div>';
   } else {
+    // Select All
+    html += '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;padding:4px;border-radius:4px;border-bottom:0.5px solid var(--border);margin-bottom:4px;font-weight:500;color:var(--text)">'
+          + '<input type="checkbox" id="req-date-all" '+(allChecked?'checked':'')+' onchange="(function(el){_poReqDateSelectAll(el.checked);})(this)" style="accent-color:var(--teal)">'
+          + 'Pilih Semua</label>';
     html += '<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">';
-    window._poReqDates = dates;
     dates.forEach(function(d, di){
-      var chk = sel.indexOf(d) >= 0;
+      var chk = pend.indexOf(d) >= 0;
       var disp = d.split('-').reverse().join('/');
       var cbId = 'req-date-cb-' + di;
       html += '<label for="'+cbId+'" style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;padding:3px 4px;border-radius:4px;'+(chk?'background:rgba(20,184,166,.1);color:var(--teal)':'color:var(--text)')+'">'
@@ -2853,19 +2859,31 @@ function _poReqDateRender() {
     html += '</div>';
   }
   html += '<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
-        + '<button onclick="_poReqDateClear()" style="flex:1;font-size:10px;padding:3px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Reset</button>'
+        + '<button onclick="_poReqDateClear()" style="flex:1;font-size:10px;padding:4px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--muted)">Reset</button>'
+        + '<button onclick="_poReqDateApply()" style="flex:1;font-size:10px;padding:4px 0;background:var(--teal);border:1px solid var(--teal);border-radius:4px;cursor:pointer;color:#fff;font-weight:600">OK</button>'
         + '</div>';
   panel.innerHTML = html;
 }
 function _poReqDateToggle(d, checked) {
-  if(!window._poReqDateFilter) window._poReqDateFilter = [];
-  if(checked) { if(window._poReqDateFilter.indexOf(d)<0) window._poReqDateFilter.push(d); }
-  else { window._poReqDateFilter = window._poReqDateFilter.filter(function(x){return x!==d;}); }
+  if(!window._poReqDatePending) window._poReqDatePending = [];
+  if(checked) { if(window._poReqDatePending.indexOf(d)<0) window._poReqDatePending.push(d); }
+  else { window._poReqDatePending = window._poReqDatePending.filter(function(x){return x!==d;}); }
   _poReqDateRender();
+}
+function _poReqDateSelectAll(checked) {
+  window._poReqDatePending = checked ? (window._poReqDates||[]).slice() : [];
+  _poReqDateRender();
+}
+function _poReqDateApply() {
+  window._poReqDateFilter = (window._poReqDatePending||[]).slice();
+  window._poReqDatePending = null;
+  var panel = document.getElementById('hf-req-panel');
+  if(panel) panel.style.display = 'none';
   renderPO();
 }
 function _poReqDateClear() {
   window._poReqDateFilter = [];
+  window._poReqDatePending = null;
   var panel = document.getElementById('hf-req-panel');
   if(panel) panel.style.display = 'none';
   renderPO();
@@ -8279,8 +8297,10 @@ document.addEventListener('click', function(e) {
   if(doi2panel && doi2panel.style.display!=='none' && !doi2panel.contains(e.target) && !(e.target.closest && e.target.closest('[onclick*="_fcOpenDOI2Panel"]')))
     doi2panel.style.display = 'none';
   var reqPanel = document.getElementById('hf-req-panel');
-  if(reqPanel && reqPanel.style.display!=='none' && !reqPanel.contains(e.target) && !(e.target.id==='hf-req'))
+  if(reqPanel && reqPanel.style.display!=='none' && !reqPanel.contains(e.target) && !(e.target.id==='hf-req')) {
     reqPanel.style.display = 'none';
+    window._poReqDatePending = null; // buang pending kalau tutup tanpa OK
+  }
 });
 
 function _mrpFallbackCopy(text, count) {
