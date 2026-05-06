@@ -6965,12 +6965,20 @@ function _calcForecast(code, ospoIdx) {
   }
 
   // ── Manual propose overrides ──────────────────────────────────────────────
-  var manProp = (_fcPropose[code] || new Array(FC_MONTHS.length).fill(0)).slice();
-  var hasPropOverride = !!_fcPropose[code];
+  // Logika per-bulan: kalau user pernah set nilai (termasuk 0) → pakai manual
+  // Kalau tidak pernah di-set → pakai auto
+  var manProp = _fcPropose[code] || null;
   var totalProp = FC_MONTHS.map(function(_, i) {
-    var v = hasPropOverride ? (manProp[i] || 0) : (_fcAutoPropose ? proposeAuto[i] : 0);
-    if(v <= 0) return 0;
-    return Math.max(moq, Math.ceil(v / _step) * _step);
+    if(manProp && manProp[i] != null && manProp[i] !== undefined) {
+      // User pernah set bulan ini — pakai nilai manual (bisa 0 = sengaja dihapus)
+      var mv = manProp[i] || 0;
+      if(mv <= 0) return 0;
+      return Math.max(moq > 0 ? moq : 0, Math.ceil(mv / (_step||1)) * (_step||1));
+    }
+    // Belum pernah di-set — pakai auto
+    var av = _fcAutoPropose ? proposeAuto[i] : 0;
+    if(av <= 0) return 0;
+    return Math.max(moq > 0 ? moq : 0, Math.ceil(av / (_step||1)) * (_step||1));
   });
 
   // ── Stock display: pakai stockAktualFw (sudah include pull-forward) + propose ──
@@ -7315,7 +7323,7 @@ function _fcDetailRow(code, fc, master) {
         +   ' title="'+(isEdited ? 'SAP: '+n_id(base)+' (diedit manual)' : 'Klik untuk edit')+'">'
         + '</div></td>';
     }).join('');
-    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
+    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':label==='OSPO'?'ospo':label==='OSPR'?'ospr':'';
     var rowAttr  = rowLabel ? ' data-rowlabel="'+rowLabel+'"' : '';
     return '<tr style="border-bottom:1px dotted var(--border)"'+rowAttr+'>'
       + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
@@ -7356,7 +7364,7 @@ function _fcDetailRow(code, fc, master) {
       var disp  = (v===0||v===null||v===undefined) ? '<span style="color:var(--hint)">—</span>' : n_id(v);
       return '<td style="text-align:right;padding:5px 5px;font-family:var(--mono);font-size:11px;'+style+'">'+disp+'</td>';
     }).join('');
-    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':'';
+    var rowLabel = label==='Stock (Ending)'?'stock':label==='DOI (hari)'?'doi':label==='Propose PR'?'propose':'';
     var rowAttr  = rowLabel ? ' data-rowlabel="'+rowLabel+'"' : '';
     return '<tr style="border-bottom:1px dotted var(--border)"'+rowAttr+'>'
       + '<td style="padding:5px 6px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text);white-space:nowrap;min-width:120px">'+label+'</td>'
@@ -7808,8 +7816,8 @@ function _bomUpload(input) {
         if(!fg || !rm) continue; // skip completely empty rows
         var fgDesc  = fgDescCol >= 0 ? String(row[fgDescCol]||'').trim() : '';
         var depth   = depthCol  >= 0 ? parseInt(row[depthCol]||0)      : 0;
-        // Package rule: FG desc contains "Package" AND depth 4 or 5 → qty = 0
-        var effQty  = (fgDesc && /package/i.test(fgDesc) && (depth===4||depth===5))
+        // Package rule: FG desc contains "Package" AND depth 3-5 → qty = 0
+        var effQty  = (fgDesc && /package/i.test(fgDesc) && (depth===3||depth===4||depth===5))
                       ? 0 : (isNaN(qty) ? 0 : qty);
         _bomData.push({
           fg:     fg,
@@ -8686,7 +8694,7 @@ function _fcOspoRowEdit(input) {
 function _fcOsprEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var qty  = parseFloat(input.value) || 0;
+  var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   var base = parseFloat(input.getAttribute('data-base')) || 0;
   if(!_fcOsprOverride[code]) _fcOsprOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOsprOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
@@ -8740,8 +8748,9 @@ function _fcLiveRecalc(code) {
   var doi_t   = _fcGetDOIForItem(code);
   var stockVals = isFcV ? fc.stockFc : fc.stock;
   var doiVals   = isFcV ? fc.doiFc   : fc.doi;
+  var ospoVals  = fc.ospo;
+  var propVals  = fc.propose;
 
-  // Find all tbodies in the detail row (there's one for the grid)
   var tbodies = detEl.querySelectorAll('table tbody');
   tbodies.forEach(function(tbody) {
     var trs = tbody.querySelectorAll('tr[data-rowlabel]');
@@ -8761,6 +8770,36 @@ function _fcLiveRecalc(code) {
           var txt = v>0 ? (v>=999?'∞':n_id(Math.round(v))) : '—';
           tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
         });
+      } else if(lbl === 'ospo') {
+        // Update nilai OSPO input jika tidak di-override manual
+        var inps = tr.querySelectorAll('input[data-code][data-mi]');
+        inps.forEach(function(inp) {
+          var mi = parseInt(inp.getAttribute('data-mi'));
+          var isOverride = _fcOspoOverride[code] && _fcOspoOverride[code][mi] != null;
+          if(!isOverride) {
+            var v = ospoVals[mi] || 0;
+            inp.value = v > 0 ? n_id(v) : '0';
+            inp.style.color = v > 0 ? 'var(--teal)' : 'var(--muted)';
+            inp.style.fontWeight = v > 0 ? '600' : '400';
+          }
+        });
+      } else if(lbl === 'propose') {
+        // Selalu update dari totalProp hasil kalkulasi terbaru
+        var inps2 = tr.querySelectorAll('input[data-code][data-mi]');
+        inps2.forEach(function(inp) {
+          var mi = parseInt(inp.getAttribute('data-mi'));
+          // Kalau bulan ini ada manual override, jangan overwrite input user
+          var hasManual = _fcPropose[code] && _fcPropose[code][mi] != null;
+          if(!hasManual) {
+            var pv = propVals[mi] || 0;
+            inp.value = pv > 0 ? n_id(pv) : '0';
+            inp.style.fontWeight = pv > 0 ? '700' : '400';
+            inp.style.color = pv > 0 ? 'var(--amber)' : 'var(--muted)';
+            inp.style.background = pv > 0 ? 'var(--amber-bg)' : '';
+            var wrap = inp.parentNode;
+            if(wrap) wrap.style.border = pv > 0 ? '1px solid rgba(245,158,11,.4)' : '1px solid var(--border2)';
+          }
+        });
       }
     });
   });
@@ -8770,7 +8809,7 @@ function _fcOspoEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
   var base    = parseFloat(input.getAttribute('data-base')) || 0;
-  var qty  = parseFloat(input.value) || 0;
+  var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
@@ -8850,7 +8889,7 @@ function _fcProposeEdit(input) {
       });
     }
   }
-  _fcPropose[code][mi] = qty; // store raw; totalProp re-rounds on calc
+  _fcPropose[code][mi] = qty > 0 ? qty : null; // null = kembali ke auto, bukan override 0
   // Multiple validation
   if(qty > 0 && moqV > 1 && Math.round(qty % moqV) !== 0) {
     input.style.outline = '1.5px solid var(--red)';
