@@ -4474,13 +4474,27 @@ function generateSchedule() {
   });
 
   var urgentItems = STATE.projectionData.filter(function(p){
-    if(!(p.max3MRP > 0)) return false;  // MRP Max = 0 / null / undefined → skip
-    // Jika confQty sudah mencukupi kebutuhan (max3MRP - stock), item tidak perlu dijadwal ulang
+    if(!(p.max3MRP > 0)) return false;
     var stockTotal = (p.stockBTG || 0) + (p.stockSNG || 0);
     var needed = Math.max(0, (p.max3MRP || 0) - stockTotal);
     var confirmed = confQtyByItem[p.productCode] || 0;
     if(needed > 0 && confirmed >= needed) return false;
     return p.coverageDate <= coverageCutoff;
+  });
+
+  // Tambah item yang ada manual date di poOverrides meski tidak urgent
+  var urgentCodes = {};
+  urgentItems.forEach(function(p){ urgentCodes[p.productCode] = true; });
+  Object.keys(STATE.poOverrides || {}).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(!ovr || !ovr.isManual || !ovr.date) return;
+    var itemCode = key.slice(key.indexOf('_') + 1);
+    if(!itemCode || urgentCodes[itemCode]) return;
+    var projItem = STATE.projectionData.find(function(p){ return p.productCode === itemCode; });
+    if(!projItem) return;
+    urgentCodes[itemCode] = true;
+    projItem._manualForced = true;
+    urgentItems.push(projItem);
   });
 
   if(!urgentItems.length) { toast('Tidak ada item untuk dijadwalkan', 'inf'); return; }
@@ -4490,6 +4504,19 @@ function generateSchedule() {
   var delivFriISO = localISO(delivFri);
 
   urgentItems.forEach(function(item){
+    // Item yang manual forced → pakai manual date dari poOverrides langsung
+    if(item._manualForced) {
+      var manISO = null;
+      STATE.poData.filter(function(p){ return p.itemCode === item.productCode; }).forEach(function(po){
+        var key = po.docNum + '_' + po.itemCode;
+        var ovr = STATE.poOverrides[key];
+        if(ovr && ovr.isManual && ovr.date) {
+          if(!manISO || ovr.date < manISO) manISO = ovr.date;
+        }
+      });
+      item._delivISO = manISO ? nextWorkday(manISO) : delivMonISO;
+      return;
+    }
     var raw = new Date(item.coverageDate);
     raw.setDate(raw.getDate() - CFG.wn);
     var rawISO = nextWorkday(localISO(raw));
@@ -4681,8 +4708,9 @@ function generateSchedule() {
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
       var qtySum = pickedPOs.reduce(function(s,po){ return s + (po.openQty||0); }, 0);
       var uom = pickedPOs.length ? pickedPOs[0].uom : (item.uom||'');
-      itemSummaryParts.push((_dispName(item)||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : ''));
-      selectedEntries.push({ item: item, pos: pickedPOs });
+      var _manualTag = item._manualForced ? ' · 📋 Manual' : '';
+      itemSummaryParts.push((_dispName(item)||'') + (qtySum ? ' · ' + n_id(qtySum) + ' ' + uom : '') + _manualTag);
+      selectedEntries.push({ item: item, pos: pickedPOs, isManual: !!item._manualForced });
     });
 
     var poNums = selectedPOs.map(function(p){ return p.docNum; }).filter(Boolean);
@@ -4811,7 +4839,7 @@ function renderSchedule() {
         var uid = 'sq_' + idx + '_' + enIdx;
         return '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;padding:3px 0;border-bottom:0.5px solid var(--border)">' +
           '<div style="flex:1;min-width:0;overflow:hidden">' +
-            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + '</div>' +
+            '<div style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _dispName(en.item) + (en.isManual ? ' <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,.15);color:var(--amber);font-weight:600">Manual</span>' : '') + '</div>' +
             '<div style="font-size:9px;color:var(--muted);display:flex;gap:6px;margin-top:1px">' +
               '<span>DOI: <span style="color:'+doiColor+';font-weight:500">'+doiNow+'</span></span>' +
               '<span>→ <span id="doi-after-'+uid+'" style="color:'+doiAfterColor+';font-weight:500">'+doiAfter+'</span></span>' +
