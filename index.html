@@ -3437,10 +3437,14 @@ function _doBuildProjection() {
     else if(doiFC > 30) category = 'OVER';
 
     // Actual Usage bulan ini:
-    // = Stock 1 April + GRPO 1-today - Stock live SAP hari ini
+    // = Stock awal bulan + GRPO 1-today - Stock live SAP hari ini
     // Balance: kalau stock turun (pemakaian) → actual usage naik
     // Fallback: kalau tidak ada stock awal bulan → pakai diff history kemarin
     var actualUsageDaily = 0;
+    // Cari stock awal bulan dari stockHistory
+    var curMonthPrefix = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    var histKeysM = Object.keys(STATE.stockHistory||{}).filter(function(d){ return d.slice(0,7)===curMonthPrefix; }).sort();
+    var stockAwal = histKeysM.length > 0 ? ((STATE.stockHistory[histKeysM[0]]||{})[code] || undefined) : undefined;
     if(stockAwal !== undefined) {
       var stockAwalTotal = (stockAwal.btg || 0) + (stockAwal.sng || 0);
       // totalIncoming sudah berisi semua GRPO bulan ini (1-today)
