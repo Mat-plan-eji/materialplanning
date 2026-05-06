@@ -6911,53 +6911,48 @@ function _calcForecast(code, ospoIdx) {
 
     // Step 1: pull-forward OSPO dari bulan berikutnya jika DOI < target
     var stockAfterOspo = prevSt + ospoPool2[am] + ospoPulled[am] + ospr_a - req_a;
-    // Cek DOI sementara untuk bulan ini
-    var _tmpSt = stockAktualFw.slice();
-    _tmpSt[am] = stockAfterOspo;
-    var _tmpD = calcDOI(_tmpSt);
-    if(_tmpD[am] >= 0 && _tmpD[am] < maxDOI) {
+    var _pfSt = stockAktualFw.slice();
+    _pfSt[am] = stockAfterOspo;
+    for(var _pz = am+1; _pz < FC_MONTHS.length; _pz++) _pfSt[_pz] = 0;
+    var _pfD = calcDOI(_pfSt)[am];
+    if(_pfD >= 0 && _pfD < maxDOI) {
       for(var nx = am+1; nx < FC_MONTHS.length; nx++) {
         if(ospoPool2[nx] <= 0) continue;
         var step2 = multiple > 0 ? multiple : 1;
-        // Tarik sedikit demi sedikit sampai DOI cukup
-        var pull = Math.min(ospoPool2[nx], ospoPool2[nx]);
-        pull = Math.ceil(pull / step2) * step2;
+        var pull = Math.ceil(ospoPool2[nx] / step2) * step2;
         pull = Math.min(pull, ospoPool2[nx]);
         if(pull <= 0) continue;
         ospoPool2[nx] -= pull;
         ospoPulled[am] += pull;
         stockAfterOspo += pull;
         pullNotifs.push({ fromMonth: FC_MONTHS[nx], toMonth: FC_MONTHS[am], qty: pull });
-        _tmpSt[am] = stockAfterOspo;
-        _tmpD = calcDOI(_tmpSt);
-        if(_tmpD[am] >= maxDOI) break;
+        _pfSt[am] = stockAfterOspo;
+        _pfD = calcDOI(_pfSt)[am];
+        if(_pfD >= maxDOI) break;
       }
     }
 
     // Step 2: propose jika DOI hasil calcDOI < target
-    // Bangun stock array sementara untuk calcDOI (pakai stock yg sudah ada + bulan ini)
     var propQty = 0;
     if(_fcAutoPropose) {
-      // Simulasi stock array dari snapMoIdx sampai am pakai stockAktualFw yg sudah dihitung
-      var _tmpStock = stockAktualFw.slice();
-      _tmpStock[am] = stockAfterOspo;
-      var _tmpDOI = calcDOI(_tmpStock);
-      if(_tmpDOI[am] >= 0 && _tmpDOI[am] < maxDOI) {
-        // Hitung berapa stock yang dibutuhkan agar DOI[am] = maxDOI
-        // DOI[am] = maxDOI berarti stock cukup untuk maxDOI hari ke depan
-        // Gunakan minStock = req[am] * (maxDOI/WD) sebagai aproksimasi awal
-        // lalu iterate sampai calcDOI >= maxDOI
+      // Pakai stockAktualFw yg sudah terisi untuk bulan sebelumnya
+      // Isi bulan yg belum dihitung (> am) dengan 0 agar tidak merusak avgReq
+      var _chkStock = stockAktualFw.slice();
+      _chkStock[am] = stockAfterOspo;
+      // Zero out bulan yang belum dihitung agar calcDOI tidak terpengaruh
+      for(var _zi = am+1; _zi < FC_MONTHS.length; _zi++) _chkStock[_zi] = 0;
+      var _chkDOI = calcDOI(_chkStock)[am];
+      if(_chkDOI >= 0 && _chkDOI < maxDOI) {
         var propNeeded = req_a * (maxDOI / WD) - stockAfterOspo;
         if(propNeeded > 0) {
-          propQty = Math.max(moq > 0 ? moq : 0, Math.ceil(propNeeded / _step) * _step);
-          // Verifikasi: apakah setelah propQty DOI sudah >= maxDOI?
-          _tmpStock[am] = stockAfterOspo + propQty;
-          var _verifyDOI = calcDOI(_tmpStock);
-          // Kalau masih kurang, tambah satu step lagi
-          while(_verifyDOI[am] < maxDOI && propQty < req_a * 12) {
+          propQty = moq > 0 ? Math.max(moq, Math.ceil(propNeeded / _step) * _step) : Math.max(_step||1, Math.ceil(propNeeded / (_step||1)) * (_step||1));
+          _chkStock[am] = stockAfterOspo + propQty;
+          var _verDOI = calcDOI(_chkStock)[am];
+          var _safeIter = 0;
+          while(_verDOI < maxDOI && propQty < req_a * 24 && _safeIter++ < 50) {
             propQty += (_step > 0 ? _step : 1);
-            _tmpStock[am] = stockAfterOspo + propQty;
-            _verifyDOI = calcDOI(_tmpStock);
+            _chkStock[am] = stockAfterOspo + propQty;
+            _verDOI = calcDOI(_chkStock)[am];
           }
           proposeAuto[am] = propQty;
         }
