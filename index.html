@@ -8222,8 +8222,11 @@ function _mrpShowResult() {
       +   code + '</td>'
       + '<td style="padding:8px;font-size:12px;font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+rowDesc+'</td>'
       + activeMonths.map(function(mn){
-          var v = _mrpResult[code][mn] || 0;
-          return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+(v>0?n_id(Math.round(v)):'<span style="color:var(--hint)">—</span>')+'</td>';
+          var v = (_mrpResult[code][mn] != null) ? _mrpResult[code][mn] : 0;
+          var disp = v <= 0 ? '<span style="color:var(--hint)">\u2014</span>'
+                   : v < 1 ? '<span style="color:var(--muted);font-size:10.5px">'+v.toFixed(4).replace(/\.?0+$/,'')+'</span>'
+                   : n_id(Math.round(v));
+          return '<td style="text-align:right;padding:8px;font-family:var(--mono);font-size:11.5px;color:var(--text)">'+disp+'</td>';
         }).join('')
       + '</tr>';
   });
