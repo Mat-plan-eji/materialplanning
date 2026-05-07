@@ -1621,10 +1621,10 @@ function _applyRealtimeChanges(keys) {
           break;
         case 'sap_cache_po':
           var rawP = JSON.parse(val || '[]');
-          STATE.poData = rawP.map(function(p){
+          STATE.poData = _filterPOBlacklist(rawP.map(function(p){
             if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,prReqDate:fmtSAPDate(p.r),site:p.t};
             return p;
-          });
+          }));
           loadOSPO();
           renderFlags.po = true; renderFlags.dash = true;
           break;
@@ -1973,6 +1973,16 @@ var STATE = {
   projComments: JSON.parse(localStorage.getItem('proj_comments') || '{}')
 };
 
+// Supplier blacklist — PO dari supplier ini tidak dipakai di semua kalkulasi
+var _SUPPLIER_BLACKLIST = ['hk holistar limited','hk holistar'];
+function _filterPOBlacklist(arr) {
+  return (arr||[]).filter(function(p){
+    var sn = (p.supplierName||'').toLowerCase().trim();
+    return !_SUPPLIER_BLACKLIST.some(function(bl){ return sn.indexOf(bl) >= 0; });
+  });
+}
+
+
 var schedTab = 'all', activeFbIdx = -1, waQueue = null, editSupIdx = -1;
 
 // ─── DEBOUNCE ─────────────────────────────────────────────────────────────────
@@ -2171,7 +2181,7 @@ async function loadPO() {
   if(poEl) poEl.innerHTML = '<div class="loading"><div class="spin"></div>Memuat PO...</div>';
   try {
     var raw = await sapFetchTO(28, { '[%0]': '2024-01-01T00:00:00.000Z', '[%1]': '2030-12-31T00:00:00.000Z' });
-    STATE.poData = (raw || []).filter(function(r){
+    STATE.poData = _filterPOBlacklist((raw || []).filter(function(r){
       var s = (r.DocStatus||'').toLowerCase();
       if(s === 'cancelled' || s === 'cancellation') return false;
       if((r.OpenQty||0) <= 0) return false;
@@ -2184,7 +2194,7 @@ async function loadPO() {
         supplierName: r.CardName, itemCode: r.ItemCode,
         itemName: r.Dscription, openQty: r.OpenQty, uom: r.unitMsr,
         status: r.DocStatus, lineStatus: r.PO_LineStatus };
-    });
+    }));
     var spo = document.getElementById('s-po'); if(spo) spo.textContent = STATE.poData.length;
     renderPO();
     _setSyncItem('po', 'ok');
@@ -6619,11 +6629,11 @@ function _appInit() {
     // Decompress PO: short keys → full keys
     if(cachedPO) {
       var raw = JSON.parse(cachedPO);
-      STATE.poData = raw.map(function(p){
+      STATE.poData = _filterPOBlacklist(raw.map(function(p){
         // Support both compressed {d,i,n,...} and full {docNum,itemCode,...}
         if(p.d !== undefined) return {docNum:p.d,itemCode:p.i,itemName:p.n,supplierName:p.s,openQty:p.q,uom:p.u,prReqDate:fmtSAPDate(p.r),site:p.t};
         return p;
-      });
+      }));
     }
     if(cachedGRPO) {
       var rawG = JSON.parse(cachedGRPO);
