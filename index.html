@@ -2224,6 +2224,7 @@ async function loadGRPO() {
     var sgrpo = document.getElementById('s-grpo'); if(sgrpo) sgrpo.textContent = (STATE.grpoData||[]).length;
     renderGRPO();
     _autoRemoveDeliveredCards();
+    _reduceConfQtyByGRPO();
     _setSyncItem('grpo', 'ok');
     toast(STATE.grpoData.length + ' GRPO ' + m + '/' + y + ' ✓', 'ok');
   } catch(e) {
@@ -6401,6 +6402,49 @@ function _pollGRPONow() {
   toast('Refreshing GRPO...', 'inf');
   _doGRPOPoll();
 }
+
+function _reduceConfQtyByGRPO() {
+  // Kurangi confQty berdasarkan GRPO yang sudah datang (match by baseRef = PO docNum + itemCode)
+  if(!STATE.grpoData || !STATE.grpoData.length) return;
+
+  // Akumulasi GRPO qty per docNum+itemCode
+  var grpoQtyMap = {};
+  STATE.grpoData.forEach(function(g){
+    var ref = String(g.baseRef||'');
+    if(!ref || !g.itemCode) return;
+    var key = ref + '_' + g.itemCode;
+    grpoQtyMap[key] = (grpoQtyMap[key] || 0) + (parseFloat(g.qty) || 0);
+  });
+
+  var changed = false;
+  Object.keys(grpoQtyMap).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(!ovr || !ovr.confQty) return;
+    var conf = parseFloat(ovr.confQty) || 0;
+    var received = grpoQtyMap[key] || 0;
+    if(received <= 0) return;
+
+    var newConf = Math.max(0, conf - received);
+    if(Math.abs(newConf - conf) < 0.01) return; // tidak ada perubahan signifikan
+
+    if(newConf <= 0) {
+      // Semua konfirmasi sudah terealisasi — clear confQty & confDate
+      delete ovr.confQty;
+      delete ovr.confDate;
+    } else {
+      ovr.confQty = newConf;
+    }
+    ovr.confUpdByGRPO = new Date().toISOString().split('T')[0];
+    changed = true;
+  });
+
+  if(changed) {
+    localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+    cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+    console.log('[GRPO] confQty updated from GRPO data');
+  }
+}
+
 
 function _doGRPOPoll() {
     var statusEl = document.getElementById('grpo-poll-status');
