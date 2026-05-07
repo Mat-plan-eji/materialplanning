@@ -326,7 +326,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span>Material Planner Dashboard</div>
   <div class="ni" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
   <div class="ni" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
-  <div class="ni" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
+  <div class="ni" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP</div>
   <div class="nav-section">Delivery</div>
   <div class="ni" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
   <div class="ni" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
@@ -1056,6 +1056,11 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </div>
   </div>
 
+  <!-- Search item -->
+  <div id="mrp-search-wrap" style="display:none;margin-bottom:12px">
+    <input id="mrp-search" type="text" placeholder="🔍 Cari kode / nama item RM atau PM..." oninput="_mrpFilterResult(this.value)"
+      style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 12px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font)">
+  </div>
   <!-- Result summary -->
   <div id="mrp-result"></div>
 
@@ -8121,6 +8126,9 @@ function _mpsMrpCalculate() {
       _mrpResult = result;
       if(progWrap) progWrap.style.display = 'none';
       _mrpShowResult();
+      // Tampilkan search box
+      var sw = document.getElementById('mrp-search-wrap');
+      if(sw) { sw.style.display = 'block'; var si = document.getElementById('mrp-search'); if(si) si.value = ''; }
       _mrpIdbSaveMrp(result);
       var saveBtn = document.getElementById('btn-save-mrp');      if(saveBtn) saveBtn.disabled = false;
       var detBtn  = document.getElementById('btn-export-detail'); if(detBtn)  detBtn.disabled  = false;
@@ -8145,6 +8153,26 @@ function _mpsMrpCalculate() {
 }
 
 // ── Show result summary ───────────────────────────────────────────────────────
+function _mrpFilterResult(q) {
+  var query = (q||'').toLowerCase().trim();
+  var rows = document.querySelectorAll('#mrp-result tr[data-code]');
+  var shown = 0;
+  rows.forEach(function(tr){
+    var code = (tr.getAttribute('data-code')||'').toLowerCase();
+    var name = (tr.getAttribute('data-name')||'').toLowerCase();
+    var match = !query || code.indexOf(query) >= 0 || name.indexOf(query) >= 0;
+    tr.style.display = match ? '' : 'none';
+    if(match) shown++;
+  });
+  // Update count label
+  var sw = document.getElementById('mrp-search-wrap');
+  if(sw) {
+    var lbl = sw.querySelector('.srch-count');
+    if(!lbl){ lbl = document.createElement('div'); lbl.className='srch-count'; lbl.style.cssText='font-size:10.5px;color:var(--muted);margin-top:4px'; sw.appendChild(lbl); }
+    lbl.textContent = query ? ('Menampilkan ' + shown + ' item') : '';
+  }
+}
+
 function _mrpShowResult() {
   var el = document.getElementById('mrp-result');
   if(!el || !_mrpResult) return;
@@ -8183,12 +8211,12 @@ function _mrpShowResult() {
   // Sync _mpsActiveMonths with what's actually in the result
   if(showMonths.length) _mpsActiveMonths = showMonths;
 
-  sorted.slice(0, 50).forEach(function(code, i) {
+  sorted.forEach(function(code, i) {
     var m = master[code] || mrpMaster[code] || {};
     var iT = /^3/.test(code)?'RM':'PM';
     var clr = iT==='RM'?'var(--teal)':'var(--purple)';
-    var rowDesc = m.desc || (matcom[code] && matcom[code].sapName) || '—';
-    html += '<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
+    var rowDesc = m.desc || (matcom[code] && matcom[code].sapName) || '\u2014';
+    html += '<tr data-code="'+code+'" data-name="'+rowDesc.toLowerCase().replace(/"/g,"'")+'" style="border-bottom:1px solid var(--border);'+(i%2?'background:var(--bg3)':'')+'">'
       + '<td style="padding:8px;font-family:var(--mono);font-size:11px">'
       +   '<span style="font-size:9.5px;font-weight:700;color:'+clr+';margin-right:4px">'+iT+'</span>'
       +   code + '</td>'
@@ -8529,6 +8557,8 @@ function _mrpIdbLoad() {
         var rekBtn  = document.getElementById('btn-export-rekap');    if(rekBtn)  rekBtn.disabled   = false;
         var tepBtn  = document.getElementById('btn-terapkan-mrp');    if(tepBtn)  tepBtn.disabled   = false;
         _mrpShowResult();
+        var sw2 = document.getElementById('mrp-search-wrap');
+        if(sw2) sw2.style.display = 'block';
         _mrpUpdateDetailStatus();
       }
     };
