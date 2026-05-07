@@ -4820,12 +4820,27 @@ function generateSchedule() {
         : sortedPOs2;
       // Kalau tidak ada PO yang eligible (semua openQty < multiple) → skip item ini
       if(!eligiblePOs.length) return; // tidak jadwalkan
+
       var accumulated = 0, pickedPOs = [];
-      for(var pi = 0; pi < eligiblePOs.length; pi++) {
-        pickedPOs.push(eligiblePOs[pi]);
-        accumulated += (eligiblePOs[pi].openQty || 0);
-        if(accumulated >= needed && needed > 0) break;
-        if(needed === 0 && pi === 0) break;
+
+      // Cek apakah ada PO yang di-set manual date
+      var manualPOs = eligiblePOs.filter(function(po){
+        var key = po.docNum + '_' + po.itemCode;
+        var ovr = STATE.poOverrides[key];
+        return ovr && ovr.isManual && ovr.date;
+      });
+
+      if(manualPOs.length > 0) {
+        // Kalau ada PO manual → masukkan SEMUA PO yang punya manual date, tanpa cek needed
+        pickedPOs = manualPOs;
+      } else {
+        // Normal FIFO sampai needed terpenuhi
+        for(var pi = 0; pi < eligiblePOs.length; pi++) {
+          pickedPOs.push(eligiblePOs[pi]);
+          accumulated += (eligiblePOs[pi].openQty || 0);
+          if(accumulated >= needed && needed > 0) break;
+          if(needed === 0 && pi === 0) break;
+        }
       }
       if(!pickedPOs.length && eligiblePOs.length) pickedPOs = [eligiblePOs[0]];
       pickedPOs.forEach(function(po){ selectedPOs.push(po); });
