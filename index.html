@@ -3490,12 +3490,12 @@ function _doBuildProjection() {
 
     // actualMRP: ONLY from MPS→MRP months[currentMonth]
     var curMonthFC = _monthNamesID[new Date().getMonth()]; // e.g. 'Mei'
-    var actualMRP  = (mrp.months && mrp.months[curMonthFC]) ? mrp.months[curMonthFC] : 0;
+    var actualMRP  = (mrp.months && mrp.months[curMonthFC] != null) ? mrp.months[curMonthFC] : 0;
     // max3MRP: still from GSheets (mrp.max3MRP)
     var max3MRP    = mrp.max3MRP || 0;
 
     // MRP bulan depan: ONLY from MPS→MRP months[nextMonth]
-    var mrpNextMonth = (mrp.months && mrp.months[nextMonthName]) ? mrp.months[nextMonthName] : 0;
+    var mrpNextMonth = (mrp.months && mrp.months[nextMonthName] != null) ? mrp.months[nextMonthName] : 0;
     var avgUsg = matcom.avgUsg || 0;
 
     var stockBTG = stockData[code] ? Math.round(stockData[code].btg * 100) / 100 : 0;
@@ -7010,7 +7010,7 @@ function _calcForecast(code, ospoIdx) {
   var _matcomUom = ((STATE.masterData||{})[code]||{}).uom || '';
   var _matcomFactor = (/^(g|gr|gram)$/i.test(_matcomUom.trim())) ? 0.001 : 1;
   var forecast = FC_MONTHS.map(function(m, i) {
-    var mrpVal = (mrp.months && mrp.months[m]) || 0;
+    var mrpVal = (mrp.months && mrp.months[m] != null) ? (mrp.months[m] || 0) : 0;
     var moNum  = FC_MONTH_NUMS[i];
     // Hanya kurangi matcom untuk bulan berjalan saja
     var consumed = (moNum === snapMon) ? ((matcomM[moNum] || 0) * _matcomFactor) : 0;
@@ -7077,7 +7077,7 @@ function _calcForecast(code, ospoIdx) {
   });
 
   // ── Remaining MRP bulan snapshot ─────────────────────────────────────────
-  var mrpSnapMo    = (mrp.months && mrp.months[FC_MONTHS[snapMoIdx]]) || 0;
+  var mrpSnapMo    = (mrp.months && mrp.months[FC_MONTHS[snapMoIdx]] != null) ? mrp.months[FC_MONTHS[snapMoIdx]] : 0;
   var usageToD     = Math.max(0, stockAwalM + grpoToD - soh);
   var remainingMRP = Math.max(0, mrpSnapMo - usageToD);
 
@@ -8239,7 +8239,7 @@ function _mrpApplyToState(result) {
       var fcIdx = FC_MONTH_NUMS.indexOf(moNum);
       if(fcIdx < 0) return; // bulan ini tidak ada di FC_MONTHS (e.g. Apr saat start Mei)
       var fcKey = FC_MONTHS[fcIdx];
-      mrpData[code].months[fcKey] = Math.round(result[code][mn] || 0);
+      mrpData[code].months[fcKey] = result[code][mn] != null ? Math.round(result[code][mn] * 1000) / 1000 : 0;
     });
   });
   STATE.mrpData = mrpData;
