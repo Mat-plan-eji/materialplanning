@@ -4818,8 +4818,8 @@ function generateSchedule() {
       var eligiblePOs = multipleQty > 0
         ? sortedPOs2.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
         : sortedPOs2;
-      // Fallback: kalau semua difilter, pakai PO pertama (agar tidak kosong total)
-      if(!eligiblePOs.length && sortedPOs.length) eligiblePOs = [sortedPOs[0]];
+      // Kalau tidak ada PO yang eligible (semua openQty < multiple) → skip item ini
+      if(!eligiblePOs.length) return; // tidak jadwalkan
       var accumulated = 0, pickedPOs = [];
       for(var pi = 0; pi < eligiblePOs.length; pi++) {
         pickedPOs.push(eligiblePOs[pi]);
@@ -5469,7 +5469,8 @@ function openFbModal(idx) {
       var poKey = po.docNum && po.docNum !== '—' ? (po.docNum + '_' + itemCode) : null;
       var ovr = poKey && STATE.poOverrides[poKey] ? STATE.poOverrides[poKey] : {};
       var origQty = po.openQty || 0;
-      var reqQty = ovr.reqQtyOverride !== undefined ? ovr.reqQtyOverride : origQty;
+      // QTY REQUEST = openQty dari SAP (tidak terpengaruh override)
+      var reqQty = origQty;
       var confQty = ovr.confQty !== undefined ? ovr.confQty : reqQty;
       // Auto-fill: jika belum ada confQty, isi dengan reqQty
       if(!ovr.confQty && !ovr.confDate) confQty = reqQty;
