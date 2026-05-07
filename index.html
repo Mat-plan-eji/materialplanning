@@ -5225,6 +5225,9 @@ function toggleApprove(idx) {
     syncApprovedToGSheet(e.entries.map(function(en){ return {pos:en.pos, supName:e.supName, delivISO:delivISO}; }));
   }
 }
+
+// ── Per-item: hapus item dari jadwal ─────────────────────────────────────────
+function removeSchedItem(schedIdx, entryIdx) {
   if(!_requireAdmin('hapus item jadwal')) return;
   var e = STATE.scheduleData[schedIdx];
   if(!e || !e.entries) return;
