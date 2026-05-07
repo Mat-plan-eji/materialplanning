@@ -4816,16 +4816,8 @@ function generateSchedule() {
       });
     }
 
-    // Update PO override dates
-    selectedPOs.forEach(function(po){
-      var key = po.docNum + '_' + po.itemCode;
-      if(!STATE.poOverrides[key] || !STATE.poOverrides[key].isManual) {
-        if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
-        STATE.poOverrides[key].date    = assignedISO;
-        STATE.poOverrides[key].isManual = false;
-        STATE.poOverrides[key].isAuto   = true;
-      }
-    });
+    // Jangan set poOverrides.date saat generate — hanya set saat approved
+    // (tanggal request kirim akan muncul di list PO setelah jadwal di-approve)
   });
 
   STATE.scheduleData = STATE.scheduleData.concat(newSchedule);
@@ -5165,7 +5157,34 @@ function _getEntryReqQty(en) {
 }
 function toggleApprove(idx) {
   var e = STATE.scheduleData[idx];
+  var wasApproved = ['approved','sent','confirmed'].indexOf(e.status) >= 0;
   e.status = e.status === 'pending' ? 'approved' : (e.status === 'approved' ? 'pending' : e.status);
+  var nowApproved = e.status === 'approved';
+
+  // Set / hapus poOverrides.date berdasarkan status approve
+  if(e.entries && e.date) {
+    var iso = e.date.split('/').reverse().join('-'); // dd/mm/yyyy → yyyy-mm-dd
+    (e.entries||[]).forEach(function(en){
+      (en.pos||[]).forEach(function(po){
+        var key = po.docNum + '_' + po.itemCode;
+        if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
+        if(nowApproved) {
+          STATE.poOverrides[key].date    = iso;
+          STATE.poOverrides[key].isManual = false;
+          STATE.poOverrides[key].isAuto   = true;
+        } else {
+          // Un-approve → hapus tanggal kalau bukan manual user
+          if(!STATE.poOverrides[key].isManual) {
+            delete STATE.poOverrides[key].date;
+            delete STATE.poOverrides[key].isAuto;
+          }
+        }
+      });
+    });
+    localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+    cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  }
+
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule();
 }
 
@@ -5237,8 +5256,27 @@ function splitSchedItem(schedIdx, entryIdx) {
 }
 function approveAll() {
   if(!_requireAdmin('approve jadwal')) return;
-  STATE.scheduleData.forEach(function(s){ if(s.status==='pending') s.status='approved'; });
-  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule(); toast('Semua di-approve ✓','ok');
+  STATE.scheduleData.forEach(function(e){
+    if(e.status !== 'pending') return;
+    e.status = 'approved';
+    if(e.entries && e.date) {
+      var iso = e.date.split('/').reverse().join('-');
+      (e.entries||[]).forEach(function(en){
+        (en.pos||[]).forEach(function(po){
+          var key = po.docNum + '_' + po.itemCode;
+          if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
+          STATE.poOverrides[key].date    = iso;
+          STATE.poOverrides[key].isManual = false;
+          STATE.poOverrides[key].isAuto   = true;
+        });
+      });
+    }
+  });
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
+  renderSchedule();
+  toast('Semua di-approve ✓', 'ok');
 }
 function removeSchedule(idx) {
   STATE.scheduleData.splice(idx, 1);
