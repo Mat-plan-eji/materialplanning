@@ -5335,6 +5335,28 @@ function approveAll() {
   toast('Semua di-approve ✓', 'ok');
 }
 function removeSchedule(idx) {
+  var e = STATE.scheduleData[idx];
+  // Clear poOverrides (date, confQty, confDate) untuk semua PO di kartu ini
+  if(e && e.entries) {
+    (e.entries||[]).forEach(function(en){
+      (en.pos||[]).forEach(function(po){
+        var key = po.docNum + '_' + po.itemCode;
+        var ovr = STATE.poOverrides[key];
+        if(!ovr) return;
+        // Jangan hapus kalau isManual (input manual user langsung di list PO)
+        if(ovr.isManual) return;
+        delete ovr.date;
+        delete ovr.isAuto;
+        delete ovr.confQty;
+        delete ovr.confDate;
+        delete ovr.confUpdByGRPO;
+        // Kalau sudah kosong semua, hapus key-nya
+        if(!Object.keys(ovr).length) delete STATE.poOverrides[key];
+      });
+    });
+    localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+    cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  }
   STATE.scheduleData.splice(idx, 1);
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule();
 }
