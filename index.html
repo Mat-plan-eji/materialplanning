@@ -1115,6 +1115,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
           <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px">Maintenance — jika cloudSave gagal karena data terlalu besar:</div>
           <button class="btn btn-sm" onclick="cleanupProjHistory()" style="font-size:11px;color:var(--amber);border-color:var(--amber)">🗑 Pangkas History (simpan 14 hari)</button>
+          <button class="btn btn-sm" onclick="cleanupStalePoOverrides()" style="font-size:11px;color:var(--amber);border-color:var(--amber);margin-top:6px">🧹 Bersihkan Konfirmasi PO Lama</button>
         </div>
       </div>
     </div>
@@ -2837,6 +2838,31 @@ function savePOChanges() {
   if(!_requireAdmin('simpan perubahan')) return;
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
   toast('Perubahan PO disimpan ✓', 'ok');
+}
+
+function cleanupStalePoOverrides() {
+  if(!confirm('Bersihkan semua konfirmasi PO (qty & tgl konfirmasi) yang bukan input manual langsung?\nTGL REQUEST KIRIM yang di-input manual di list PO tidak akan terpengaruh.')) return;
+  var cleaned = 0;
+  Object.keys(STATE.poOverrides||{}).forEach(function(key){
+    var ovr = STATE.poOverrides[key];
+    if(!ovr) return;
+    var hadData = ovr.confQty !== undefined || ovr.confDate !== undefined || ovr.date !== undefined;
+    if(!hadData) return;
+    // Hapus hanya yang bukan isManual (hasil generate/approve otomatis)
+    if(!ovr.isManual) {
+      delete ovr.date;
+      delete ovr.isAuto;
+      delete ovr.confQty;
+      delete ovr.confDate;
+      delete ovr.confUpdByGRPO;
+      if(!Object.keys(ovr).length) delete STATE.poOverrides[key];
+      cleaned++;
+    }
+  });
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  toast('Selesai — ' + cleaned + ' entri PO dibersihkan ✓', 'ok');
+  if(document.getElementById('pg-po') && document.getElementById('pg-po').classList.contains('active')) renderPO();
 }
 
 function cleanupProjHistory() {
