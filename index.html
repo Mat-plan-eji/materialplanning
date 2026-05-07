@@ -1156,6 +1156,23 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         <button class="btn btn-primary" onclick="saveSettings()">Simpan Parameter</button>
       </div>
     </div>
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">📋 GSheet Sync — List Pengiriman RM</span></div>
+      <div style="padding:16px">
+        <div class="fg"><label style="font-size:11px">Apps Script URL</label><input id="cfg-gsheet-sync-url" type="text" placeholder="https://script.google.com/macros/s/..." style="width:100%;font-size:11px"></div>
+        <div class="fg"><label style="font-size:11px">Secret Token</label><input id="cfg-gsheet-sync-token" type="password" placeholder="Token rahasia (sama dengan di Apps Script)" style="width:100%;font-size:11px"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveGSheetSyncConfig()" style="font-size:11px">💾 Simpan Config</button>
+          <button class="btn btn-sm" onclick="testGSheetSync()" style="font-size:11px">🔗 Test Koneksi</button>
+        </div>
+        <div id="gsheet-sync-status" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
+        <div style="margin-top:10px;padding:8px;background:var(--bg3);border-radius:5px;font-size:10.5px;color:var(--muted);line-height:1.6">
+          Sync otomatis saat kartu jadwal di-<b>Approve</b>.<br>
+          Hanya kolom <b>Request Kirim (Generate)</b> yang diupdate.<br>
+          Match by: Doc Number + Item Code + Supplier.
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -5202,10 +5219,12 @@ function toggleApprove(idx) {
   }
 
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData)); renderSchedule();
+  // Sync ke GSheet kalau approved
+  if(nowApproved && e.entries) {
+    var delivISO = (e.date||'').split('/').reverse().join('-');
+    syncApprovedToGSheet(e.entries.map(function(en){ return {pos:en.pos, supName:e.supName, delivISO:delivISO}; }));
+  }
 }
-
-// ── Per-item: hapus item dari jadwal ─────────────────────────────────────────
-function removeSchedItem(schedIdx, entryIdx) {
   if(!_requireAdmin('hapus item jadwal')) return;
   var e = STATE.scheduleData[schedIdx];
   if(!e || !e.entries) return;
@@ -5292,6 +5311,12 @@ function approveAll() {
   cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
   renderSchedule();
+  // Sync semua yang baru di-approve ke GSheet
+  STATE.scheduleData.forEach(function(e){
+    if(e.status !== 'approved' || !e.entries) return;
+    var delivISO = (e.date||'').split('/').reverse().join('-');
+    syncApprovedToGSheet(e.entries.map(function(en){ return {pos:en.pos, supName:e.supName, delivISO:delivISO}; }));
+  });
   toast('Semua di-approve ✓', 'ok');
 }
 function removeSchedule(idx) {
@@ -5740,6 +5765,15 @@ function loadSettingsForm() {
   var dot = document.getElementById('fb-dot'); if(dot) dot.className = _fbReady?'dot':'dot off';
   var msg = document.getElementById('fb-status-msg');
   if(msg) msg.textContent = _fbReady ? '☁ Firebase aktif' + (_realtimeActive ? ' — Real-time sync ● Live' : '') : 'Menghubungkan...';
+  // Restore GSheet sync config
+  var syncUrl = localStorage.getItem('gsheet_sync_url') || '';
+  var syncTok = localStorage.getItem('gsheet_sync_token') || '';
+  var urlEl = document.getElementById('cfg-gsheet-sync-url');
+  var tokEl = document.getElementById('cfg-gsheet-sync-token');
+  if(urlEl) urlEl.value = syncUrl;
+  if(tokEl && syncTok) tokEl.value = syncTok;
+  var statEl = document.getElementById('gsheet-sync-status');
+  if(statEl) statEl.textContent = syncUrl ? '✅ Config tersimpan' : '';
 }
 function saveSettings() {
   CFG.url = document.getElementById('cfg-url').value.trim();
@@ -5760,6 +5794,69 @@ function saveSettings() {
     localStorage.setItem('fc_maxdoi', String(md));
   }
   toast('Settings disimpan ✓','ok');
+}
+
+function saveGSheetSyncConfig() {
+  var url   = (document.getElementById('cfg-gsheet-sync-url')  ||{}).value || '';
+  var token = (document.getElementById('cfg-gsheet-sync-token')||{}).value || '';
+  if(!url) { toast('Masukkan Apps Script URL dulu','err'); return; }
+  localStorage.setItem('gsheet_sync_url',   url.trim());
+  localStorage.setItem('gsheet_sync_token', token.trim());
+  toast('Config GSheet Sync disimpan ✓','ok');
+}
+
+function testGSheetSync() {
+  var url   = localStorage.getItem('gsheet_sync_url')   || '';
+  var token = localStorage.getItem('gsheet_sync_token') || '';
+  if(!url) { toast('Belum ada URL — simpan config dulu','err'); return; }
+  var el = document.getElementById('gsheet-sync-status');
+  if(el) el.textContent = '🔄 Testing...';
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ token: token, updates: [], test: true }),
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(function(r){ return r.json(); })
+    .then(function(d){
+      if(el) el.textContent = d.ok ? '✅ Koneksi berhasil' : '❌ ' + (d.msg||'Error');
+      toast(d.ok ? 'Koneksi GSheet OK ✓' : 'Gagal: ' + d.msg, d.ok ? 'ok' : 'err');
+    }).catch(function(e){
+      if(el) el.textContent = '❌ Tidak bisa terhubung: ' + e.message;
+      toast('Gagal terhubung ke Apps Script', 'err');
+    });
+}
+
+function syncApprovedToGSheet(entries) {
+  var url   = localStorage.getItem('gsheet_sync_url')   || '';
+  var token = localStorage.getItem('gsheet_sync_token') || '';
+  if(!url || !token) return; // belum dikonfigurasi — skip silently
+
+  var updates = [];
+  (entries||[]).forEach(function(en){
+    var delivISO = en.delivISO || '';
+    var ddmm = delivISO ? delivISO.split('-').reverse().join('/') : '';
+    (en.pos||[]).forEach(function(po){
+      updates.push({
+        docNum:   String(po.docNum  || ''),
+        itemCode: String(po.itemCode|| ''),
+        supplier: String(po.supplierName || en.supName || ''),
+        date:     ddmm
+      });
+    });
+  });
+
+  if(!updates.length) return;
+
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ token: token, updates: updates }),
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok) toast('GSheet diupdate: ' + d.updated + ' baris ✓', 'ok');
+      else toast('GSheet sync gagal: ' + (d.msg||''), 'err');
+    }).catch(function(e){
+      console.warn('[GSheet sync] failed:', e.message);
+    });
 }
 
 function exportConfigHTML() {
@@ -6460,6 +6557,52 @@ function _reduceConfQtyByGRPO() {
   }
 }
 
+
+function _saveGSheetSyncCfg() {
+  var url = (document.getElementById('cfg-gsheet-sync-url')||{}).value||'';
+  var tok = (document.getElementById('cfg-gsheet-sync-token')||{}).value||'';
+  localStorage.setItem('gsheet_sync_url', url);
+  localStorage.setItem('gsheet_sync_token', tok);
+}
+
+function _restoreGSheetSyncCfg() {
+  var u = document.getElementById('cfg-gsheet-sync-url');
+  var t = document.getElementById('cfg-gsheet-sync-token');
+  if(u) u.value = localStorage.getItem('gsheet_sync_url') || '';
+  if(t) t.value = localStorage.getItem('gsheet_sync_token') || '';
+}
+
+function _syncApprovedToGSheet(entries) {
+  var url   = localStorage.getItem('gsheet_sync_url') || '';
+  var token = localStorage.getItem('gsheet_sync_token') || '';
+  if(!url) return; // belum di-setup, skip silently
+
+  // Kumpulkan semua PO + tanggal dari entries yang di-approve
+  var items = [];
+  (entries||[]).forEach(function(en){
+    var dateStr = en.delivDate || ''; // yyyy-mm-dd
+    (en.pos||[]).forEach(function(po){
+      items.push({
+        docNum:   String(po.docNum),
+        itemCode: String(po.itemCode),
+        date:     dateStr
+      });
+    });
+  });
+  if(!items.length) return;
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: token, items: items })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    if(res.ok) toast('GSheet diupdate: ' + res.updated + ' baris ✓', 'ok');
+    else toast('GSheet sync gagal: ' + (res.error||'unknown'), 'err');
+  })
+  .catch(function(e){ toast('GSheet sync error: ' + e.message, 'err'); });
+}
 
 function _doGRPOPoll() {
     var statusEl = document.getElementById('grpo-poll-status');
