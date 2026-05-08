@@ -4953,12 +4953,18 @@ function generateSchedule() {
         return !scheduledPOKeys[po.docNum + '_' + po.itemCode];
       });
       if(!sortedPOs2.length) sortedPOs2 = sortedPOs; // fallback kalau semua sudah terjadwal
+      // Ambil multiple dari master data — konversi gram→kg kalau UOM gram
+      var masterItem = STATE.masterData && STATE.masterData[item.productCode];
+      var multipleQty = masterItem ? (masterItem.multiple || 0) : 0;
+      var itemUOM = (masterItem && masterItem.uom) ? masterItem.uom.toUpperCase() : '';
+      if(multipleQty > 0 && /^(G|GR|GRAM)$/.test(itemUOM)) multipleQty = multipleQty / 1000;
       // Filter: hanya PO yang openQty >= multiple (kalau multiple > 0)
+      // PO di bawah multiple akan di-close supplier, tidak perlu dijadwalkan
       var eligiblePOs = multipleQty > 0
         ? sortedPOs2.filter(function(po){ return (po.openQty || 0) >= multipleQty; })
         : sortedPOs2;
-      // Kalau tidak ada PO yang eligible (semua openQty < multiple) → skip item ini
-      if(!eligiblePOs.length) return; // tidak jadwalkan
+      // Kalau tidak ada PO yang eligible → skip item ini
+      if(!eligiblePOs.length) return;
 
       var accumulated = 0, pickedPOs = [];
 
