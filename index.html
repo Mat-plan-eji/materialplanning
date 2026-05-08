@@ -5030,6 +5030,11 @@ function generateSchedule() {
   showPage('schedule', document.querySelectorAll('.ni')[5]);
 }
 
+function _enUOM(en) {
+  // Prioritaskan UOM dari PO (unitMsr SAP), fallback ke item uom
+  return (en.pos && en.pos[0] && en.pos[0].uom) ? en.pos[0].uom : (en.item && en.item.uom ? en.item.uom : '');
+}
+
 function renderSchedule() {
   var ftype = (document.getElementById('f-sched-type')||{value:''}).value;
   var fsrch = (document.getElementById('srch-sched')||{value:''}).value.toLowerCase();
@@ -5128,7 +5133,7 @@ function renderSchedule() {
             'onchange="saveSchedQty(this)" onfocus="this.value=this.value.replace(/\\./g,\'\')" onblur="_schedQtyBlur(this)" title="Qty · multiple: '+n_id(multiple)+'"' + (_isAdmin?'':' disabled') + '>' +
             (_isAdmin ? '<span onclick="_schedQtyStep(\''+uid+'\','+multiple+')" style="cursor:pointer;font-size:11px;color:var(--muted);padding:2px 3px;user-select:none" title="+'+n_id(multiple)+'">▲</span>' : '') +
           '</div>' +
-          '<span style="font-size:9px;color:var(--muted);width:22px">' + (en.item.uom||'') + '</span>' +
+          '<span style="font-size:9px;color:var(--muted);width:22px">' + _enUOM(en) + '</span>' +
           (_isAdmin && multiItem ? '<span onclick="splitSchedItem('+idx+','+enIdx+')" title="Pisahkan" style="cursor:pointer;font-size:10px;color:var(--accent);padding:1px 2px">↗</span>' : '') +
           (_isAdmin ? '<span onclick="removeSchedItem('+idx+','+enIdx+')" title="Hapus item" style="cursor:pointer;font-size:10px;color:var(--red);padding:1px 2px">✕</span>' : '') +
         '</div>';
@@ -5328,7 +5333,7 @@ function saveSchedQty(input) {
   (e.entries||[]).forEach(function(en){
     if(!en.item) return;
     var totalQ = _getEntryReqQty(en);
-    summaryParts.push((_dispName(en.item)||'') + ' · ' + n_id(totalQ) + ' ' + (en.item.uom||''));
+    summaryParts.push((_dispName(en.item)||'') + ' · ' + n_id(totalQ) + ' ' + _enUOM(en));
   });
   e.items = summaryParts.join(', ');
 
@@ -5404,7 +5409,7 @@ function removeSchedItem(schedIdx, entryIdx) {
       var pk = en.pos && en.pos[0] ? (en.pos[0].docNum + '_' + en.pos[0].itemCode) : '';
       var ovr = pk ? (STATE.poOverrides[pk]||{}) : {};
       var qty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
-      return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||'');
+      return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + _enUOM(en);
     }).join(', ');
   }
   localStorage.setItem('schedule', JSON.stringify(STATE.scheduleData));
@@ -5430,7 +5435,7 @@ function splitSchedItem(schedIdx, entryIdx) {
     var pk = en.pos && en.pos[0] ? (en.pos[0].docNum + '_' + en.pos[0].itemCode) : '';
     var ovr = pk ? (STATE.poOverrides[pk]||{}) : {};
     var qty = en.pos ? en.pos.reduce(function(s,p){return s+(p.openQty||0);},0) : 0;
-    return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + (en.item.uom||'');
+    return (_dispName(en.item)||'') + ' · ' + n_id(qty) + ' ' + _enUOM(en);
   }).join(', ');
 
   // Create new entry
@@ -5440,7 +5445,7 @@ function splitSchedItem(schedIdx, entryIdx) {
   var newEntry = {
     supName: e.supName, date: e.date, status: 'pending', isManual: true,
     entries: [item],
-    items: (_dispName(item.item)||'') + ' · ' + n_id(qty2) + ' ' + (item.item.uom||''),
+    items: (_dispName(item.item)||'') + ' · ' + n_id(qty2) + ' ' + (item.pos&&item.pos[0]&&item.pos[0].uom ? item.pos[0].uom : (item.item.uom||'')),
     pos: item.pos ? item.pos.map(function(p){return p.docNum}).join(', ') : ''
   };
   STATE.scheduleData.push(newEntry);
@@ -5641,7 +5646,7 @@ function openFbModal(idx) {
   (e.entries||[]).forEach(function(en){
     var pos = (en.pos&&en.pos.length) ? en.pos : [{
       docNum:'—', itemCode:(en.item&&en.item.productCode)||'',
-      itemName:(en.item?_dispName(en.item):'')||'', openQty:0, uom:(en.item&&en.item.uom)||''
+      itemName:(en.item?_dispName(en.item):'')||'', openQty:0, uom:_enUOM(en)
     }];
     pos.forEach(function(po){
       var itemCode = po.itemCode || '';
