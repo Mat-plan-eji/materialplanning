@@ -2663,7 +2663,7 @@ function renderPO() {
          + ' style="width:120px;color:' + (confDate ? confColor : 'var(--muted)') + '"' + _dis + '>'
          + '</td>';
     // Tgl Update — read-only
-    row += '<td class="mono" style="font-size:10.5px;color:var(--muted);text-align:center">' + (confUpd||'—') + '</td>';
+    row += '<td class="mono tgl-update" style="font-size:10.5px;color:var(--muted);text-align:center">' + (confUpd||'—') + '</td>';
     // Notes — editable
     row += '<td>'
          + '<input type="text" value="' + notes + '" data-key="' + key + '" onchange="setPOField(this,&quot;notes&quot;)" placeholder="' + (_isAdmin?'Notes...':'🔒') + '"'
@@ -2753,7 +2753,12 @@ function setPOConfQty(el) {
   STATE.poOverrides[key].confSource = 'manual';
   STATE.poOverrides[key].confUpd = new Date().toISOString().split('T')[0];
   el.style.color = el.value ? 'var(--amber)' : 'var(--muted)';
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
   updateProjComment(key);
+  // Update TGL UPDATE di DOM
+  var row = el.closest('tr');
+  if(row) { var upd = row.querySelector('td.tgl-update'); if(upd) upd.textContent = STATE.poOverrides[key].confUpd; }
 }
 
 function setPOConfDate(el) {
@@ -2763,7 +2768,11 @@ function setPOConfDate(el) {
   STATE.poOverrides[key].confSource = 'manual';
   STATE.poOverrides[key].confUpd = new Date().toISOString().split('T')[0];
   el.style.color = el.value ? 'var(--amber)' : 'var(--muted)';
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
   updateProjComment(key);
+  var row = el.closest('tr');
+  if(row) { var upd = row.querySelector('td.tgl-update'); if(upd) upd.textContent = STATE.poOverrides[key].confUpd; }
 }
 
 function updateProjComment(key) {
@@ -2831,7 +2840,13 @@ function setPODate(el, isManual) {
   STATE.poOverrides[key].date = el.value;
   STATE.poOverrides[key].isManual = isManual;
   STATE.poOverrides[key].isAuto = false;
+  STATE.poOverrides[key].confUpd = new Date().toISOString().split('T')[0];
   el.style.color = isManual ? 'var(--amber)' : 'var(--text)';
+  localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+  cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+  // Update TGL UPDATE di DOM
+  var row = el.closest('tr');
+  if(row) { var upd = row.querySelector('td.tgl-update'); if(upd) upd.textContent = STATE.poOverrides[key].confUpd; }
 }
 
 function savePOChanges() {
