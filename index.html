@@ -41,8 +41,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 .sidebar{width:220px;background:var(--navy);border-right:none;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:2px 0 20px rgba(11,29,53,.25);transition:width .22s cubic-bezier(.4,0,.2,1);overflow-x:hidden}
 .sidebar.collapsed{width:56px}
 .sidebar.collapsed .nav-label,.sidebar.collapsed .nav-section,.sidebar.collapsed .logo p,.sidebar.collapsed .logo-title,.sidebar.collapsed .nb{display:none!important}
-.sidebar.collapsed .ni{padding:10px 0;justify-content:center;margin:1px 4px}
-.sidebar.collapsed .ni-ico{width:auto;font-size:16px}
+.sidebar.collapsed .ni{padding:10px 0;justify-content:center;margin:1px 4px;gap:0}
+.sidebar.collapsed .ni-ico{width:auto;font-size:17px}
+.sidebar.collapsed .ni > *:not(.ni-ico){display:none!important}
 .sidebar.collapsed .logo-mark{justify-content:center;padding:0}
 .sidebar.collapsed .logo{padding:14px 8px}
 .sidebar.collapsed .nav-divider{margin:8px 4px}
@@ -343,20 +344,20 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="_toggleSidebar()" title="Collapse menu">❮</button>
   <div class="nav-section">Planning</div>
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span>Material Planner Dashboard</div>
-  <div class="ni" data-label="Projection Stock" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
-  <div class="ni" data-label="Forecast & Propose PR" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
+  <div class="ni" data-label="Projection Stock" onclick="showPage('projection',this)"><span class="ni-ico">📦</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
+  <div class="ni" data-label="Forecast & Propose PR" onclick="showPage('forecast',this)"><span class="ni-ico">🔮</span>Forecast & Propose PR</div>
   <div class="ni" data-label="MPS → MRP" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP</div>
   <div class="nav-section">Delivery</div>
-  <div class="ni" data-label="List Pengiriman (PO)" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
-  <div class="ni" data-label="Jadwal Pengiriman" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
-  <div class="ni" data-label="List Kiriman Daily" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span>List Kiriman Daily</div>
+  <div class="ni" data-label="List Pengiriman (PO)" onclick="showPage('po',this)"><span class="ni-ico">📋</span>List Pengiriman (PO)</div>
+  <div class="ni" data-label="Jadwal Pengiriman" onclick="showPage('schedule',this)"><span class="ni-ico">🚛</span>Jadwal Pengiriman</div>
+  <div class="ni" data-label="List Kiriman Daily" onclick="showPage('daily-list',this)"><span class="ni-ico">📬</span>List Kiriman Daily</div>
   <div class="ni" data-label="Performance" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
-  <div class="ni" data-label="GRPO" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
-    <div class="ni" data-label="OSPR" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
-  <div class="ni" data-label="Stock Daily" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
-  <div class="ni" data-label="Data Source (Sheets)" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets) <span id="lock-upload" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="GRPO" onclick="showPage('grpo',this)"><span class="ni-ico">✅</span>GRPO</div>
+    <div class="ni" data-label="OSPR" onclick="showPage('ospr',this)"><span class="ni-ico">📝</span>OSPR</div>
+  <div class="ni" data-label="Stock Daily" onclick="showPage('stock-daily',this)"><span class="ni-ico">📅</span>Stock Daily</div>
+  <div class="ni" data-label="Data Source (Sheets)" onclick="showPage('upload',this)"><span class="ni-ico">☁</span>Data Source (Sheets) <span id="lock-upload" style="font-size:10px">🔒</span></div>
   <div class="nav-divider"></div>
   <div style="padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:10.5px;color:var(--muted)" id="theme-label">🌙 Dark</span>
@@ -364,7 +365,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div class="theme-toggle-knob" id="theme-knob">🌙</div>
     </div>
   </div>
-  <div class="ni" data-label="Settings" onclick="showPage('settings',this)"><span class="ni-ico">◈</span>Settings <span id="lock-settings" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="Settings" onclick="showPage('settings',this)"><span class="ni-ico">⚙</span>Settings <span id="lock-settings" style="font-size:10px">🔒</span></div>
   <div class="ni" data-label="<span id="login-label">Login</" id="nav-login" onclick="_isAdmin?doLogout():showLoginModal()" style="border-top:0.5px solid var(--border);margin-top:4px">
     <span class="ni-ico" id="login-ico">🔒</span><span id="login-label">Login</span>
   </div>
@@ -3764,7 +3765,12 @@ function _doBuildProjection() {
   var nb = document.getElementById('nb-urgent');
   if(nb) { nb.style.display = urgentCount > 0 ? '' : 'none'; if(urgentCount > 0) nb.textContent = urgentCount; }
 
-  try { renderProjection(); } catch(e) { console.error('[build] renderProjection CRASH:', e.message, e.stack); }
+  try { renderProjection(); } catch(e) {
+    console.error('[build] renderProjection CRASH:', e.message, e.stack);
+    toast('Error render: ' + e.message, 'err');
+    var pt = document.getElementById('proj-table');
+    if(pt) pt.innerHTML = '<div style="padding:32px;color:var(--red)">Error: ' + e.message + '</div>';
+  }
   try { populateSKUFilter(); } catch(e) { console.warn('[build] populateSKUFilter fail:', e.message); }
   // Restore sync timestamp setelah build selesai
   if(_lastSyncMsg) document.getElementById('dash-sub').textContent = _lastSyncMsg;
