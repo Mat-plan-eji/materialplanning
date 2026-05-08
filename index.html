@@ -2245,6 +2245,7 @@ async function loadPO() {
         status: r.DocStatus, lineStatus: r.PO_LineStatus };
     }));
     var spo = document.getElementById('s-po'); if(spo) spo.textContent = STATE.poData.length;
+    _cleanupStalePoOverridesOnLoad();
     renderPO();
     _setSyncItem('po', 'ok');
     toast(STATE.poData.length + ' PO aktif ✓', 'ok');
@@ -2293,6 +2294,27 @@ async function loadGRPO() {
   }
 }
 
+
+// ─── Cleanup poOverrides untuk PO yang sudah tidak ada di SAP ────────────────
+function _cleanupStalePoOverridesOnLoad() {
+  if(!STATE.poData || !STATE.poOverrides) return;
+  var activePO = {};
+  STATE.poData.forEach(function(po){ activePO[String(po.docNum)+'_'+po.itemCode] = true; });
+  var cleaned = 0;
+  Object.keys(STATE.poOverrides).forEach(function(key){
+    if(activePO[key]) return; // masih aktif, skip
+    var ovr = STATE.poOverrides[key];
+    if(!ovr) return;
+    // PO tidak ada di SAP — hapus semua data override
+    delete STATE.poOverrides[key];
+    cleaned++;
+  });
+  if(cleaned > 0) {
+    localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
+    cloudSave('po_overrides', JSON.stringify(STATE.poOverrides));
+    console.log('[cleanup] Removed stale confQty for', cleaned, 'PO keys');
+  }
+}
 
 // ─── Auto-remove schedule cards that have been received (GRPO matched) ───────
 function _autoRemoveDeliveredCards() {
@@ -2775,8 +2797,13 @@ function _initColResize(tableId) {
 function setPOConfQty(el) {
   var key = el.getAttribute('data-key');
   if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
-  STATE.poOverrides[key].confQty = el.value;
-  STATE.poOverrides[key].confSource = 'manual';
+  if(el.value) {
+    STATE.poOverrides[key].confQty = el.value;
+    STATE.poOverrides[key].confSource = 'manual';
+  } else {
+    delete STATE.poOverrides[key].confQty;
+    delete STATE.poOverrides[key].confSource;
+  }
   STATE.poOverrides[key].confUpd = new Date().toISOString().split('T')[0];
   el.style.color = el.value ? 'var(--amber)' : 'var(--muted)';
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
@@ -2790,8 +2817,13 @@ function setPOConfQty(el) {
 function setPOConfDate(el) {
   var key = el.getAttribute('data-key');
   if(!STATE.poOverrides[key]) STATE.poOverrides[key] = {};
-  STATE.poOverrides[key].confDate = el.value;
-  STATE.poOverrides[key].confSource = 'manual';
+  if(el.value) {
+    STATE.poOverrides[key].confDate = el.value;
+    STATE.poOverrides[key].confSource = 'manual';
+  } else {
+    delete STATE.poOverrides[key].confDate;
+    delete STATE.poOverrides[key].confSource;
+  }
   STATE.poOverrides[key].confUpd = new Date().toISOString().split('T')[0];
   el.style.color = el.value ? 'var(--amber)' : 'var(--muted)';
   localStorage.setItem('po_overrides', JSON.stringify(STATE.poOverrides));
@@ -4674,13 +4706,33 @@ function generateSchedule() {
   // ── 3. Filter item urgent — hanya yg max3MRP > 0 ─────────────────────────────
   // Bangun index confQty per itemCode (hanya yg punya confDate) untuk cek apakah
   // kebutuhan item sudah terpenuhi oleh konfirmasi supplier — dipakai di Step 9
+  // Build set of active PO keys (masih ada di STATE.poData)
+  var activePOKeys = {};
+  (STATE.poData||[]).forEach(function(po){
+    activePOKeys[String(po.docNum)+'_'+po.itemCode] = true;
+  });
+
+  // Bangun index GRPO received per itemCode
+  var grpoByItem = {};
+  (STATE.grpoData||[]).forEach(function(g){
+    if(!g.itemCode) return;
+    grpoByItem[g.itemCode] = (grpoByItem[g.itemCode]||0) + (parseFloat(g.qty)||0);
+  });
+
+  // confQtyByItem hanya dari PO yang masih aktif di list PO
   var confQtyByItem = {};
   Object.keys(STATE.poOverrides || {}).forEach(function(key){
+    // Skip kalau PO sudah tidak ada di poData
+    if(!activePOKeys[key]) return;
     var ovr = STATE.poOverrides[key];
     if(!ovr || !ovr.confDate || !ovr.confQty) return;
     var itemCode = key.slice(key.indexOf('_') + 1);
     if(!itemCode) return;
     confQtyByItem[itemCode] = (confQtyByItem[itemCode] || 0) + (parseFloat(ovr.confQty) || 0);
+  });
+  // Kurangi dengan yang sudah datang (GRPO)
+  Object.keys(grpoByItem).forEach(function(ic){
+    if(confQtyByItem[ic]) confQtyByItem[ic] = Math.max(0, confQtyByItem[ic] - grpoByItem[ic]);
   });
 
   var urgentItems = STATE.projectionData.filter(function(p){
