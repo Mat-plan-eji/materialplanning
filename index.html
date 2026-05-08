@@ -38,9 +38,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 .shell{display:flex;min-height:100vh}
 
 /* Sidebar */
-.sidebar{width:220px;background:var(--navy);border-right:none;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:2px 0 12px rgba(11,29,53,.15)}
-.logo{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
-.logo-mark{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.sidebar{width:220px;background:var(--navy);border-right:none;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:2px 0 20px rgba(11,29,53,.25);transition:width .22s cubic-bezier(.4,0,.2,1);overflow-x:hidden}
+.sidebar.collapsed{width:56px}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-section,.sidebar.collapsed .logo p,.sidebar.collapsed .logo-title,.sidebar.collapsed .nb{display:none!important}
+.sidebar.collapsed .ni{padding:10px 0;justify-content:center;margin:1px 4px}
+.sidebar.collapsed .ni-ico{width:auto;font-size:16px}
+.sidebar.collapsed .logo-mark{justify-content:center;padding:0}
+.sidebar.collapsed .logo{padding:14px 8px}
+.sidebar.collapsed .nav-divider{margin:8px 4px}
+.sidebar-toggle{position:absolute;top:14px;right:10px;width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:13px;transition:.15s;flex-shrink:0;z-index:10}
+.sidebar-toggle:hover{background:rgba(255,255,255,.15);color:#fff}
+.sidebar.collapsed .sidebar-toggle{right:50%;transform:translateX(50%);top:14px;position:relative;margin:0 auto;display:block}
+.ni .nav-label{transition:opacity .15s}
+.sidebar.collapsed .ni .nav-label{opacity:0;width:0;overflow:hidden}
+.sidebar.collapsed .ni{position:relative}
+.sidebar.collapsed .ni:hover::after{content:attr(data-label);position:absolute;left:56px;top:50%;transform:translateY(-50%);background:var(--navy);color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:100;border:1px solid rgba(255,255,255,.12)}
+.main-wrap{transition:margin-left .22s cubic-bezier(.4,0,.2,1)}
+.logo{padding:14px 16px 14px 14px;border-bottom:1px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:space-between}
+.logo-mark{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex:1}
 .logo-icon{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff;font-family:var(--mono);flex-shrink:0}
 .logo h1{font-size:13px;font-weight:600;letter-spacing:-.2px}
 .logo p{font-size:10.5px;color:var(--muted);padding-left:38px}
@@ -94,6 +109,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 
 /* Table */
 .tbl-wrap{overflow-x:auto;max-height:520px;overflow-y:auto}
+.proj-freeze th.sticky,.proj-freeze td.sticky{position:sticky;background:var(--bg2);z-index:2}
+.proj-freeze th.sticky{z-index:3;background:var(--bg3)}
+.proj-freeze td.sticky:last-child,.proj-freeze th.sticky:last-child{box-shadow:2px 0 4px rgba(0,0,0,.08)}
 /* Resizable columns */
 table th{position:relative}
 .col-resize{position:absolute;right:0;top:0;bottom:0;width:4px;cursor:col-resize;background:transparent;z-index:2}
@@ -310,7 +328,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
 <div class="shell">
 
 <!-- SIDEBAR -->
-<nav class="sidebar">
+<nav class="sidebar" id="main-sidebar">
   <div class="logo">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
         <div style="background:#fff;border-radius:10px;height:44px;width:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">
@@ -322,22 +340,23 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
         </div>
       </div>
     </div>
+    <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="_toggleSidebar()" title="Collapse menu">❮</button>
   <div class="nav-section">Planning</div>
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span>Material Planner Dashboard</div>
-  <div class="ni" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
-  <div class="ni" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
-  <div class="ni" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP</div>
+  <div class="ni" data-label="Projection Stock" onclick="showPage('projection',this)"><span class="ni-ico">◉</span>Projection Stock<span class="nb" id="nb-urgent" style="display:none">0</span></div>
+  <div class="ni" data-label="Forecast & Propose PR" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span>Forecast & Propose PR</div>
+  <div class="ni" data-label="MPS → MRP" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span>MPS → MRP</div>
   <div class="nav-section">Delivery</div>
-  <div class="ni" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
-  <div class="ni" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
-  <div class="ni" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span>List Kiriman Daily</div>
-  <div class="ni" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
+  <div class="ni" data-label="List Pengiriman (PO)" onclick="showPage('po',this)"><span class="ni-ico">◫</span>List Pengiriman (PO)</div>
+  <div class="ni" data-label="Jadwal Pengiriman" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span>Jadwal Pengiriman</div>
+  <div class="ni" data-label="List Kiriman Daily" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span>List Kiriman Daily</div>
+  <div class="ni" data-label="Performance" onclick="showPage('performance',this)"><span class="ni-ico">📊</span>Performance <span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
-  <div class="ni" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
-    <div class="ni" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
-  <div class="ni" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
-  <div class="ni" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets) <span id="lock-upload" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="GRPO" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span>GRPO</div>
+    <div class="ni" data-label="OSPR" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span>OSPR</div>
+  <div class="ni" data-label="Stock Daily" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span>Stock Daily</div>
+  <div class="ni" data-label="Data Source (Sheets)" onclick="showPage('upload',this)"><span class="ni-ico">◷</span>Data Source (Sheets) <span id="lock-upload" style="font-size:10px">🔒</span></div>
   <div class="nav-divider"></div>
   <div style="padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:10.5px;color:var(--muted)" id="theme-label">🌙 Dark</span>
@@ -345,8 +364,8 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div class="theme-toggle-knob" id="theme-knob">🌙</div>
     </div>
   </div>
-  <div class="ni" onclick="showPage('settings',this)"><span class="ni-ico">◈</span>Settings <span id="lock-settings" style="font-size:10px">🔒</span></div>
-  <div class="ni" id="nav-login" onclick="_isAdmin?doLogout():showLoginModal()" style="border-top:0.5px solid var(--border);margin-top:4px">
+  <div class="ni" data-label="Settings" onclick="showPage('settings',this)"><span class="ni-ico">◈</span>Settings <span id="lock-settings" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="<span id="login-label">Login</" id="nav-login" onclick="_isAdmin?doLogout():showLoginModal()" style="border-top:0.5px solid var(--border);margin-top:4px">
     <span class="ni-ico" id="login-ico">🔒</span><span id="login-label">Login</span>
   </div>
 </nav>
@@ -570,6 +589,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     </label>
     <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;margin:0">
       <input type="checkbox" id="f-proj-col-filter" onchange="renderProjection()"> Filter kolom
+      &nbsp;<button id="btn-proj-freeze" onclick="_toggleProjFreeze()" class="btn btn-sm" style="font-size:10.5px;padding:2px 8px" title="Freeze kolom kiri">&nbsp;❄ Freeze Kolom</button>
     </label>
   </div>
   <div id="proj-table"><div class="loading"><div class="spin"></div>Upload Master Data lalu klik Build Projection...</div></div>
@@ -1329,6 +1349,9 @@ function doLogin() {
     _updateLoginUI();
     // Re-render tables supaya inputs jadi enabled
     if(STATE.projectionData && STATE.projectionData.length) renderProjection();
+    // Restore freeze button state
+    var _fb = document.getElementById('btn-proj-freeze');
+    if(_fb && _projFreezeCol) { _fb.style.background='var(--teal)'; _fb.style.color='#fff'; _fb.textContent='❄ Freeze ON'; }
     if(STATE.poData && STATE.poData.length) renderPO();
     toast('Login berhasil ✓', 'ok');
   } else {
@@ -2880,6 +2903,18 @@ function cleanupStalePoOverrides() {
   if(document.getElementById('pg-po') && document.getElementById('pg-po').classList.contains('active')) renderPO();
 }
 
+function _toggleProjFreeze() {
+  _projFreezeCol = !_projFreezeCol;
+  localStorage.setItem('proj_freeze_col', _projFreezeCol ? '1' : '0');
+  var btn = document.getElementById('btn-proj-freeze');
+  if(btn) {
+    btn.style.background = _projFreezeCol ? 'var(--teal)' : '';
+    btn.style.color = _projFreezeCol ? '#fff' : '';
+    btn.textContent = _projFreezeCol ? '❄ Freeze ON' : '❄ Freeze Kolom';
+  }
+  if(STATE.projectionData && STATE.projectionData.length) renderProjection();
+}
+
 function cleanupProjHistory() {
   if(!STATE.projectionHistory) STATE.projectionHistory = {};
   var keys = Object.keys(STATE.projectionHistory).sort();
@@ -3891,15 +3926,15 @@ function renderProjection() {
     })();
     var typeBadge = p.itemType === 'RM' ? '<span class="badge b-blue" style="font-size:9px">RM</span>' : (p.itemType === 'PM' ? '<span class="badge b-purple" style="font-size:9px">PM</span>' : (p.itemType === 'FG' ? '<span class="badge b-green" style="font-size:9px">FG</span>' : ''));
     return '<tr>' +
-      td('<span class="mono" style="font-size:10.5px">' + p.productCode + ' ' + typeBadge + '</span>','kode') +
+      td('<span class="mono" style="font-size:10.5px">' + p.productCode + ' ' + typeBadge + '</span>','kode', (_projFreezeCol?'position:sticky;left:0;z-index:1;background:var(--bg2)':'')) +
       (function(){
         var a=p.abc||''; var ac=a==='A'?'var(--red)':a==='B'?'var(--amber)':a==='C'?'var(--teal)':'var(--muted)';
-        return td('<span style="font-weight:700;font-size:11px;color:'+ac+'">'+(a||'—')+'</span>','abc','text-align:center');
+        return td('<span style="font-weight:700;font-size:11px;color:'+ac+'">'+(a||'—')+'</span>','abc','text-align:center'+(_projFreezeCol?';position:sticky;left:80px;z-index:1;background:var(--bg2)':''));
       })() +
-      td((p.description||''),'desc','max-width:140px;overflow:hidden;text-overflow:ellipsis') +
-      td(_isAdmin ? (p.realName||'—') : '🔒','realname','max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--teal);font-size:11px') +
-      td((p.uom||''),'uom') +
-      td((p.supplier||'—'),'supplier','max-width:130px;overflow:hidden;text-overflow:ellipsis') +
+      td((p.description||''),'desc','max-width:140px;overflow:hidden;text-overflow:ellipsis'+(_projFreezeCol?';position:sticky;left:120px;z-index:1;background:var(--bg2)':'')) +
+      td(_isAdmin ? (p.realName||'—') : '🔒','realname','max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--teal);font-size:11px'+(_projFreezeCol?';position:sticky;left:280px;z-index:1;background:var(--bg2)':'')) +
+      td((p.uom||''),'uom',(_projFreezeCol?'position:sticky;left:420px;z-index:1;background:var(--bg2)':'')) +
+      td((p.supplier||'—'),'supplier','max-width:130px;overflow:hidden;text-overflow:ellipsis'+(_projFreezeCol?';position:sticky;left:460px;z-index:1;background:var(--bg2);box-shadow:2px 0 4px rgba(0,0,0,.08)':'')) +
       td((p.site||'—'),'site') +
       td('<span class="mono td-right" style="display:block">' + n_id(p.stockBTG||0) + '</span>','stockbtg') +
       td('<span class="mono td-right" style="display:block">' + n_id(p.stockSNG||0) + '</span>','stocksng') +
@@ -3958,15 +3993,23 @@ function renderProjection() {
 
   var histBanner = isHistory ? '<div style="background:var(--amber-bg);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:var(--amber)">📅 Menampilkan history: <strong>' + histDate + '</strong> — <a onclick="clearHistoryView()" style="cursor:pointer;text-decoration:underline">Kembali ke hari ini</a></div>' : '';
 
-  document.getElementById('proj-table').innerHTML = histBanner + '<div class="card"><div class="tbl-wrap"><table class="resizable-table" id="proj-tbl">' +
+  var _freezeClass = _projFreezeCol ? ' proj-freeze' : '';
+  // Sticky left positions untuk 6 kolom pertama (kode,abc,desc,realname,uom,supplier)
+  var _sPos = [0, 80, 120, 280, 420, 460];
+  function thS(label, col, idx) {
+    if(!_projFreezeCol || idx === undefined) return th(label, col);
+    var shadow = idx === 5 ? ';box-shadow:2px 0 4px rgba(0,0,0,.1)' : '';
+    return th(label, col).replace('<th ', '<th style="position:sticky;left:'+_sPos[idx]+'px;z-index:3;background:var(--bg3)'+shadow+'" ');
+  }
+  document.getElementById('proj-table').innerHTML = histBanner + '<div class="card"><div class="tbl-wrap"><table class="resizable-table'+_freezeClass+'" id="proj-tbl">' +
     '<thead>' +
     '<tr>' +
-    th('Kode','kode') +
-    th('ABC','abc') +
-    th('Deskripsi','desc') +
-    th('Real Name','realname') +
-    th('UOM','uom') +
-    th('Supplier','supplier') +
+    thS('Kode','kode',0) +
+    thS('ABC','abc',1) +
+    thS('Deskripsi','desc',2) +
+    thS('Real Name','realname',3) +
+    thS('UOM','uom',4) +
+    thS('Supplier','supplier',5) +
     th('Site','site') +
     th('Stock BTG','stockbtg') +
     th('Stock SNG','stocksng') +
@@ -6785,6 +6828,15 @@ function toggleColMenu() {
   m.style.display = m.style.display === 'none' ? 'block' : 'none';
 }
 // ── Mobile sidebar toggle ────────────────────────────────────────────────────
+function _toggleSidebar() {
+  var sidebar = document.getElementById('main-sidebar');
+  var btn = document.getElementById('sidebar-toggle-btn');
+  if(!sidebar) return;
+  var collapsed = sidebar.classList.toggle('collapsed');
+  localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
+  if(btn) btn.innerHTML = collapsed ? '❯' : '❮';
+}
+
 function toggleMobSidebar() {
   var sb = document.querySelector('.sidebar');
   var ov = document.getElementById('mob-overlay');
@@ -6829,6 +6881,13 @@ function td(content, col, extraStyle) {
 // ─── INIT ────────────────────────────────────────────────────────────────────
 function _appInit() {
   console.log('[_appInit] START');
+  // Restore sidebar collapsed state
+  if(localStorage.getItem('sidebar_collapsed') === '1') {
+    var sb = document.getElementById('main-sidebar');
+    var btn = document.getElementById('sidebar-toggle-btn');
+    if(sb) sb.classList.add('collapsed');
+    if(btn) btn.innerHTML = '❯';
+  }
   // Re-read STATE from (possibly cloud-updated) localStorage
   try {
   STATE.mrpData          = JSON.parse(localStorage.getItem('mrp_data')       || 'null');
