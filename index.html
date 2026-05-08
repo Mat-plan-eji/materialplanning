@@ -516,7 +516,18 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       </label>
       <button class="btn btn-sm" onclick="clearHistoryView()">Hari Ini</button>
       <button class="btn btn-sm" onclick="buildProjection()">↺ Rebuild</button>
-      <button class="btn btn-sm btn-primary" onclick="generateSchedule()">⚡ Generate Jadwal</button>
+      <div style="position:relative;display:inline-block">
+        <div style="display:flex;border-radius:7px;overflow:hidden;border:1.5px solid var(--accent);box-shadow:0 1px 4px rgba(59,127,255,.15)">
+          <button class="btn btn-sm btn-primary" onclick="generateSchedule('all')" style="border-radius:0;border:none;padding:5px 12px;border-right:1px solid rgba(255,255,255,.2)">⚡ Generate Jadwal</button>
+          <button class="btn btn-sm btn-primary" onclick="_toggleGenDropdown()" style="border-radius:0;border:none;padding:5px 8px" title="Pilih tipe item">▾</button>
+        </div>
+        <div id="gen-jadwal-menu" style="display:none;position:absolute;top:calc(100%+4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);min-width:140px">
+          <div onclick="generateSchedule('all');_toggleGenDropdown()" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">⚡ Semua (RM+PM+FG)</div>
+          <div onclick="generateSchedule('RM');_toggleGenDropdown()" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--teal)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">⚡ RM</div>
+          <div onclick="generateSchedule('PM');_toggleGenDropdown()" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--purple)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">⚡ PM</div>
+          <div onclick="generateSchedule('FG');_toggleGenDropdown()" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--amber)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">⚡ FG</div>
+        </div>
+      </div>
       <div style="position:relative;display:inline-block">
         <button class="btn btn-sm" onclick="_projExportDropdown()">&#x2193; Export &#x25BE;</button>
         <div id="proj-export-menu" style="display:none;position:absolute;top:calc(100%+4px);right:0;z-index:200;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r);padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.2);min-width:180px">
@@ -4644,7 +4655,12 @@ function getWorkdays(from, n) {
   return days;
 }
 
-function generateSchedule() {
+function _toggleGenDropdown() {
+  var m = document.getElementById('gen-jadwal-menu');
+  if(m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+
+function generateSchedule(typeFilter) {
   if(!_requireAdmin('generate jadwal')) return;
 
   // Cleanup: reset isManual untuk PO yang tanggalnya sudah lewat minggu ini
@@ -4737,6 +4753,12 @@ function generateSchedule() {
 
   var urgentItems = STATE.projectionData.filter(function(p){
     if(!(p.max3MRP > 0)) return false;
+    // Filter berdasarkan tipe yang dipilih
+    if(typeFilter && typeFilter !== 'all') {
+      if(typeFilter === 'FG' && p.itemType !== 'FG') return false;
+      if(typeFilter === 'RM' && p.itemType !== 'RM') return false;
+      if(typeFilter === 'PM' && p.itemType !== 'PM') return false;
+    }
     var stockTotal = (p.stockBTG || 0) + (p.stockSNG || 0);
     var needed = Math.max(0, (p.max3MRP || 0) - stockTotal);
     var confirmed = confQtyByItem[p.productCode] || 0;
@@ -4754,6 +4776,12 @@ function generateSchedule() {
     if(!itemCode || urgentCodes[itemCode]) return;
     var projItem = STATE.projectionData.find(function(p){ return p.productCode === itemCode; });
     if(!projItem) return;
+    // Filter tipe
+    if(typeFilter && typeFilter !== 'all') {
+      if(typeFilter === 'FG' && projItem.itemType !== 'FG') return;
+      if(typeFilter === 'RM' && projItem.itemType !== 'RM') return;
+      if(typeFilter === 'PM' && projItem.itemType !== 'PM') return;
+    }
     urgentCodes[itemCode] = true;
     projItem._manualForced = true;
     urgentItems.push(projItem);
@@ -8783,6 +8811,9 @@ document.addEventListener('click', function(e) {
     reqPanel.style.display = 'none';
     window._poReqDatePending = null; // buang pending kalau tutup tanpa OK
   }
+  var genMenu = document.getElementById('gen-jadwal-menu');
+  if(genMenu && genMenu.style.display!=='none' && !genMenu.contains(e.target) && !e.target.closest('[onclick*="_toggleGenDropdown"]'))
+    genMenu.style.display = 'none';
 });
 
 function _mrpFallbackCopy(text, count) {
