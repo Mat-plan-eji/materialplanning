@@ -344,20 +344,20 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
     <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="_toggleSidebar()" title="Collapse menu">❮</button>
   <div class="nav-section">Planning</div>
   <div class="ni active" onclick="showPage('dashboard',this)"><span class="ni-ico">◈</span><span class="nav-label">Material Planner Dashboard</span></div>
-  <div class="ni" data-label="Projection Stock" onclick="showPage('projection',this)"><span class="ni-ico">◉</span><span class="nav-label">Projection Stock</span><span class="nb" id="nb-urgent" style="display:none">0</span></div>
-  <div class="ni" data-label="Forecast & Propose PR" onclick="showPage('forecast',this)"><span class="ni-ico">◈</span><span class="nav-label">Forecast & Propose PR</span></div>
+  <div class="ni" data-label="Projection Stock" onclick="showPage('projection',this)"><span class="ni-ico">📦</span><span class="nav-label">Projection Stock</span><span class="nb" id="nb-urgent" style="display:none">0</span></div>
+  <div class="ni" data-label="Forecast & Propose PR" onclick="showPage('forecast',this)"><span class="ni-ico">🔮</span><span class="nav-label">Forecast & Propose PR</span></div>
   <div class="ni" data-label="MPS → MRP" onclick="showPage('mps-mrp',this)"><span class="ni-ico">⚙</span><span class="nav-label">MPS → MRP</span></div>
   <div class="nav-section">Delivery</div>
-  <div class="ni" data-label="List Pengiriman (PO)" onclick="showPage('po',this)"><span class="ni-ico">◫</span><span class="nav-label">List Pengiriman (PO)</span></div>
-  <div class="ni" data-label="Jadwal Pengiriman" onclick="showPage('schedule',this)"><span class="ni-ico">◷</span><span class="nav-label">Jadwal Pengiriman</span></div>
-  <div class="ni" data-label="List Kiriman Daily" onclick="showPage('daily-list',this)"><span class="ni-ico">◑</span><span class="nav-label">List Kiriman Daily</span></div>
+  <div class="ni" data-label="List Pengiriman (PO)" onclick="showPage('po',this)"><span class="ni-ico">📋</span><span class="nav-label">List Pengiriman (PO)</span></div>
+  <div class="ni" data-label="Jadwal Pengiriman" onclick="showPage('schedule',this)"><span class="ni-ico">🚛</span><span class="nav-label">Jadwal Pengiriman</span></div>
+  <div class="ni" data-label="List Kiriman Daily" onclick="showPage('daily-list',this)"><span class="ni-ico">📬</span><span class="nav-label">List Kiriman Daily</span></div>
   <div class="ni" data-label="Performance" onclick="showPage('performance',this)"><span class="ni-ico">📊</span><span class="nav-label">Performance </span><span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">On Develop</span></div>
   <div class="nav-divider"></div>
   <div class="nav-section">Data</div>
-  <div class="ni" data-label="GRPO" onclick="showPage('grpo',this)"><span class="ni-ico">◈</span><span class="nav-label">GRPO</span></div>
-    <div class="ni" data-label="OSPR" onclick="showPage('ospr',this)"><span class="ni-ico">◎</span><span class="nav-label">OSPR</span></div>
-  <div class="ni" data-label="Stock Daily" onclick="showPage('stock-daily',this)"><span class="ni-ico">◫</span><span class="nav-label">Stock Daily</span></div>
-  <div class="ni" data-label="Data Source (Sheets)" onclick="showPage('upload',this)"><span class="ni-ico">◷</span><span class="nav-label">Data Source (Sheets) </span><span id="lock-upload" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="GRPO" onclick="showPage('grpo',this)"><span class="ni-ico">✅</span><span class="nav-label">GRPO</span></div>
+    <div class="ni" data-label="OSPR" onclick="showPage('ospr',this)"><span class="ni-ico">📝</span><span class="nav-label">OSPR</span></div>
+  <div class="ni" data-label="Stock Daily" onclick="showPage('stock-daily',this)"><span class="ni-ico">📅</span><span class="nav-label">Stock Daily</span></div>
+  <div class="ni" data-label="Data Source (Sheets)" onclick="showPage('upload',this)"><span class="ni-ico">☁</span><span class="nav-label">Data Source (Sheets) </span><span id="lock-upload" style="font-size:10px">🔒</span></div>
   <div class="nav-divider"></div>
   <div style="padding:10px 20px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:10.5px;color:var(--muted)" id="theme-label">🌙 Dark</span>
@@ -365,7 +365,7 @@ body.light-mode .theme-toggle-knob{transform:translateX(15px);background:var(--a
       <div class="theme-toggle-knob" id="theme-knob">🌙</div>
     </div>
   </div>
-  <div class="ni" data-label="Settings" onclick="showPage('settings',this)"><span class="ni-ico">◈</span><span class="nav-label">Settings </span><span id="lock-settings" style="font-size:10px">🔒</span></div>
+  <div class="ni" data-label="Settings" onclick="showPage('settings',this)"><span class="ni-ico">⚙</span><span class="nav-label">Settings </span><span id="lock-settings" style="font-size:10px">🔒</span></div>
   <div class="ni" data-label="<span id="login-label">Login</" id="nav-login" onclick="_isAdmin?doLogout():showLoginModal()" style="border-top:0.5px solid var(--border);margin-top:4px">
     <span class="ni-ico" id="login-ico">🔒</span><span id="login-label">Login</span>
   </div>
@@ -4002,7 +4002,7 @@ function renderProjection() {
   function thS(label, col, idx) {
     if(!_projFreezeCol || idx === undefined) return th(label, col);
     var shadow = idx === 5 ? ';box-shadow:2px 0 4px rgba(0,0,0,.1)' : '';
-    return th(label, col).replace('<th ', '<th style="position:sticky;left:'+_sPos[idx]+'px;z-index:3;background:var(--bg3)'+shadow+'" ');
+    return th(label, col).replace('<th ', '<th style="position:sticky;left:'+_sPos[idx]+'px;top:0;z-index:4;background:var(--bg3)'+shadow+'" ');
   }
   document.getElementById('proj-table').innerHTML = histBanner + '<div class="card"><div class="tbl-wrap"><table class="resizable-table'+_freezeClass+'" id="proj-tbl">' +
     '<thead>' +
