@@ -2019,6 +2019,8 @@ var STATE = {
   projectionSnapshots: JSON.parse(localStorage.getItem('proj_snapshots') || '{}'),
   projComments: JSON.parse(localStorage.getItem('proj_comments') || '{}')
 };
+var _projFreezeCol = localStorage.getItem('proj_freeze_col') === '1';
+
 
 // Supplier blacklist — PO dari supplier ini tidak dipakai di semua kalkulasi
 var _SUPPLIER_BLACKLIST = ['hk holistar limited','hk holistar'];
@@ -6894,6 +6896,8 @@ function _appInit() {
     if(sb) sb.classList.add('collapsed');
     if(btn) btn.innerHTML = '❯';
   }
+  // Sync freeze state dari localStorage
+  _projFreezeCol = localStorage.getItem('proj_freeze_col') === '1';
   // Re-read STATE from (possibly cloud-updated) localStorage
   try {
   STATE.mrpData          = JSON.parse(localStorage.getItem('mrp_data')       || 'null');
