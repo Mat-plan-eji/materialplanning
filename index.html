@@ -7408,7 +7408,7 @@ function _calcForecast(code, ospoIdx) {
   var ospo = ospoBase.map(function(v, i) {
     return (ospoOvr && ospoOvr[i] != null) ? ospoOvr[i] : v;
   });
-  if(ospoOvr) console.log('[_calcForecast] code:', code, 'ospoOvr:', JSON.stringify(ospoOvr), 'ospo[0]:', ospo[0], 'ospo[1]:', ospo[1]);
+  if(ospoOvr)
 
   // OSPR per month — distribute by prReqDate like OSPO
   var ospr_base = new Array(FC_MONTHS.length).fill(0);
@@ -7596,17 +7596,18 @@ function _calcForecast(code, ospoIdx) {
     return Math.max(moq > 0 ? moq : 0, Math.ceil(av / (_step||1)) * (_step||1));
   });
 
-  // ── Stock display: pakai stockAktualFw (sudah include pull-forward) + propose ──
-  // stockAktualFw sudah dihitung di single-pass loop dengan OSPO+pull+propose
-  // Rebuild dengan totalProp (manual override mungkin beda dari proposeAuto)
+  // ── Stock display: rebuild dari nilai OSPO yang ditampilkan ──────────────
+  // ospoDisplay = nilai yang user lihat: override kalau ada, ospoEffective kalau tidak
+  var ospoDisplay = ospo.map(function(v, i) {
+    var hasOvr = _fcOspoOverride[code] && _fcOspoOverride[code][i] != null;
+    return hasOvr ? (_fcOspoOverride[code][i] || 0) : (ospoPool2[i] + ospoPulled[i]);
+  });
   var stockWithProp = new Array(FC_MONTHS.length).fill(0);
   var prevStDisp = soh;
-  console.log('[stockWithProp] soh:', soh, 'ospoPool2:', JSON.stringify(ospoPool2), 'ospoPulled:', JSON.stringify(ospoPulled));
   for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
     var req_d  = forecast[dp];
     var ospr_d = ospr[dp];
-    // ospoEffective sudah dihitung: ospoPool2[dp] + ospoPulled[dp]
-    var ospo_d = ospoPool2[dp] + ospoPulled[dp];
+    var ospo_d = ospoDisplay[dp];
     var prop_d = totalProp[dp] || 0;
     stockWithProp[dp] = prevStDisp + ospo_d + ospr_d + prop_d - req_d;
     prevStDisp = stockWithProp[dp];
@@ -9423,13 +9424,10 @@ function _fcLiveRecalc(code) {
 
     // Query langsung — tidak perlu lewat tbody
   var allRows = detEl.querySelectorAll('tr[data-rowlabel]');
-  console.log('[fcLiveRecalc] found rows:', allRows.length, 'labels:', Array.from(allRows).map(function(r){return r.getAttribute('data-rowlabel');}));
-  console.log('[fcLiveRecalc] stockVals:', stockVals, 'doiVals:', doiVals);
   allRows.forEach(function(tr) {
     var lbl = tr.getAttribute('data-rowlabel');
     var tds = tr.querySelectorAll('td:not(:first-child)');
     if(lbl === 'stock') {
-      console.log('[fcLiveRecalc] updating stock, tds:', tds.length, 'vals:', stockVals);
       stockVals.forEach(function(v, i) {
         if(!tds[i]) return;
         var _di2 = doiVals[i];
@@ -9491,7 +9489,6 @@ function _fcOspoEdit(input) {
 
   // Set nilai bulan yang diedit
   _fcOspoOverride[code][mi] = qty;
-  console.log('[_fcOspoEdit] code:', code, 'mi:', mi, 'qty:', qty, 'override:', JSON.stringify(_fcOspoOverride[code]));
 
   // Sisa = total - qty yang baru di bulan ini
   var sisa = total - qty;
