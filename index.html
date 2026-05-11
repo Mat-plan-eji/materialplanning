@@ -9429,15 +9429,15 @@ function _fcLiveRecalc(code) {
     }
   }
   var doiRecalc = hasAnyOvr ? (function() {
-    // Hitung DOI sederhana: stock / (total req / WD)
     var WD = 25;
     return stockRecalc.map(function(s, i) {
       var totalReq = 0;
       for(var j = i; j < Math.min(i+3, fc.forecast.length); j++) totalReq += (fc.forecast[j]||0);
-      if(totalReq <= 0) return s >= 0 ? 999 : -1;
+      if(totalReq <= 0) return s >= 0 ? 9999 : -1;
       var daily = totalReq / (3 * WD);
-      if(daily <= 0) return 999;
-      return Math.round(s / daily);
+      if(daily <= 0) return 9999;
+      var doi = s / daily;
+      return doi;
     });
   })() : (isFcV ? fc.doiFc : fc.doi);
   var stockVals = hasAnyOvr ? stockRecalc : (isFcV ? fc.stockFc : fc.stock);
@@ -9465,7 +9465,8 @@ function _fcLiveRecalc(code) {
       doiVals.forEach(function(v, i) {
         if(!tds[i]) return;
         var cls = v<0 ? 'color:var(--red)' : v<doi_t ? 'color:var(--amber)' : v>99 ? 'color:var(--muted)' : 'color:var(--green)';
-        var txt = v>0 ? (v>=999 ? '∞' : n_id(Math.round(v))) : '—';
+        var doi_cap = doi_t > 0 ? doi_t * 3 : 75;
+        var txt = v>0 ? (v>=doi_cap ? '∞' : n_id(Math.round(v))) : (v<0 ? n_id(Math.round(v)) : '—');
         tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
       });
     } else if(lbl === 'ospo') {
