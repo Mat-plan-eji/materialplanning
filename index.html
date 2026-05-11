@@ -7412,6 +7412,7 @@ function _calcForecast(code, ospoIdx) {
   if(ospoOvr)
 
   // OSPR per month — distribute by prReqDate like OSPO
+  if(!FC_MONTHS || !FC_MONTHS.length) return {forecast:[],ospo:[],ospoRaw:[],ospr:[],stock:[],doi:[],propose:[],forecastOspo:[],stockFc:[],doiFc:[],pullNotifs:[],suggestions:[],lt_days:30,moq:0,multiple:1,maxDOI:30,soh:0,ospoBase:[],ospr_base:[],stockBase:[]};
   var ospr_base = new Array(FC_MONTHS.length).fill(0);
   var osprItems = (STATE.osprData || []).filter(function(r){ return r.itemCode === code; });
   osprItems.forEach(function(r) {
