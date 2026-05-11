@@ -9445,7 +9445,53 @@ function _fcOspoEdit(input) {
   var base    = parseFloat(input.getAttribute('data-base')) || 0;
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
-  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
+
+  // Hitung total OSPO original untuk item ini
+  var ospoIdx = _buildOSPOIndex();
+  var ospoOrig = new Array(FC_MONTHS.length).fill(0);
+  FC_MONTH_NUMS.forEach(function(mn, i){
+    ospoOrig[i] = (ospoIdx[code] && ospoIdx[code][mn]) || 0;
+  });
+  var totalOSPO = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
+
+  // Hitung current values (termasuk override yang sudah ada)
+  var cur = ospoOrig.map(function(v, i){
+    return (_fcOspoOverride[code] && _fcOspoOverride[code][i] != null) ? _fcOspoOverride[code][i] : v;
+  });
+
+  // Clamp qty agar tidak melebihi total OSPO
+  var maxForMi = totalOSPO; // maksimum = total semua OSPO
+  qty = Math.min(qty, maxForMi);
+  qty = Math.max(0, qty);
+  input.value = qty > 0 ? n_id(qty) : '0';
+
+  // Set override bulan ini
+  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(ospoOrig[mi])) ? null : qty;
+
+  // Hitung sisa dan distribusikan ke bulan lain (geser ke bulan paling akhir dulu)
+  var used = qty;
+  var remaining = totalOSPO - used;
+  // Distribusi: bulan lain selain mi, dari belakang ke depan
+  var otherMonths = [];
+  for(var i = FC_MONTHS.length - 1; i >= 0; i--) {
+    if(i !== mi) otherMonths.push(i);
+  }
+  for(var j = 0; j < otherMonths.length; j++) {
+    var oi = otherMonths[j];
+    var origV = ospoOrig[oi];
+    if(remaining <= 0) {
+      _fcOspoOverride[code][oi] = 0;
+    } else if(remaining >= origV) {
+      // Bulan ini dapat penuh
+      _fcOspoOverride[code][oi] = (Math.round(origV) === Math.round(origV)) ? null : origV;
+      remaining -= origV;
+    } else {
+      // Bulan ini dapat sisa
+      _fcOspoOverride[code][oi] = remaining;
+      remaining = 0;
+    }
+  }
+
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
   var isEdited = (_fcOspoOverride[code][mi] != null);
   input.style.color      = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
