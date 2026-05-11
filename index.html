@@ -1752,6 +1752,23 @@ Storage.prototype.setItem = function(k, v) {
 
 // ── Boot sequence — CEPAT: tampil dari cache dulu, SAP di background ──────────
 function appStart() {
+  // Bersihkan override corrupt (array dengan banyak nilai non-null)
+  try {
+    var ovr = JSON.parse(localStorage.getItem('fc_ospo_ovr') || '{}');
+    var cleaned = false;
+    Object.keys(ovr).forEach(function(k) {
+      var arr = ovr[k];
+      if(!Array.isArray(arr)) return;
+      // Reset kalau semua slot terisi (kemungkinan redistribute corrupt)
+      var nonNull = arr.filter(function(v){ return v != null; }).length;
+      if(nonNull > 2) { delete ovr[k]; cleaned = true; }
+    });
+    if(cleaned) {
+      localStorage.setItem('fc_ospo_ovr', JSON.stringify(ovr));
+      window._fcOspoOverride = ovr;
+    }
+  } catch(e) {}
+
   initFirebase();
 
   // Splash screen ringan
@@ -7519,20 +7536,15 @@ function _calcForecast(code, ospoIdx) {
     var ospr_a = ospr[am];
 
     // Step 1: pull-forward OSPO dari bulan berikutnya jika DOI < target
-    // Skip pull-forward kalau bulan ini sudah di-override user
     var _amOverridden = _fcOspoOverride[code] && _fcOspoOverride[code][am] != null;
-    // Kalau di-override, paksa ospoPool2[am] = nilai override (jangan biarkan pull masuk)
-    if(_amOverridden) ospoPool2[am] = _fcOspoOverride[code][am];
     var stockAfterOspo = prevSt + ospoPool2[am] + ospoPulled[am] + ospr_a - req_a;
     var _pfSt = stockAktualFw.slice();
     _pfSt[am] = stockAfterOspo;
     for(var _pz = am+1; _pz < FC_MONTHS.length; _pz++) _pfSt[_pz] = 0;
     var _pfD = calcDOI(_pfSt)[am];
-    if(!_amOverridden && _pfD >= 0 && _pfD < maxDOI) {
+    if(_pfD >= 0 && _pfD < maxDOI) {
       for(var nx = am+1; nx < FC_MONTHS.length; nx++) {
         if(ospoPool2[nx] <= 0) continue;
-        // Jangan tarik dari bulan yang sudah di-override user
-        if(_fcOspoOverride[code] && _fcOspoOverride[code][nx] != null) continue;
         var step2 = multiple > 0 ? multiple : 1;
         var pull = Math.ceil(ospoPool2[nx] / step2) * step2;
         pull = Math.min(pull, ospoPool2[nx]);
@@ -9472,43 +9484,43 @@ function _fcOspoEdit(input) {
   var mi   = parseInt(input.getAttribute('data-mi'));
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
 
-  // Ambil nilai OSPO original dari SAP per bulan (pakai yyyymm key)
-  var ospoIdx  = _buildOSPOIndex();
-  var yr       = new Date().getFullYear();
+  // Hitung total OSPO original dari SAP
+  var ospoIdx = _buildOSPOIndex();
+  var yr = new Date().getFullYear();
   var ospoOrig = FC_MONTH_NUMS.map(function(mn){ return (ospoIdx[code]||{})[yr*100+mn] || 0; });
-  var total    = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
+  var total = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
 
-  // Clamp input: 0 <= qty <= total
+  // Clamp
   qty = Math.max(0, Math.min(qty, total));
   input.value = qty > 0 ? n_id(qty) : '0';
 
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
-  // Set nilai bulan yang diedit
+  // Set override bulan yang diedit
   _fcOspoOverride[code][mi] = qty;
 
-  // Sisa = total - qty yang baru di bulan ini
+  // Redistribute sisa ke bulan lain yang punya OSPO original, dari belakang ke depan
   var sisa = total - qty;
-
-    // Distribusikan sisa ke bulan lain dari PALING JAUH ke paling dekat
-  var firstOther = -1;
-  for(var k2 = 0; k2 < FC_MONTHS.length; k2++) { if(k2 !== mi){ firstOther = k2; break; } }
   for(var oi = FC_MONTHS.length - 1; oi >= 0; oi--) {
     if(oi === mi) continue;
+    if(ospoOrig[oi] <= 0 && oi !== 0) continue; // skip bulan tanpa OSPO kecuali bulan pertama
     if(sisa <= 0) {
       _fcOspoOverride[code][oi] = 0;
     } else {
-      var dapat = (oi === firstOther) ? sisa : Math.min(sisa, ospoOrig[oi]);
-      _fcOspoOverride[code][oi] = dapat;
-      sisa -= dapat;
+      // Bulan pertama (paling awal selain mi) dapat semua sisa
+      var isFirstOther = true;
+      for(var k=0; k<oi; k++) { if(k!==mi){ isFirstOther=false; break; } }
+      var give = isFirstOther ? sisa : Math.min(sisa, ospoOrig[oi]);
+      _fcOspoOverride[code][oi] = give;
+      sisa -= give;
     }
   }
+
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
-  input.style.color      = (qty !== (ospoOrig[mi]||0)) ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
+  input.style.color = (_fcOspoOverride[code][mi] !== ospoOrig[mi]) ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
   input.style.fontWeight = qty > 0 ? '600' : '400';
   _fcLiveRecalc(code);
 }
-
 function _fcOspoStep(btn) {
   var wrap = btn.parentNode && btn.parentNode.parentNode;
   var inp  = wrap ? wrap.querySelector('input[data-code][data-mi]') : null;
