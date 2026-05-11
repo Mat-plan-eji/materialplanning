@@ -9416,7 +9416,8 @@ function _fcLiveRecalc(code) {
     } else if(lbl === 'ospo') {
       tr.querySelectorAll('input[data-code][data-mi]').forEach(function(inp) {
         var mi2 = parseInt(inp.getAttribute('data-mi'));
-        // Selalu update dari ospoVals hasil _calcForecast (sudah include override)
+        // Jangan update input yang sedang aktif diketik user
+        if(document.activeElement === inp) return;
         var v = (ospoVals && ospoVals[mi2] != null) ? ospoVals[mi2] : 0;
         inp.value = v > 0 ? n_id(v) : '0';
         var isOvr = _fcOspoOverride[code] && _fcOspoOverride[code][mi2] != null;
