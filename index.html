@@ -1752,22 +1752,6 @@ Storage.prototype.setItem = function(k, v) {
 
 // ── Boot sequence — CEPAT: tampil dari cache dulu, SAP di background ──────────
 function appStart() {
-  // Bersihkan override corrupt (array dengan banyak nilai non-null)
-  try {
-    var ovr = JSON.parse(localStorage.getItem('fc_ospo_ovr') || '{}');
-    var cleaned = false;
-    Object.keys(ovr).forEach(function(k) {
-      var arr = ovr[k];
-      if(!Array.isArray(arr)) return;
-      // Reset kalau semua slot terisi (kemungkinan redistribute corrupt)
-      var nonNull = arr.filter(function(v){ return v != null; }).length;
-      if(nonNull > 2) { delete ovr[k]; cleaned = true; }
-    });
-    if(cleaned) {
-      localStorage.setItem('fc_ospo_ovr', JSON.stringify(ovr));
-      window._fcOspoOverride = ovr;
-    }
-  } catch(e) {}
 
   initFirebase();
 
@@ -7614,9 +7598,7 @@ function _calcForecast(code, ospoIdx) {
   for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
     var req_d  = forecast[dp];
     var ospr_d = ospr[dp];
-    // Kalau bulan ini di-override user, pakai override langsung
-    var hasOvrDp = _fcOspoOverride[code] && _fcOspoOverride[code][dp] != null;
-    var ospo_d = hasOvrDp ? (_fcOspoOverride[code][dp] || 0) : (ospoPool2[dp] + ospoPulled[dp]);
+    var ospo_d = ospoPool2[dp] + ospoPulled[dp];
     var prop_d = totalProp[dp] || 0;
     stockWithProp[dp] = prevStDisp + ospo_d + ospr_d + prop_d - req_d;
     prevStDisp = stockWithProp[dp];
@@ -9416,18 +9398,53 @@ function _fcGenerateItem(btn) {
 function _fcLiveRecalc(code) {
   var ospoIdx = _buildOSPOIndex();
   var fc      = _calcForecast(code, ospoIdx);
+  if(!fc || !fc.stock) return;
   var detEl   = document.getElementById('fc-detail-' + code);
   if(!detEl) return;
   var isFcV   = (_fcGridViewMode === 'forecast');
   var doi_t   = _fcGetDOIForItem(code);
-  var stockVals = isFcV ? fc.stockFc : fc.stock;
-  var doiVals   = isFcV ? fc.doiFc   : fc.doi;
-  // Untuk display baris OSPO:
-  // - bulan yang ada override user → tampilkan nilai override (ospoRaw)
-  // - bulan yang belum di-override → tampilkan ospoEffective (hasil pull-forward)
+
+  // Hitung ulang stock dan DOI dari nilai yang tampil di baris OSPO
+  // (override kalau ada, pull-forward kalau tidak)
+  var ospoDisplay = fc.ospo.map(function(v, i) {
+    var ovr = _fcOspoOverride[code];
+    return (ovr && ovr[i] != null) ? ovr[i] : v;
+  });
+  var soh = fc.soh !== undefined ? fc.soh : ((fc.stock[0] || 0) - (fc.ospo[0] || 0) + (fc.forecast ? fc.forecast[0] : 0));
+  // Rebuild stock dari ospoDisplay
+  var stockRecalc = fc.stock.slice();
+  var prevS = fc.stockBase ? fc.stockBase[0] : (fc.soh || 0);
+  // Cek apakah ada override aktif
+  var hasAnyOvr = _fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){ return v != null; });
+  if(hasAnyOvr && fc.forecast) {
+    prevS = fc.soh || 0;
+    for(var i = 0; i < fc.stock.length; i++) {
+      var osp = ospoDisplay[i] || 0;
+      var osr = (fc.ospr && fc.ospr[i]) || 0;
+      var prp = (fc.propose && fc.propose[i]) || 0;
+      var req = (fc.forecast && fc.forecast[i]) || 0;
+      stockRecalc[i] = prevS + osp + osr + prp - req;
+      prevS = stockRecalc[i];
+    }
+  }
+  var doiRecalc = hasAnyOvr ? (function() {
+    // Hitung DOI sederhana: stock / (total req / WD)
+    var WD = 25;
+    return stockRecalc.map(function(s, i) {
+      var totalReq = 0;
+      for(var j = i; j < Math.min(i+3, fc.forecast.length); j++) totalReq += (fc.forecast[j]||0);
+      if(totalReq <= 0) return s >= 0 ? 999 : -1;
+      var daily = totalReq / (3 * WD);
+      if(daily <= 0) return 999;
+      return Math.round(s / daily);
+    });
+  })() : (isFcV ? fc.doiFc : fc.doi);
+  var stockVals = hasAnyOvr ? stockRecalc : (isFcV ? fc.stockFc : fc.stock);
+  var doiVals   = doiRecalc;
+
   var ospoVals = fc.ospo.map(function(v, i) {
-    var hasOvr = _fcOspoOverride[code] && _fcOspoOverride[code][i] != null;
-    return hasOvr ? (fc.ospoRaw[i] || 0) : v;
+    var ovr = _fcOspoOverride[code];
+    return (ovr && ovr[i] != null) ? ovr[i] : v;
   });
   var propVals  = fc.propose;
 
