@@ -9518,21 +9518,16 @@ function _fcOspoEdit(input) {
   // Set override bulan yang diedit
   _fcOspoOverride[code][mi] = qty;
 
-  // Redistribute sisa ke bulan lain yang punya OSPO original, dari belakang ke depan
+  // Redistribute: semua bulan lain = 0, sisa semua ke bulan terdekat (pertama selain mi)
   var sisa = total - qty;
-  for(var oi = FC_MONTHS.length - 1; oi >= 0; oi--) {
-    if(oi === mi) continue;
-    if(ospoOrig[oi] <= 0 && oi !== 0) continue; // skip bulan tanpa OSPO kecuali bulan pertama
-    if(sisa <= 0) {
-      _fcOspoOverride[code][oi] = 0;
-    } else {
-      // Bulan pertama (paling awal selain mi) dapat semua sisa
-      var isFirstOther = true;
-      for(var k=0; k<oi; k++) { if(k!==mi){ isFirstOther=false; break; } }
-      var give = isFirstOther ? sisa : Math.min(sisa, ospoOrig[oi]);
-      _fcOspoOverride[code][oi] = give;
-      sisa -= give;
-    }
+  var firstOther = -1;
+  for(var oi2 = 0; oi2 < FC_MONTHS.length; oi2++) {
+    if(oi2 === mi) continue;
+    _fcOspoOverride[code][oi2] = 0;
+    if(firstOther < 0) firstOther = oi2;
+  }
+  if(sisa > 0 && firstOther >= 0) {
+    _fcOspoOverride[code][firstOther] = sisa;
   }
 
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
