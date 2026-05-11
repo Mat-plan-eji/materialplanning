@@ -9395,6 +9395,7 @@ function _fcLiveRecalc(code) {
 
     // Query langsung — tidak perlu lewat tbody
   var allRows = detEl.querySelectorAll('tr[data-rowlabel]');
+  console.log('[fcLiveRecalc] found rows:', allRows.length, 'labels:', Array.from(allRows).map(function(r){return r.getAttribute('data-rowlabel');}));
   allRows.forEach(function(tr) {
     var lbl = tr.getAttribute('data-rowlabel');
     var tds = tr.querySelectorAll('td:not(:first-child)');
@@ -9442,54 +9443,36 @@ function _fcLiveRecalc(code) {
 function _fcOspoEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var base    = parseFloat(input.getAttribute('data-base')) || 0;
+  var base = parseFloat(input.getAttribute('data-base')) || 0;
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
+
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
-  // Hitung total OSPO original untuk item ini
+  // Simpan override bulan ini
+  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(base)) ? null : qty;
+
+  // Auto-adjust bulan lain: sisa = total original - qty bulan ini
+  // Hanya redistribute kalau ada bulan lain yang punya OSPO original
   var ospoIdx = _buildOSPOIndex();
-  var ospoOrig = new Array(FC_MONTHS.length).fill(0);
-  FC_MONTH_NUMS.forEach(function(mn, i){
-    ospoOrig[i] = (ospoIdx[code] && ospoIdx[code][mn]) || 0;
-  });
+  var ospoOrig = FC_MONTH_NUMS.map(function(mn){ return (ospoIdx[code] && ospoIdx[code][mn]) || 0; });
   var totalOSPO = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
 
-  // Hitung current values (termasuk override yang sudah ada)
-  var cur = ospoOrig.map(function(v, i){
-    return (_fcOspoOverride[code] && _fcOspoOverride[code][i] != null) ? _fcOspoOverride[code][i] : v;
-  });
-
-  // Clamp qty agar tidak melebihi total OSPO
-  var maxForMi = totalOSPO; // maksimum = total semua OSPO
-  qty = Math.min(qty, maxForMi);
-  qty = Math.max(0, qty);
-  input.value = qty > 0 ? n_id(qty) : '0';
-
-  // Set override bulan ini
-  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(ospoOrig[mi])) ? null : qty;
-
-  // Hitung sisa dan distribusikan ke bulan lain (geser ke bulan paling akhir dulu)
-  var used = qty;
-  var remaining = totalOSPO - used;
-  // Distribusi: bulan lain selain mi, dari belakang ke depan
-  var otherMonths = [];
-  for(var i = FC_MONTHS.length - 1; i >= 0; i--) {
-    if(i !== mi) otherMonths.push(i);
-  }
-  for(var j = 0; j < otherMonths.length; j++) {
-    var oi = otherMonths[j];
-    var origV = ospoOrig[oi];
-    if(remaining <= 0) {
-      _fcOspoOverride[code][oi] = 0;
-    } else if(remaining >= origV) {
-      // Bulan ini dapat penuh
-      _fcOspoOverride[code][oi] = (Math.round(origV) === Math.round(origV)) ? null : origV;
-      remaining -= origV;
-    } else {
-      // Bulan ini dapat sisa
-      _fcOspoOverride[code][oi] = remaining;
-      remaining = 0;
+  if(totalOSPO > 0 && qty !== base) {
+    var remaining = Math.max(0, totalOSPO - qty);
+    // Distribusi sisa ke bulan lain yang ada OSPO original, dari belakang
+    var others = [];
+    for(var i = FC_MONTHS.length - 1; i >= 0; i--) {
+      if(i !== mi && ospoOrig[i] > 0) others.push(i);
     }
+    others.forEach(function(oi) {
+      if(remaining <= 0) {
+        _fcOspoOverride[code][oi] = 0;
+      } else {
+        var give = Math.min(remaining, ospoOrig[oi]);
+        _fcOspoOverride[code][oi] = (Math.round(give) === Math.round(ospoOrig[oi])) ? null : give;
+        remaining -= give;
+      }
+    });
   }
 
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
