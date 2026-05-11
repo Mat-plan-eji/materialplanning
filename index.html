@@ -9443,48 +9443,41 @@ function _fcLiveRecalc(code) {
 function _fcOspoEdit(input) {
   var code = input.getAttribute('data-code');
   var mi   = parseInt(input.getAttribute('data-mi'));
-  var base = parseFloat(input.getAttribute('data-base')) || 0;
   var qty  = parseFloat((input.value||'0').replace(/\./g,'').replace(/,/g,'.')) || 0;
+
+  // Ambil nilai OSPO original dari SAP per bulan (pakai yyyymm key)
+  var ospoIdx  = _buildOSPOIndex();
+  var yr       = new Date().getFullYear();
+  var ospoOrig = FC_MONTH_NUMS.map(function(mn){ return (ospoIdx[code]||{})[yr*100+mn] || 0; });
+  var total    = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
+
+  // Clamp input: 0 <= qty <= total
+  qty = Math.max(0, Math.min(qty, total));
+  input.value = qty > 0 ? n_id(qty) : '0';
 
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
-  // Hitung total OSPO original (dari SAP) — pakai yyyymm key sama seperti _buildOSPOIndex
-  var ospoIdx = _buildOSPOIndex();
-  var curYear2 = new Date().getFullYear();
-  var ospoOrig = FC_MONTH_NUMS.map(function(mn){
-    var yyyymm = curYear2 * 100 + mn;
-    return (ospoIdx[code] && ospoIdx[code][yyyymm]) || 0;
-  });
-  var totalOSPO = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
+  // Set nilai bulan yang diedit
+  _fcOspoOverride[code][mi] = qty;
 
-  // Clamp: tidak boleh melebihi total OSPO
-  if(totalOSPO > 0) qty = Math.min(qty, totalOSPO);
-  qty = Math.max(0, qty);
-  input.value = qty > 0 ? n_id(qty) : '0';
+  // Sisa = total - qty yang baru di bulan ini
+  var sisa = total - qty;
 
-  // Set override bulan ini
-  _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(ospoOrig[mi])) ? null : qty;
-
-  // Redistribute sisa ke bulan lain (dari belakang ke depan)
-  if(totalOSPO > 0) {
-    var remaining = Math.max(0, totalOSPO - qty);
-    // Kumpulkan bulan lain yang ada nilai original, dari belakang
-    var others = [];
-    for(var oi = FC_MONTHS.length - 1; oi >= 0; oi--) {
-      if(oi !== mi && ospoOrig[oi] > 0) others.push(oi);
-    }
-    for(var j = 0; j < others.length; j++) {
-      var idx2 = others[j];
-      var isLast = (j === others.length - 1);
-      var give = isLast ? remaining : Math.min(remaining, ospoOrig[idx2]);
-      _fcOspoOverride[code][idx2] = (Math.round(give) === Math.round(ospoOrig[idx2])) ? null : give;
-      remaining = Math.max(0, remaining - give);
+    // Distribusikan sisa ke bulan lain dari PALING JAUH ke paling dekat
+  var firstOther = -1;
+  for(var k2 = 0; k2 < FC_MONTHS.length; k2++) { if(k2 !== mi){ firstOther = k2; break; } }
+  for(var oi = FC_MONTHS.length - 1; oi >= 0; oi--) {
+    if(oi === mi) continue;
+    if(sisa <= 0) {
+      _fcOspoOverride[code][oi] = 0;
+    } else {
+      var dapat = (oi === firstOther) ? sisa : Math.min(sisa, ospoOrig[oi]);
+      _fcOspoOverride[code][oi] = dapat;
+      sisa -= dapat;
     }
   }
-
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
-  var isEdited = (_fcOspoOverride[code][mi] != null);
-  input.style.color      = isEdited ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
+  input.style.color      = (qty !== (ospoOrig[mi]||0)) ? '#8b5cf6' : (qty > 0 ? 'var(--teal)' : 'var(--muted)');
   input.style.fontWeight = qty > 0 ? '600' : '400';
   _fcLiveRecalc(code);
 }
