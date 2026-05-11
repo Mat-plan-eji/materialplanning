@@ -7505,6 +7505,8 @@ function _calcForecast(code, ospoIdx) {
   // ── Single pass: pull-forward + propose generator bersama ──────────────────
   // Kedua logika pakai prevStock yang sama supaya konsisten dengan display
   var ospoPool2  = ospo.slice();
+  // Kalau ada override, pastikan ospoPool2 tidak diubah oleh pull-forward
+  // Inisialisasi ospoPulled dengan 0 untuk bulan yang di-override
   var pullNotifs = [];
   var ospoPulled = new Array(FC_MONTHS.length).fill(0);
   var _step      = multiple > 0 ? multiple : 1;
@@ -7519,6 +7521,8 @@ function _calcForecast(code, ospoIdx) {
     // Step 1: pull-forward OSPO dari bulan berikutnya jika DOI < target
     // Skip pull-forward kalau bulan ini sudah di-override user
     var _amOverridden = _fcOspoOverride[code] && _fcOspoOverride[code][am] != null;
+    // Kalau di-override, paksa ospoPool2[am] = nilai override (jangan biarkan pull masuk)
+    if(_amOverridden) ospoPool2[am] = _fcOspoOverride[code][am];
     var stockAfterOspo = prevSt + ospoPool2[am] + ospoPulled[am] + ospr_a - req_a;
     var _pfSt = stockAktualFw.slice();
     _pfSt[am] = stockAfterOspo;
