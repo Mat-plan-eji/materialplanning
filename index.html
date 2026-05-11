@@ -9448,42 +9448,35 @@ function _fcOspoEdit(input) {
 
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
-  // Hitung total OSPO dari semua bulan (current values termasuk override)
+  // Hitung total OSPO original (dari SAP)
   var ospoIdx = _buildOSPOIndex();
   var ospoOrig = FC_MONTH_NUMS.map(function(mn){ return (ospoIdx[code] && ospoIdx[code][mn]) || 0; });
-  // Current = override kalau ada, kalau tidak pakai original
-  var curVals = ospoOrig.map(function(v, i){
-    return (_fcOspoOverride[code][i] != null) ? _fcOspoOverride[code][i] : v;
-  });
   var totalOSPO = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
 
-  // Clamp input
-  qty = Math.max(0, Math.min(qty, totalOSPO));
+  // Clamp: tidak boleh melebihi total OSPO
+  if(totalOSPO > 0) qty = Math.min(qty, totalOSPO);
+  qty = Math.max(0, qty);
   input.value = qty > 0 ? n_id(qty) : '0';
 
   // Set override bulan ini
   _fcOspoOverride[code][mi] = (Math.round(qty) === Math.round(ospoOrig[mi])) ? null : qty;
 
-  // Distribusi sisa ke bulan lain yang punya nilai (dari belakang ke depan)
-  var remaining = Math.max(0, totalOSPO - qty);
-  // Bulan lain yang punya nilai current > 0, dari belakang
-  var others = [];
-  for(var i = FC_MONTHS.length - 1; i >= 0; i--) {
-    if(i !== mi && curVals[i] > 0) others.push(i);
-  }
-  // Kalau tidak ada bulan yang punya nilai, coba semua bulan dari belakang
-  if(!others.length) {
-    for(var i = FC_MONTHS.length - 1; i >= 0; i--) {
-      if(i !== mi) others.push(i);
+  // Redistribute sisa ke bulan lain (dari belakang ke depan)
+  if(totalOSPO > 0) {
+    var remaining = Math.max(0, totalOSPO - qty);
+    // Kumpulkan bulan lain yang ada nilai original, dari belakang
+    var others = [];
+    for(var oi = FC_MONTHS.length - 1; oi >= 0; oi--) {
+      if(oi !== mi && ospoOrig[oi] > 0) others.push(oi);
+    }
+    for(var j = 0; j < others.length; j++) {
+      var idx2 = others[j];
+      var isLast = (j === others.length - 1);
+      var give = isLast ? remaining : Math.min(remaining, ospoOrig[idx2]);
+      _fcOspoOverride[code][idx2] = (Math.round(give) === Math.round(ospoOrig[idx2])) ? null : give;
+      remaining = Math.max(0, remaining - give);
     }
   }
-  others.forEach(function(oi) {
-    var give = Math.min(remaining, Math.max(curVals[oi], 0));
-    // Kalau remaining > 0 tapi ini bulan terakhir, berikan semua sisa
-    if(oi === others[others.length-1]) give = remaining;
-    _fcOspoOverride[code][oi] = give > 0 ? give : 0;
-    remaining = Math.max(0, remaining - give);
-  });
 
   try { localStorage.setItem('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); cloudSave('fc_ospo_ovr', JSON.stringify(_fcOspoOverride)); } catch(e){}
   var isEdited = (_fcOspoOverride[code][mi] != null);
