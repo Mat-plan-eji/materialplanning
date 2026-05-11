@@ -7597,6 +7597,7 @@ function _calcForecast(code, ospoIdx) {
   // Rebuild dengan totalProp (manual override mungkin beda dari proposeAuto)
   var stockWithProp = new Array(FC_MONTHS.length).fill(0);
   var prevStDisp = soh;
+  console.log('[stockWithProp] soh:', soh, 'ospoPool2:', JSON.stringify(ospoPool2), 'ospoPulled:', JSON.stringify(ospoPulled));
   for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
     var req_d  = forecast[dp];
     var ospr_d = ospr[dp];
