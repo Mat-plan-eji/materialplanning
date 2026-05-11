@@ -9448,9 +9448,13 @@ function _fcOspoEdit(input) {
 
   if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
-  // Hitung total OSPO original (dari SAP)
+  // Hitung total OSPO original (dari SAP) — pakai yyyymm key sama seperti _buildOSPOIndex
   var ospoIdx = _buildOSPOIndex();
-  var ospoOrig = FC_MONTH_NUMS.map(function(mn){ return (ospoIdx[code] && ospoIdx[code][mn]) || 0; });
+  var curYear2 = new Date().getFullYear();
+  var ospoOrig = FC_MONTH_NUMS.map(function(mn){
+    var yyyymm = curYear2 * 100 + mn;
+    return (ospoIdx[code] && ospoIdx[code][yyyymm]) || 0;
+  });
   var totalOSPO = ospoOrig.reduce(function(s,v){ return s+v; }, 0);
 
   // Clamp: tidak boleh melebihi total OSPO
