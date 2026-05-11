@@ -5134,9 +5134,11 @@ function renderSchedule() {
         var doiAfter = doiNow + addDays;
         var doiColor = doiNow < 7 ? 'var(--red)' : (doiNow < 14 ? 'var(--amber)' : 'var(--muted)');
         var doiAfterColor = doiAfter > doiNow ? 'var(--green)' : 'var(--muted)';
-        // Multiple from master data
+        // Multiple from master data — konversi gram→kg kalau UOM gram
         var master = STATE.masterData && STATE.masterData[en.item.productCode];
         var multiple = master ? (master.multiple || 1) : 1;
+        var masterUOM = master ? (master.uom||'').toUpperCase() : '';
+        if(multiple > 0 && /^(G|GR|GRAM)$/.test(masterUOM)) multiple = multiple / 1000;
         if(multiple < 1) multiple = 1;
         // Max available from all POs for this item+supplier
         var allItemPOs = STATE.poData.filter(function(x){
@@ -9391,58 +9393,51 @@ function _fcLiveRecalc(code) {
   var ospoVals  = fc.ospo;
   var propVals  = fc.propose;
 
-  var tbodies = detEl.querySelectorAll('table tbody');
-  tbodies.forEach(function(tbody) {
-    var trs = tbody.querySelectorAll('tr[data-rowlabel]');
-    trs.forEach(function(tr) {
-      var lbl = tr.getAttribute('data-rowlabel');
-      var tds = tr.querySelectorAll('td:not(:first-child)');
-      if(lbl === 'stock') {
-        stockVals.forEach(function(v, i) {
-          if(!tds[i]) return;
-          var _di2 = doiVals[i]; var cls = v<0?'color:var(--red);font-weight:600':(_di2>=0&&_di2<doi_t)?'color:var(--amber);font-weight:500':'color:var(--green)';
-          tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
-        });
-      } else if(lbl === 'doi') {
-        doiVals.forEach(function(v, i) {
-          if(!tds[i]) return;
-          var cls = v<0?'color:var(--red)':v<doi_t?'color:var(--amber)':v>99?'color:var(--muted)':'color:var(--green)';
-          var txt = v>0 ? (v>=999?'∞':n_id(Math.round(v))) : '—';
-          tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
-        });
-      } else if(lbl === 'ospo') {
-        // Update nilai OSPO input jika tidak di-override manual
-        var inps = tr.querySelectorAll('input[data-code][data-mi]');
-        inps.forEach(function(inp) {
-          var mi = parseInt(inp.getAttribute('data-mi'));
-          var isOverride = _fcOspoOverride[code] && _fcOspoOverride[code][mi] != null;
-          if(!isOverride) {
-            var v = ospoVals[mi] || 0;
-            inp.value = v > 0 ? n_id(v) : '0';
-            inp.style.color = v > 0 ? 'var(--teal)' : 'var(--muted)';
-            inp.style.fontWeight = v > 0 ? '600' : '400';
-          }
-        });
-      } else if(lbl === 'propose') {
-        var inps2 = tr.querySelectorAll('input[data-code][data-mi]');
-        inps2.forEach(function(inp) {
-          var mi = parseInt(inp.getAttribute('data-mi'));
-          // Jangan overwrite kalau user sudah pernah set (termasuk 0)
-          var hasManual = _fcPropose[code] && _fcPropose[code][mi] !== null && _fcPropose[code][mi] !== undefined;
-          if(!hasManual) {
-            var pv = propVals[mi] || 0;
-            inp.value = pv > 0 ? n_id(pv) : '0';
-            inp.style.fontWeight = pv > 0 ? '700' : '400';
-            inp.style.color = pv > 0 ? 'var(--amber)' : 'var(--muted)';
-            inp.style.background = pv > 0 ? 'var(--amber-bg)' : '';
-            var wrap = inp.parentNode;
-            if(wrap) wrap.style.border = pv > 0 ? '1px solid rgba(245,158,11,.4)' : '1px solid var(--border2)';
-          }
-        });
-      }
-    });
+    // Query langsung — tidak perlu lewat tbody
+  var allRows = detEl.querySelectorAll('tr[data-rowlabel]');
+  allRows.forEach(function(tr) {
+    var lbl = tr.getAttribute('data-rowlabel');
+    var tds = tr.querySelectorAll('td:not(:first-child)');
+    if(lbl === 'stock') {
+      stockVals.forEach(function(v, i) {
+        if(!tds[i]) return;
+        var _di2 = doiVals[i];
+        var cls = v<0 ? 'color:var(--red);font-weight:600' : (_di2>=0&&_di2<doi_t) ? 'color:var(--amber);font-weight:500' : 'color:var(--green)';
+        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+n_id(v)+'</span>';
+      });
+    } else if(lbl === 'doi') {
+      doiVals.forEach(function(v, i) {
+        if(!tds[i]) return;
+        var cls = v<0 ? 'color:var(--red)' : v<doi_t ? 'color:var(--amber)' : v>99 ? 'color:var(--muted)' : 'color:var(--green)';
+        var txt = v>0 ? (v>=999 ? '∞' : n_id(Math.round(v))) : '—';
+        tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
+      });
+    } else if(lbl === 'ospo') {
+      tr.querySelectorAll('input[data-code][data-mi]').forEach(function(inp) {
+        var mi = parseInt(inp.getAttribute('data-mi'));
+        if(_fcOspoOverride[code] && _fcOspoOverride[code][mi] != null) return;
+        var v = ospoVals[mi] || 0;
+        inp.value = v > 0 ? n_id(v) : '0';
+        inp.style.color = v > 0 ? 'var(--teal)' : 'var(--muted)';
+        inp.style.fontWeight = v > 0 ? '600' : '400';
+      });
+    } else if(lbl === 'propose') {
+      tr.querySelectorAll('input[data-code][data-mi]').forEach(function(inp) {
+        var mi = parseInt(inp.getAttribute('data-mi'));
+        var hasManual = _fcPropose[code] && _fcPropose[code][mi] !== null && _fcPropose[code][mi] !== undefined;
+        if(hasManual) return;
+        var pv = propVals[mi] || 0;
+        inp.value = pv > 0 ? n_id(pv) : '0';
+        inp.style.fontWeight = pv > 0 ? '700' : '400';
+        inp.style.color = pv > 0 ? 'var(--amber)' : 'var(--muted)';
+        inp.style.background = pv > 0 ? 'var(--amber-bg)' : '';
+        var wrap = inp.parentNode;
+        if(wrap) wrap.style.border = pv > 0 ? '1px solid rgba(245,158,11,.4)' : '1px solid var(--border2)';
+      });
+    }
   });
 }
+
 
 function _fcOspoEdit(input) {
   var code = input.getAttribute('data-code');
