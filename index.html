@@ -9417,6 +9417,7 @@ function _fcLiveRecalc(code) {
     var lbl = tr.getAttribute('data-rowlabel');
     var tds = tr.querySelectorAll('td:not(:first-child)');
     if(lbl === 'stock') {
+      console.log('[fcLiveRecalc] updating stock, tds:', tds.length, 'vals:', stockVals);
       stockVals.forEach(function(v, i) {
         if(!tds[i]) return;
         var _di2 = doiVals[i];
