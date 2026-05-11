@@ -7408,6 +7408,7 @@ function _calcForecast(code, ospoIdx) {
   var ospo = ospoBase.map(function(v, i) {
     return (ospoOvr && ospoOvr[i] != null) ? ospoOvr[i] : v;
   });
+  if(ospoOvr) console.log('[_calcForecast] code:', code, 'ospoOvr:', JSON.stringify(ospoOvr), 'ospo[0]:', ospo[0], 'ospo[1]:', ospo[1]);
 
   // OSPR per month — distribute by prReqDate like OSPO
   var ospr_base = new Array(FC_MONTHS.length).fill(0);
@@ -9485,6 +9486,7 @@ function _fcOspoEdit(input) {
 
   // Set nilai bulan yang diedit
   _fcOspoOverride[code][mi] = qty;
+  console.log('[_fcOspoEdit] code:', code, 'mi:', mi, 'qty:', qty, 'override:', JSON.stringify(_fcOspoOverride[code]));
 
   // Sisa = total - qty yang baru di bulan ini
   var sisa = total - qty;
