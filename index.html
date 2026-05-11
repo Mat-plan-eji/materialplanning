@@ -9408,6 +9408,7 @@ function _fcLiveRecalc(code) {
     // Query langsung — tidak perlu lewat tbody
   var allRows = detEl.querySelectorAll('tr[data-rowlabel]');
   console.log('[fcLiveRecalc] found rows:', allRows.length, 'labels:', Array.from(allRows).map(function(r){return r.getAttribute('data-rowlabel');}));
+  console.log('[fcLiveRecalc] stockVals:', stockVals, 'doiVals:', doiVals);
   allRows.forEach(function(tr) {
     var lbl = tr.getAttribute('data-rowlabel');
     var tds = tr.querySelectorAll('td:not(:first-child)');
