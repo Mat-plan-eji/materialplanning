@@ -7815,7 +7815,7 @@ function _fcRenderDetail(el, items, fcData, fRows) {
         return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+cl+'">'+n_id(v2)+'</td>';
       } else if(fRows==='doi') {
         var d=fc.doi[i]; var dc=d<0?'var(--red)':d<_fcGetDOIForItem(code)?'var(--amber)':d>99?'var(--muted)':'var(--green)';
-        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d===999?'∞':d)+'</td>';
+        return '<td style="text-align:right;padding:6px 5px;font-family:var(--mono);font-size:11px;color:'+dc+'">'+(d>0?n_id(d):(d<0?n_id(d):'—'))+'</td>';
       } else {
         // propose (default)
         var pv=fc.propose[i];
@@ -9431,8 +9431,7 @@ function _fcLiveRecalc(code) {
       doiVals.forEach(function(v, i) {
         if(!tds[i]) return;
         var cls = v<0 ? 'color:var(--red)' : v<doi_t ? 'color:var(--amber)' : v>99 ? 'color:var(--muted)' : 'color:var(--green)';
-        var doi_cap = doi_t > 0 ? doi_t * 3 : 75;
-        var txt = v>0 ? (v>=doi_cap ? '∞' : n_id(Math.round(v))) : (v<0 ? n_id(Math.round(v)) : '—');
+        var txt = v > 0 ? n_id(Math.round(v)) : (v < 0 ? '<span style="color:var(--red)">' + n_id(Math.round(v)) + '</span>' : '—');
         tds[i].innerHTML = '<span style="font-family:var(--mono);font-size:11px;'+cls+'">'+txt+'</span>';
       });
     } else if(lbl === 'ospo') {
