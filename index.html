@@ -7644,7 +7644,7 @@ function _calcForecast(code, ospoIdx) {
   var ospoEffective = ospo.map(function(v, i) { return ospoPool2[i] + ospoPulled[i]; });
 
   return {
-    forecast: forecast, ospo: ospoEffective, ospoBase: ospoBase, ospr: ospr, ospr_base: ospr_base,
+    forecast: forecast, ospo: ospoEffective, ospoRaw: ospo, ospoBase: ospoBase, ospr: ospr, ospr_base: ospr_base,
     stock: stockWithProp, doi: doiAktual, stockBase: stockProj,
     forecastOspo: forecastOspo, stockFc: stockFc, doiFc: doiFc,
     propose: totalProp, pullNotifs: pullNotifs,
@@ -9396,7 +9396,13 @@ function _fcLiveRecalc(code) {
   var doi_t   = _fcGetDOIForItem(code);
   var stockVals = isFcV ? fc.stockFc : fc.stock;
   var doiVals   = isFcV ? fc.doiFc   : fc.doi;
-  var ospoVals  = fc.ospo;
+  // Untuk display baris OSPO:
+  // - bulan yang ada override user → tampilkan nilai override (ospoRaw)
+  // - bulan yang belum di-override → tampilkan ospoEffective (hasil pull-forward)
+  var ospoVals = fc.ospo.map(function(v, i) {
+    var hasOvr = _fcOspoOverride[code] && _fcOspoOverride[code][i] != null;
+    return hasOvr ? (fc.ospoRaw[i] || 0) : v;
+  });
   var propVals  = fc.propose;
 
     // Query langsung — tidak perlu lewat tbody
