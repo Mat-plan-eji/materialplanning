@@ -7516,14 +7516,18 @@ function _calcForecast(code, ospoIdx) {
     var ospr_a = ospr[am];
 
     // Step 1: pull-forward OSPO dari bulan berikutnya jika DOI < target
+    // Skip pull-forward kalau bulan ini sudah di-override user
+    var _amOverridden = _fcOspoOverride[code] && _fcOspoOverride[code][am] != null;
     var stockAfterOspo = prevSt + ospoPool2[am] + ospoPulled[am] + ospr_a - req_a;
     var _pfSt = stockAktualFw.slice();
     _pfSt[am] = stockAfterOspo;
     for(var _pz = am+1; _pz < FC_MONTHS.length; _pz++) _pfSt[_pz] = 0;
     var _pfD = calcDOI(_pfSt)[am];
-    if(_pfD >= 0 && _pfD < maxDOI) {
+    if(!_amOverridden && _pfD >= 0 && _pfD < maxDOI) {
       for(var nx = am+1; nx < FC_MONTHS.length; nx++) {
         if(ospoPool2[nx] <= 0) continue;
+        // Jangan tarik dari bulan yang sudah di-override user
+        if(_fcOspoOverride[code] && _fcOspoOverride[code][nx] != null) continue;
         var step2 = multiple > 0 ? multiple : 1;
         var pull = Math.ceil(ospoPool2[nx] / step2) * step2;
         pull = Math.min(pull, ospoPool2[nx]);
