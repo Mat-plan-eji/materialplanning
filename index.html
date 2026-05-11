@@ -9512,7 +9512,8 @@ function _fcOspoEdit(input) {
   qty = Math.max(0, Math.min(qty, total));
   input.value = qty > 0 ? n_id(qty) : '0';
 
-  if(!_fcOspoOverride[code]) _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
+  // Reset semua override untuk item ini dulu, lalu set ulang
+  _fcOspoOverride[code] = new Array(FC_MONTHS.length).fill(null);
 
   // Set override bulan yang diedit
   _fcOspoOverride[code][mi] = qty;
