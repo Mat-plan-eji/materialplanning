@@ -7596,10 +7596,12 @@ function _calcForecast(code, ospoIdx) {
   // ── Stock display ──────────────────────────────────────────────────────────
   var stockWithProp = new Array(FC_MONTHS.length).fill(0);
   var prevStDisp = soh;
+  var _ospoOvr2 = _fcOspoOverride[code] || null;
   for(var dp = snapMoIdx; dp < FC_MONTHS.length; dp++) {
     var req_d  = forecast[dp];
     var ospr_d = ospr[dp];
-    var ospo_d = ospoPool2[dp] + ospoPulled[dp];
+    // Kalau bulan ini di-override user, pakai nilai override langsung
+    var ospo_d = (_ospoOvr2 && _ospoOvr2[dp] != null) ? _ospoOvr2[dp] : (ospoPool2[dp] + ospoPulled[dp]);
     var prop_d = totalProp[dp] || 0;
     stockWithProp[dp] = prevStDisp + ospo_d + ospr_d + prop_d - req_d;
     prevStDisp = stockWithProp[dp];
@@ -9405,45 +9407,9 @@ function _fcLiveRecalc(code) {
   var isFcV   = (_fcGridViewMode === 'forecast');
   var doi_t   = _fcGetDOIForItem(code);
 
-  // Hitung ulang stock dan DOI dari nilai yang tampil di baris OSPO
-  // (override kalau ada, pull-forward kalau tidak)
-  var ospoDisplay = fc.ospo.map(function(v, i) {
-    var ovr = _fcOspoOverride[code];
-    return (ovr && ovr[i] != null) ? ovr[i] : v;
-  });
-  var soh = fc.soh !== undefined ? fc.soh : ((fc.stock[0] || 0) - (fc.ospo[0] || 0) + (fc.forecast ? fc.forecast[0] : 0));
-  // Rebuild stock dari ospoDisplay
-  var stockRecalc = fc.stock.slice();
-  var prevS = fc.stockBase ? fc.stockBase[0] : (fc.soh || 0);
-  // Cek apakah ada override aktif
-  var hasAnyOvr = _fcOspoOverride[code] && _fcOspoOverride[code].some(function(v){ return v != null; });
-  if(hasAnyOvr && fc.forecast) {
-    prevS = fc.soh || 0;
-    for(var i = 0; i < fc.stock.length; i++) {
-      var osp = ospoDisplay[i] || 0;
-      var osr = (fc.ospr && fc.ospr[i]) || 0;
-      var prp = (fc.propose && fc.propose[i]) || 0;
-      var req = (fc.forecast && fc.forecast[i]) || 0;
-      stockRecalc[i] = prevS + osp + osr + prp - req;
-      prevS = stockRecalc[i];
-    }
-  }
-  var doiRecalc = hasAnyOvr ? (function() {
-    var WD = 25;
-    return stockRecalc.map(function(s, i) {
-      var totalReq = 0;
-      for(var j = i; j < Math.min(i+3, fc.forecast.length); j++) totalReq += (fc.forecast[j]||0);
-      if(totalReq <= 0) return s >= 0 ? 9999 : -1;
-      var daily = totalReq / (3 * WD);
-      if(daily <= 0) return 9999;
-      var doi = s / daily;
-      return doi;
-    });
-  })() : (isFcV ? fc.doiFc : fc.doi);
-  var stockVals = hasAnyOvr ? stockRecalc : (isFcV ? fc.stockFc : fc.stock);
-  var doiVals   = doiRecalc;
-
-  var ospoVals = fc.ospo.map(function(v, i) {
+  var stockVals = isFcV ? fc.stockFc : fc.stock;
+  var doiVals   = isFcV ? fc.doiFc   : fc.doi;
+  var ospoVals  = fc.ospo.map(function(v, i) {
     var ovr = _fcOspoOverride[code];
     return (ovr && ovr[i] != null) ? ovr[i] : v;
   });
