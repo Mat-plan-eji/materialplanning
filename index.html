@@ -9415,11 +9415,12 @@ function _fcLiveRecalc(code) {
       });
     } else if(lbl === 'ospo') {
       tr.querySelectorAll('input[data-code][data-mi]').forEach(function(inp) {
-        var mi = parseInt(inp.getAttribute('data-mi'));
-        if(_fcOspoOverride[code] && _fcOspoOverride[code][mi] != null) return;
-        var v = ospoVals[mi] || 0;
+        var mi2 = parseInt(inp.getAttribute('data-mi'));
+        // Selalu update dari ospoVals hasil _calcForecast (sudah include override)
+        var v = (ospoVals && ospoVals[mi2] != null) ? ospoVals[mi2] : 0;
         inp.value = v > 0 ? n_id(v) : '0';
-        inp.style.color = v > 0 ? 'var(--teal)' : 'var(--muted)';
+        var isOvr = _fcOspoOverride[code] && _fcOspoOverride[code][mi2] != null;
+        inp.style.color = isOvr ? '#8b5cf6' : (v > 0 ? 'var(--teal)' : 'var(--muted)');
         inp.style.fontWeight = v > 0 ? '600' : '400';
       });
     } else if(lbl === 'propose') {
