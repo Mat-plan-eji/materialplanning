@@ -7924,7 +7924,7 @@ function _fcDetailRow(code, fc, master) {
         + '<div style="display:inline-flex;align-items:stretch;border:1px solid '+bdr+';border-radius:4px;overflow:hidden;background:'+inp_bg+'">'
         + '<input type="text" inputmode="numeric" value="'+(cur>0?n_id(cur):'0')+'"'
         +   ' data-code="'+itemCode+'" data-mi="'+i+'" data-base="'+base+'" data-rowtype="'+(rowType||'ospo')+'"'
-        +   ' oninput="_fcOspoRowEdit(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+        +   ' oninput="_fcOspoRowEdit(this)" onblur="_fcOspoBlur(this)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
         +   ' style="width:62px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:'+inp_wt+';color:'+inp_clr+';background:transparent;border:none;padding:3px 6px 3px 4px;outline:none"'
         +   ' title="'+(isEdited ? 'SAP: '+n_id(base)+' (diedit manual)' : 'Klik untuk edit')+'">'
         + '</div></td>';
@@ -9327,6 +9327,12 @@ function _fcResetPropose() {
 
 // ─── Step button: ▼▲ adjust by multiple ─────────────────────────────────────
 // ─── OSPO override edit ──────────────────────────────────────────────────────
+function _fcOspoBlur(input) {
+  // Setelah blur, trigger recalc sekali lagi agar bulan lain terupdate di DOM
+  var code = input.getAttribute('data-code');
+  if(code) _fcLiveRecalc(code);
+}
+
 function _fcOspoRowEdit(input) {
   var rt = input.getAttribute('data-rowtype') || 'ospo';
   if(rt === 'ospr') { _fcOsprEdit(input); return; }
